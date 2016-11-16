@@ -84,7 +84,10 @@ class ClientInterfaceIPCI implements IIPCI {
             case START_JOB:
                 HyracksClientInterfaceFunctions.StartJobFunction sjf =
                         (HyracksClientInterfaceFunctions.StartJobFunction) fn;
-                JobId jobId = jobIdFactory.create();
+                JobId jobId = sjf.getJobId();
+                if (jobId == null) {
+                    jobId = jobIdFactory.create();
+                }
                 ccs.getWorkQueue().schedule(new JobStartWork(ccs, sjf.getDeploymentId(),
                         sjf.getACGGFBytes(), sjf.getJobFlags(), jobId, new IPCResponder<JobId>(handle, mid)));
                 break;

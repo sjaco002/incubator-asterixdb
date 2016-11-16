@@ -186,11 +186,17 @@ public class StartTasksWork extends AbstractWork {
         Map<JobId, Joblet> jobletMap = ncs.getJobletMap();
         Joblet ji = jobletMap.get(jobId);
         if (ji == null) {
-            if (acgBytes == null) {
-                throw new HyracksException("Joblet was not found. This job was most likely aborted.");
+            Map<JobId, ActivityClusterGraph> acgMap = ncs.getACGMap();
+            ActivityClusterGraph acg = acgMap.get(jobId);
+            if (acg == null) {
+                if (acgBytes == null) {
+                    throw new HyracksException("Joblet was not found. This job was most likely aborted.");
+                }
+                acg = (ActivityClusterGraph) DeploymentUtils.deserialize(acgBytes, deploymentId, appCtx);
+                if (flags.contains(JobFlag.STORED_JOB)) {
+                    acgMap.put(jobId, acg);
+                }
             }
-            ActivityClusterGraph acg = (ActivityClusterGraph) DeploymentUtils.deserialize(acgBytes, deploymentId,
-                    appCtx);
             ji = new Joblet(ncs, deploymentId, jobId, appCtx, acg);
             jobletMap.put(jobId, ji);
         }

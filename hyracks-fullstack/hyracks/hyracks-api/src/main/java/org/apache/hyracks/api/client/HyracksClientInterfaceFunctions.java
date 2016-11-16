@@ -107,22 +107,36 @@ public class HyracksClientInterfaceFunctions {
         private final byte[] acggfBytes;
         private final EnumSet<JobFlag> jobFlags;
         private final DeploymentId deploymentId;
+        private final JobId jobId;
+
+        public StartJobFunction(byte[] acggfBytes, EnumSet<JobFlag> jobFlags, JobId jobId) {
+            this.acggfBytes = acggfBytes;
+            this.jobFlags = jobFlags;
+            this.deploymentId = null;
+            this.jobId = jobId;
+        }
 
         public StartJobFunction(byte[] acggfBytes, EnumSet<JobFlag> jobFlags) {
             this.acggfBytes = acggfBytes;
             this.jobFlags = jobFlags;
             this.deploymentId = null;
+            this.jobId = null;
         }
 
         public StartJobFunction(DeploymentId deploymentId, byte[] acggfBytes, EnumSet<JobFlag> jobFlags) {
             this.acggfBytes = acggfBytes;
             this.jobFlags = jobFlags;
             this.deploymentId = deploymentId;
+            this.jobId = null;
         }
 
         @Override
         public FunctionId getFunctionId() {
             return FunctionId.START_JOB;
+        }
+
+        public JobId getJobId() {
+            return jobId;
         }
 
         public byte[] getACGGFBytes() {
