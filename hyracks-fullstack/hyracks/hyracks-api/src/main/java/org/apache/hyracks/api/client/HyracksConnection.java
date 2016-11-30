@@ -25,6 +25,7 @@ import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 import org.apache.http.HttpResponse;
@@ -96,24 +97,24 @@ public final class HyracksConnection implements IHyracksClientConnection {
     }
 
     @Override
-    public JobId startJob(JobSpecification jobSpec, EnumSet<JobFlag> jobFlags) throws Exception {
+    public JobId startJob(JobSpecification jobSpec, Set<JobFlag> jobFlags) throws Exception {
         JobSpecificationActivityClusterGraphGeneratorFactory jsacggf = new JobSpecificationActivityClusterGraphGeneratorFactory(
                 jobSpec);
         return startJob(jsacggf, jobFlags);
     }
 
     @Override
-    public JobId startJob(JobSpecification jobSpec, EnumSet<JobFlag> jobFlags, JobId jobId) throws Exception {
+    public JobId startJob(JobSpecification jobSpec, Set<JobFlag> jobFlags, JobId jobId) throws Exception {
         JobSpecificationActivityClusterGraphGeneratorFactory jsacggf =
                 new JobSpecificationActivityClusterGraphGeneratorFactory(jobSpec);
         return startJob(jsacggf, jobFlags, jobId);
     }
 
-    public JobId startJob(IActivityClusterGraphGeneratorFactory acggf, EnumSet<JobFlag> jobFlags) throws Exception {
+    public JobId startJob(IActivityClusterGraphGeneratorFactory acggf, Set<JobFlag> jobFlags) throws Exception {
         return hci.startJob(JavaSerializationUtils.serialize(acggf), jobFlags);
     }
 
-    public JobId startJob(IActivityClusterGraphGeneratorFactory acggf, EnumSet<JobFlag> jobFlags, JobId jobId)
+    public JobId startJob(IActivityClusterGraphGeneratorFactory acggf, Set<JobFlag> jobFlags, JobId jobId)
             throws Exception {
         return hci.startJob(JavaSerializationUtils.serialize(acggf), jobFlags, jobId);
     }
@@ -182,7 +183,7 @@ public final class HyracksConnection implements IHyracksClientConnection {
     }
 
     @Override
-    public JobId startJob(DeploymentId deploymentId, JobSpecification jobSpec, EnumSet<JobFlag> jobFlags)
+    public JobId startJob(DeploymentId deploymentId, JobSpecification jobSpec, Set<JobFlag> jobFlags)
             throws Exception {
         JobSpecificationActivityClusterGraphGeneratorFactory jsacggf = new JobSpecificationActivityClusterGraphGeneratorFactory(
                 jobSpec);
@@ -190,8 +191,8 @@ public final class HyracksConnection implements IHyracksClientConnection {
     }
 
     @Override
-    public JobId startJob(DeploymentId deploymentId, IActivityClusterGraphGeneratorFactory acggf,
-            EnumSet<JobFlag> jobFlags) throws Exception {
+    public JobId startJob(DeploymentId deploymentId, IActivityClusterGraphGeneratorFactory acggf, Set<JobFlag> jobFlags)
+            throws Exception {
         return hci.startJob(deploymentId, JavaSerializationUtils.serialize(acggf), jobFlags);
     }
 

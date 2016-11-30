@@ -193,7 +193,7 @@ public class StartTasksWork extends AbstractWork {
                     throw new HyracksException("Joblet was not found. This job was most likely aborted.");
                 }
                 acg = (ActivityClusterGraph) DeploymentUtils.deserialize(acgBytes, deploymentId, appCtx);
-                if (flags.contains(JobFlag.STORED_JOB)) {
+                if (flags.contains(JobFlag.STORE_JOB)) {
                     acgMap.put(jobId, acg);
                 }
             }

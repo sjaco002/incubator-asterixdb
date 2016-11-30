@@ -20,8 +20,8 @@ package org.apache.hyracks.api.client;
 
 import java.io.Serializable;
 import java.net.URL;
-import java.util.EnumSet;
 import java.util.List;
+import java.util.Set;
 
 import org.apache.hyracks.api.dataset.DatasetDirectoryRecord;
 import org.apache.hyracks.api.dataset.ResultSetId;
@@ -105,29 +105,27 @@ public class HyracksClientInterfaceFunctions {
         private static final long serialVersionUID = 1L;
 
         private final byte[] acggfBytes;
-        private final EnumSet<JobFlag> jobFlags;
+        private final Set<JobFlag> jobFlags;
         private final DeploymentId deploymentId;
         private final JobId jobId;
 
-        public StartJobFunction(byte[] acggfBytes, EnumSet<JobFlag> jobFlags, JobId jobId) {
-            this.acggfBytes = acggfBytes;
-            this.jobFlags = jobFlags;
-            this.deploymentId = null;
-            this.jobId = jobId;
-        }
-
-        public StartJobFunction(byte[] acggfBytes, EnumSet<JobFlag> jobFlags) {
-            this.acggfBytes = acggfBytes;
-            this.jobFlags = jobFlags;
-            this.deploymentId = null;
-            this.jobId = null;
-        }
-
-        public StartJobFunction(DeploymentId deploymentId, byte[] acggfBytes, EnumSet<JobFlag> jobFlags) {
+        private StartJobFunction(DeploymentId deploymentId, byte[] acggfBytes, Set<JobFlag> jobFlags, JobId jobId) {
             this.acggfBytes = acggfBytes;
             this.jobFlags = jobFlags;
             this.deploymentId = deploymentId;
-            this.jobId = null;
+            this.jobId = jobId;
+        }
+
+        public StartJobFunction(byte[] acggfBytes, Set<JobFlag> jobFlags, JobId jobId) {
+            this(null, acggfBytes, jobFlags, jobId);
+        }
+
+        public StartJobFunction(byte[] acggfBytes, Set<JobFlag> jobFlags) {
+            this(null, acggfBytes, jobFlags, null);
+        }
+
+        public StartJobFunction(DeploymentId deploymentId, byte[] acggfBytes, Set<JobFlag> jobFlags) {
+            this(deploymentId, acggfBytes, jobFlags, null);
         }
 
         @Override
@@ -143,7 +141,7 @@ public class HyracksClientInterfaceFunctions {
             return acggfBytes;
         }
 
-        public EnumSet<JobFlag> getJobFlags() {
+        public Set<JobFlag> getJobFlags() {
             return jobFlags;
         }
 

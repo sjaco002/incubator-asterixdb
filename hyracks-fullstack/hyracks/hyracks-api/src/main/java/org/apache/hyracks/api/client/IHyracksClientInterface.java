@@ -19,9 +19,9 @@
 package org.apache.hyracks.api.client;
 
 import java.net.URL;
-import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import org.apache.hyracks.api.comm.NetworkAddress;
 import org.apache.hyracks.api.deployment.DeploymentId;
@@ -36,9 +36,9 @@ public interface IHyracksClientInterface {
 
     public JobStatus getJobStatus(JobId jobId) throws Exception;
 
-    public JobId startJob(byte[] acggfBytes, EnumSet<JobFlag> jobFlags) throws Exception;
+    public JobId startJob(byte[] acggfBytes, Set<JobFlag> jobFlags) throws Exception;
 
-    public JobId startJob(byte[] acggfBytes, EnumSet<JobFlag> jobFlags, JobId jobId) throws Exception;
+    public JobId startJob(byte[] acggfBytes, Set<JobFlag> jobFlags, JobId jobId) throws Exception;
 
     public NetworkAddress getDatasetDirectoryServiceInfo() throws Exception;
 
@@ -52,7 +52,7 @@ public interface IHyracksClientInterface {
 
     public void unDeployBinary(DeploymentId deploymentId) throws Exception;
 
-    public JobId startJob(DeploymentId deploymentId, byte[] acggfBytes, EnumSet<JobFlag> jobFlags) throws Exception;
+    public JobId startJob(DeploymentId deploymentId, byte[] acggfBytes, Set<JobFlag> jobFlags) throws Exception;
 
     public JobInfo getJobInfo(JobId jobId) throws Exception;
 

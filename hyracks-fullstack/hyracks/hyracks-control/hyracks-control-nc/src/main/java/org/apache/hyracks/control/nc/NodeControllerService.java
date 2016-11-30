@@ -115,7 +115,7 @@ public class NodeControllerService implements IControllerService {
 
     private final Map<JobId, Joblet> jobletMap;
 
-    private final Map<JobId, ActivityClusterGraph> activityCluseterGraphMap;
+    private final Map<JobId, ActivityClusterGraph> activityClusterGraphMap;
 
     private ExecutorService executor;
 
@@ -170,7 +170,7 @@ public class NodeControllerService implements IControllerService {
         lccm = new LifeCycleComponentManager();
         workQueue = new WorkQueue(id, Thread.NORM_PRIORITY); // Reserves MAX_PRIORITY of the heartbeat thread.
         jobletMap = new Hashtable<>();
-        activityCluseterGraphMap = new Hashtable<>();
+        activityClusterGraphMap = new Hashtable<>();
         timer = new Timer(true);
         serverCtx = new ServerContext(ServerContext.ServerType.NODE_CONTROLLER,
                 new File(new File(NodeControllerService.class.getName()), id));
@@ -361,7 +361,7 @@ public class NodeControllerService implements IControllerService {
     }
 
     public Map<JobId, ActivityClusterGraph> getACGMap() {
-        return activityCluseterGraphMap;
+        return activityClusterGraphMap;
     }
 
     public NetworkManager getNetworkManager() {
