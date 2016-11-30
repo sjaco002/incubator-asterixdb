@@ -18,9 +18,9 @@
  */
 package org.apache.hyracks.api.client;
 
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 import org.apache.hyracks.api.comm.NetworkAddress;
 import org.apache.hyracks.api.deployment.DeploymentId;
@@ -80,7 +80,7 @@ public interface IHyracksClientConnection {
      *            Flags
      * @throws Exception
      */
-    public JobId startJob(JobSpecification jobSpec, Set<JobFlag> jobFlags) throws Exception;
+    public JobId startJob(JobSpecification jobSpec, EnumSet<JobFlag> jobFlags) throws Exception;
 
     /**
      * Start the specified Job.
@@ -93,7 +93,7 @@ public interface IHyracksClientConnection {
      *            Flags
      * @throws Exception
      */
-    public JobId startJob(JobSpecification jobSpec, Set<JobFlag> jobFlags, JobId jobId) throws Exception;
+    public JobId startJob(JobSpecification jobSpec, EnumSet<JobFlag> jobFlags, JobId jobId) throws Exception;
 
     /**
      * Start the specified Job.
@@ -106,7 +106,7 @@ public interface IHyracksClientConnection {
      *            Flags
      * @throws Exception
      */
-    public JobId startJob(IActivityClusterGraphGeneratorFactory acggf, Set<JobFlag> jobFlags) throws Exception;
+    public JobId startJob(IActivityClusterGraphGeneratorFactory acggf, EnumSet<JobFlag> jobFlags) throws Exception;
 
     /**
      * Gets the IP Address and port for the DatasetDirectoryService wrapped in NetworkAddress
@@ -179,7 +179,7 @@ public interface IHyracksClientConnection {
      *            Flags
      * @throws Exception
      */
-    public JobId startJob(DeploymentId deploymentId, JobSpecification jobSpec, Set<JobFlag> jobFlags)
+    public JobId startJob(DeploymentId deploymentId, JobSpecification jobSpec, EnumSet<JobFlag> jobFlags)
             throws Exception;
 
     /**
@@ -193,7 +193,8 @@ public interface IHyracksClientConnection {
      *            Flags
      * @throws Exception
      */
-    public JobId startJob(DeploymentId deploymentId, IActivityClusterGraphGeneratorFactory acggf, Set<JobFlag> jobFlags)
+    public JobId startJob(DeploymentId deploymentId, IActivityClusterGraphGeneratorFactory acggf,
+            EnumSet<JobFlag> jobFlags)
             throws Exception;
 
     /**

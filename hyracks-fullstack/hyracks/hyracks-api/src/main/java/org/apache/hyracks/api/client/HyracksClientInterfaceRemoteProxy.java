@@ -19,9 +19,9 @@
 package org.apache.hyracks.api.client;
 
 import java.net.URL;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 import org.apache.hyracks.api.comm.NetworkAddress;
@@ -62,21 +62,21 @@ public class HyracksClientInterfaceRemoteProxy implements IHyracksClientInterfac
     }
 
     @Override
-    public JobId startJob(byte[] acggfBytes, Set<JobFlag> jobFlags) throws Exception {
+    public JobId startJob(byte[] acggfBytes, EnumSet<JobFlag> jobFlags) throws Exception {
         HyracksClientInterfaceFunctions.StartJobFunction sjf =
                 new HyracksClientInterfaceFunctions.StartJobFunction(acggfBytes, jobFlags);
         return (JobId) rpci.call(ipcHandle, sjf);
     }
 
     @Override
-    public JobId startJob(byte[] acggfBytes, Set<JobFlag> jobFlags, JobId jobId) throws Exception {
+    public JobId startJob(byte[] acggfBytes, EnumSet<JobFlag> jobFlags, JobId jobId) throws Exception {
         HyracksClientInterfaceFunctions.StartJobFunction sjf =
                 new HyracksClientInterfaceFunctions.StartJobFunction(acggfBytes, jobFlags, jobId);
         return (JobId) rpci.call(ipcHandle, sjf);
     }
 
     @Override
-    public JobId startJob(DeploymentId deploymentId, byte[] acggfBytes, Set<JobFlag> jobFlags) throws Exception {
+    public JobId startJob(DeploymentId deploymentId, byte[] acggfBytes, EnumSet<JobFlag> jobFlags) throws Exception {
         HyracksClientInterfaceFunctions.StartJobFunction sjf = new HyracksClientInterfaceFunctions.StartJobFunction(
                 deploymentId, acggfBytes, jobFlags);
         return (JobId) rpci.call(ipcHandle, sjf);
