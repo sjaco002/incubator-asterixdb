@@ -18,72 +18,66 @@
  */
 package org.apache.hyracks.control.cc.work;
 
-import java.util.Collections;
 import java.util.EnumSet;
+import java.util.Map;
+import java.util.Set;
 
-import org.apache.hyracks.api.deployment.DeploymentId;
+import org.apache.hyracks.api.constraints.Constraint;
+import org.apache.hyracks.api.exceptions.HyracksException;
+import org.apache.hyracks.api.job.ActivityClusterGraph;
 import org.apache.hyracks.api.job.IActivityClusterGraphGenerator;
 import org.apache.hyracks.api.job.IActivityClusterGraphGeneratorFactory;
 import org.apache.hyracks.api.job.JobFlag;
 import org.apache.hyracks.api.job.JobId;
-import org.apache.hyracks.api.job.JobStatus;
+import org.apache.hyracks.api.util.JavaSerializationUtils;
 import org.apache.hyracks.control.cc.ClusterControllerService;
+import org.apache.hyracks.control.cc.NodeControllerState;
 import org.apache.hyracks.control.cc.application.CCApplicationContext;
-import org.apache.hyracks.control.cc.job.JobRun;
 import org.apache.hyracks.control.common.deployment.DeploymentUtils;
 import org.apache.hyracks.control.common.work.IResultCallback;
 import org.apache.hyracks.control.common.work.SynchronizableWork;
 
-public class JobStartWork extends SynchronizableWork {
+public class DistributeJobWork extends SynchronizableWork {
     private final ClusterControllerService ccs;
     private final byte[] acggfBytes;
-    private final EnumSet<JobFlag> jobFlags;
-    private final DeploymentId deploymentId;
     private final JobId jobId;
     private final IResultCallback<JobId> callback;
-    private final boolean predestributed;
 
-    public JobStartWork(ClusterControllerService ccs, DeploymentId deploymentId, byte[] acggfBytes,
-            EnumSet<JobFlag> jobFlags, JobId jobId, IResultCallback<JobId> callback, boolean predestributed) {
-        this.deploymentId = deploymentId;
+    public DistributeJobWork(ClusterControllerService ccs, byte[] acggfBytes, JobId jobId,
+            IResultCallback<JobId> callback) {
         this.jobId = jobId;
         this.ccs = ccs;
         this.acggfBytes = acggfBytes;
-        this.jobFlags = jobFlags;
         this.callback = callback;
-        this.predestributed = predestributed;
     }
 
     @Override
     protected void doRun() throws Exception {
         try {
             final CCApplicationContext appCtx = ccs.getApplicationContext();
-            JobRun run;
-            IActivityClusterGraphGeneratorFactory acggf = null;
-            if (!predestributed) {
-                //Need to create the ActivityClusterGraph
-                acggf = (IActivityClusterGraphGeneratorFactory) DeploymentUtils
-                        .deserialize(acggfBytes, deploymentId, appCtx);
-                IActivityClusterGraphGenerator acgg =
-                        acggf.createActivityClusterGraphGenerator(jobId, appCtx, jobFlags);
-                run = new JobRun(ccs, deploymentId, jobId, acgg, jobFlags);
-            } else {
-                //ActivityClusterGraph has already been distributed
-                run = new JobRun(ccs, deploymentId, jobId);
+            Map<JobId, ActivityClusterGraph> acgMap = ccs.getActivityClusterGraphMap();
+            Map<JobId, Set<Constraint>> acgConstaintsMap = ccs.getActivityClusterGraphConstraintsMap();
+            ActivityClusterGraph entry = acgMap.get(jobId);
+            Set<Constraint> constaints = acgConstaintsMap.get(jobId);
+            if (entry != null || constaints != null) {
+                throw new HyracksException("Trying to distribute a job with a duplicate jobId");
             }
-            run.setStatus(JobStatus.INITIALIZED, null);
-            run.setStartTime(System.currentTimeMillis());
-            ccs.getActiveRunMap().put(jobId, run);
-            if (!predestributed) {
-                appCtx.notifyJobCreation(jobId, acggf);
+            IActivityClusterGraphGeneratorFactory acggf =
+                    (IActivityClusterGraphGeneratorFactory) DeploymentUtils.deserialize(acggfBytes, null, appCtx);
+            IActivityClusterGraphGenerator acgg =
+                    acggf.createActivityClusterGraphGenerator(jobId, appCtx, EnumSet.noneOf(JobFlag.class));
+            ActivityClusterGraph acg = acgg.initialize();
+            acgMap.put(jobId, acg);
+            acgConstaintsMap.put(jobId, acgg.getConstraints());
+
+            appCtx.notifyJobCreation(jobId, acggf);
+
+            byte[] acgBytes = JavaSerializationUtils.serialize(acg);
+            for (NodeControllerState node : ccs.getNodeMap().values()) {
+                //TODO: Can we just use acggfBytes here?
+                node.getNodeController().distributeJob(jobId, acgBytes);
             }
-            run.setStatus(JobStatus.RUNNING, null);
-            try {
-                run.getScheduler().startJob();
-            } catch (Exception e) {
-                ccs.getWorkQueue().schedule(
-                        new JobCleanupWork(ccs, run.getJobId(), JobStatus.FAILURE, Collections.singletonList(e)));
-            }
+
             callback.setValue(jobId);
         } catch (Exception e) {
             callback.setException(e);

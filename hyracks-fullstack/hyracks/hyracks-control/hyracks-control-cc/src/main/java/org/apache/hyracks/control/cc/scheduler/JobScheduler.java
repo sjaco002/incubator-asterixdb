@@ -31,8 +31,6 @@ import java.util.Set;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.apache.hyracks.api.comm.NetworkAddress;
 import org.apache.hyracks.api.constraints.Constraint;
 import org.apache.hyracks.api.constraints.expressions.LValueConstraintExpression;
@@ -66,6 +64,9 @@ import org.apache.hyracks.control.cc.work.JobCleanupWork;
 import org.apache.hyracks.control.common.job.PartitionState;
 import org.apache.hyracks.control.common.job.TaskAttemptDescriptor;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+
 public class JobScheduler {
     private static final Logger LOGGER = Logger.getLogger(JobScheduler.class.getName());
 
@@ -75,14 +76,17 @@ public class JobScheduler {
 
     private final PartitionConstraintSolver solver;
 
+    private final boolean predistributed;
+
     private final Map<PartitionId, TaskCluster> partitionProducingTaskClusterMap;
 
     private final Set<TaskCluster> inProgressTaskClusters;
 
-
-    public JobScheduler(ClusterControllerService ccs, JobRun jobRun, Collection<Constraint> constraints) {
+    public JobScheduler(ClusterControllerService ccs, JobRun jobRun, Collection<Constraint> constraints,
+            boolean predistributed) {
         this.ccs = ccs;
         this.jobRun = jobRun;
+        this.predistributed = predistributed;
         solver = new PartitionConstraintSolver();
         partitionProducingTaskClusterMap = new HashMap<PartitionId, TaskCluster>();
         inProgressTaskClusters = new HashSet<TaskCluster>();
@@ -465,7 +469,6 @@ public class JobScheduler {
         final Map<ConnectorDescriptorId, IConnectorPolicy> connectorPolicies = new HashMap<ConnectorDescriptorId, IConnectorPolicy>(
                 jobRun.getConnectorPolicyMap());
         try {
-            byte[] acgBytes = JavaSerializationUtils.serialize(acg);
             for (Map.Entry<String, List<TaskAttemptDescriptor>> entry : taskAttemptMap.entrySet()) {
                 String nodeId = entry.getKey();
                 final List<TaskAttemptDescriptor> taskDescriptors = entry.getValue();
@@ -475,6 +478,10 @@ public class JobScheduler {
                     boolean changed = jobRun.getParticipatingNodeIds().add(nodeId);
                     if (LOGGER.isLoggable(Level.FINE)) {
                         LOGGER.fine("Starting: " + taskDescriptors + " at " + entry.getKey());
+                    }
+                    byte[] acgBytes = null;
+                    if (!predistributed && !changed) {
+                        acgBytes = JavaSerializationUtils.serialize(acg);
                     }
                     byte[] jagBytes = changed ? acgBytes : null;
                     node.getNodeController().startTasks(deploymentId, jobId, jagBytes, taskDescriptors,

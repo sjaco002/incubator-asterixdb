@@ -25,6 +25,7 @@ import java.net.InetSocketAddress;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.Hashtable;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -40,9 +41,11 @@ import java.util.logging.Logger;
 import org.apache.hyracks.api.application.ICCApplicationEntryPoint;
 import org.apache.hyracks.api.client.ClusterControllerInfo;
 import org.apache.hyracks.api.comm.NetworkAddress;
+import org.apache.hyracks.api.constraints.Constraint;
 import org.apache.hyracks.api.context.ICCContext;
 import org.apache.hyracks.api.deployment.DeploymentId;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
+import org.apache.hyracks.api.job.ActivityClusterGraph;
 import org.apache.hyracks.api.job.JobId;
 import org.apache.hyracks.api.service.IControllerService;
 import org.apache.hyracks.api.topology.ClusterTopology;
@@ -101,6 +104,10 @@ public class ClusterControllerService implements IControllerService {
 
     private final Map<JobId, List<Exception>> runMapHistory;
 
+    private final Map<JobId, ActivityClusterGraph> activityClusterGraphMap;
+
+    private final Map<JobId, Set<Constraint>> activityClusterGraphConstraintsMap;
+
     private final WorkQueue workQueue;
 
     private ExecutorService executor;
@@ -138,6 +145,8 @@ public class ClusterControllerService implements IControllerService {
                 new JavaSerializationBasedPayloadSerializerDeserializer());
         webServer = new WebServer(this);
         activeRunMap = new HashMap<>();
+        activityClusterGraphMap = new Hashtable<>();
+        activityClusterGraphConstraintsMap = new Hashtable<>();
         runMapArchive = new LinkedHashMap<JobId, JobRun>() {
             private static final long serialVersionUID = 1L;
 
@@ -311,6 +320,14 @@ public class ClusterControllerService implements IControllerService {
 
     public Map<JobId, List<Exception>> getRunHistory() {
         return runMapHistory;
+    }
+
+    public Map<JobId, ActivityClusterGraph> getActivityClusterGraphMap() {
+        return activityClusterGraphMap;
+    }
+
+    public Map<JobId, Set<Constraint>> getActivityClusterGraphConstraintsMap() {
+        return activityClusterGraphConstraintsMap;
     }
 
     public Map<InetAddress, Set<String>> getIpAddressNodeNameMap() {

@@ -20,7 +20,6 @@ package org.apache.hyracks.control.cc.job;
 
 import java.io.PrintWriter;
 import java.io.StringWriter;
-import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -28,9 +27,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ArrayNode;
-import com.fasterxml.jackson.databind.node.ObjectNode;
+import org.apache.hyracks.api.constraints.Constraint;
 import org.apache.hyracks.api.dataflow.ActivityId;
 import org.apache.hyracks.api.dataflow.ConnectorDescriptorId;
 import org.apache.hyracks.api.dataflow.OperatorDescriptorId;
@@ -53,16 +50,20 @@ import org.apache.hyracks.control.cc.scheduler.JobScheduler;
 import org.apache.hyracks.control.common.job.profiling.om.JobProfile;
 import org.apache.hyracks.control.common.utils.ExceptionUtils;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+
 public class JobRun implements IJobStatusConditionVariable {
     private final DeploymentId deploymentId;
 
     private final JobId jobId;
 
-    private final IActivityClusterGraphGenerator acgg;
+    private IActivityClusterGraphGenerator acgg;
 
-    private final ActivityClusterGraph acg;
+    private ActivityClusterGraph acg;
 
-    private final JobScheduler scheduler;
+    private JobScheduler scheduler;
 
     private final EnumSet<JobFlag> jobFlags;
 
@@ -94,13 +95,9 @@ public class JobRun implements IJobStatusConditionVariable {
 
     private Map<OperatorDescriptorId, Map<Integer, String>> operatorLocations;
 
-    public JobRun(ClusterControllerService ccs, DeploymentId deploymentId, JobId jobId,
-            IActivityClusterGraphGenerator acgg, EnumSet<JobFlag> jobFlags) {
+    private JobRun(ClusterControllerService ccs, DeploymentId deploymentId, JobId jobId, EnumSet<JobFlag> jobFlags) {
         this.deploymentId = deploymentId;
         this.jobId = jobId;
-        this.acgg = acgg;
-        this.acg = acgg.initialize();
-        this.scheduler = new JobScheduler(ccs, this, acgg.getConstraints());
         this.jobFlags = jobFlags;
         activityClusterPlanMap = new HashMap<ActivityClusterId, ActivityClusterPlan>();
         pmm = new PartitionMatchMaker();
@@ -110,6 +107,32 @@ public class JobRun implements IJobStatusConditionVariable {
         connectorPolicyMap = new HashMap<ConnectorDescriptorId, IConnectorPolicy>();
         operatorLocations = new HashMap<OperatorDescriptorId, Map<Integer, String>>();
         createTime = System.currentTimeMillis();
+
+    }
+
+    //Run a Pre-distributed job by passing the ActivityClusterGraph
+    public JobRun(ClusterControllerService ccs, DeploymentId deploymentId, JobId jobId)
+            throws HyracksException {
+        this(ccs, deploymentId, jobId, null);
+        Map<JobId, ActivityClusterGraph> acgMap = ccs.getActivityClusterGraphMap();
+        Map<JobId, Set<Constraint>> acgConstaintsMap = ccs.getActivityClusterGraphConstraintsMap();
+        ActivityClusterGraph entry = acgMap.get(jobId);
+        Set<Constraint> constaints = acgConstaintsMap.get(jobId);
+        if (entry == null || constaints == null) {
+            throw new HyracksException("Trying to run a pre-destributed job with no cluster map");
+        }
+        this.acg = entry;
+        this.acgg = null;
+        this.scheduler = new JobScheduler(ccs, this, constaints, true);
+    }
+
+    //Run a new job by creating an ActivityClusterGraph
+    public JobRun(ClusterControllerService ccs, DeploymentId deploymentId, JobId jobId,
+            IActivityClusterGraphGenerator acgg, EnumSet<JobFlag> jobFlags) {
+        this(ccs, deploymentId, jobId, jobFlags);
+        this.acgg = acgg;
+        this.acg = acgg.initialize();
+        this.scheduler = new JobScheduler(ccs, this, acgg.getConstraints(), false);
     }
 
     public DeploymentId getDeploymentId() {
