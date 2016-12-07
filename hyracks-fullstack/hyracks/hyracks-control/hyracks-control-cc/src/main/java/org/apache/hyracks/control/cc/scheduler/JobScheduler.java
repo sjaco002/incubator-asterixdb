@@ -480,7 +480,7 @@ public class JobScheduler {
                         LOGGER.fine("Starting: " + taskDescriptors + " at " + entry.getKey());
                     }
                     byte[] acgBytes = null;
-                    if (!predistributed && !changed) {
+                    if (!predistributed && changed) {
                         acgBytes = JavaSerializationUtils.serialize(acg);
                     }
                     byte[] jagBytes = changed ? acgBytes : null;
