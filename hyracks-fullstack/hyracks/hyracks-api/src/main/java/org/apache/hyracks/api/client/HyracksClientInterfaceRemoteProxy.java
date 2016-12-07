@@ -90,6 +90,13 @@ public class HyracksClientInterfaceRemoteProxy implements IHyracksClientInterfac
     }
 
     @Override
+    public JobId destroyJob(JobId jobId) throws Exception {
+        HyracksClientInterfaceFunctions.DestroyJobFunction sjf =
+                new HyracksClientInterfaceFunctions.DestroyJobFunction(jobId);
+        return (JobId) rpci.call(ipcHandle, sjf);
+    }
+
+    @Override
     public NetworkAddress getDatasetDirectoryServiceInfo() throws Exception {
         HyracksClientInterfaceFunctions.GetDatasetDirectoryServiceInfoFunction gddsf =
                 new HyracksClientInterfaceFunctions.GetDatasetDirectoryServiceInfoFunction();

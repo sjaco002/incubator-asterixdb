@@ -88,6 +88,15 @@ public interface IHyracksClientConnection extends IClusterInfoCollector {
     public JobId distributeJob(JobSpecification jobSpec) throws Exception;
 
     /**
+     * Destroy the distributed graph for a pre-distributed job
+     *
+     * @param jobId
+     *            The id of the predistributed job
+     * @throws Exception
+     */
+    public JobId destroyJob(JobId jobId) throws Exception;
+
+    /**
      * Used to run a pre-distributed job by id (the same JobId will be returned)
      *
      * @param jobId

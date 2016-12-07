@@ -42,6 +42,8 @@ public interface IHyracksClientInterface {
 
     public JobId distributeJob(byte[] acggfBytes) throws Exception;
 
+    public JobId destroyJob(JobId jobId) throws Exception;
+
     public NetworkAddress getDatasetDirectoryServiceInfo() throws Exception;
 
     public void waitForCompletion(JobId jobId) throws Exception;

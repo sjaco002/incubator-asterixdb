@@ -31,6 +31,7 @@ import org.apache.hyracks.api.job.JobStatus;
 import org.apache.hyracks.control.cc.work.CliDeployBinaryWork;
 import org.apache.hyracks.control.cc.work.CliUnDeployBinaryWork;
 import org.apache.hyracks.control.cc.work.ClusterShutdownWork;
+import org.apache.hyracks.control.cc.work.DestroyJobWork;
 import org.apache.hyracks.control.cc.work.DistributeJobWork;
 import org.apache.hyracks.control.cc.work.GetDatasetDirectoryServiceInfoWork;
 import org.apache.hyracks.control.cc.work.GetJobInfoWork;
@@ -87,6 +88,12 @@ class ClientInterfaceIPCI implements IIPCI {
                         (HyracksClientInterfaceFunctions.DistributeJobFunction) fn;
                 ccs.getWorkQueue().schedule(new DistributeJobWork(ccs, djf.getACGGFBytes(), jobIdFactory.create(),
                         new IPCResponder<JobId>(handle, mid)));
+                break;
+            case DESTROY_JOB:
+                HyracksClientInterfaceFunctions.DestroyJobFunction dsjf =
+                        (HyracksClientInterfaceFunctions.DestroyJobFunction) fn;
+                ccs.getWorkQueue()
+                        .schedule(new DestroyJobWork(ccs, dsjf.getJobId(), new IPCResponder<JobId>(handle, mid)));
                 break;
             case START_JOB:
                 HyracksClientInterfaceFunctions.StartJobFunction sjf =

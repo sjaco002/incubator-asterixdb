@@ -74,7 +74,6 @@ public class DistributeJobWork extends SynchronizableWork {
 
             byte[] acgBytes = JavaSerializationUtils.serialize(acg);
             for (NodeControllerState node : ccs.getNodeMap().values()) {
-                //TODO: Can we just use acggfBytes here?
                 node.getNodeController().distributeJob(jobId, acgBytes);
             }
 

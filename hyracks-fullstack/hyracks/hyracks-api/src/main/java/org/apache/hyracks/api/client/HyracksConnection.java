@@ -110,6 +110,11 @@ public final class HyracksConnection implements IHyracksClientConnection {
     }
 
     @Override
+    public JobId destroyJob(JobId jobId) throws Exception {
+        return hci.destroyJob(jobId);
+    }
+
+    @Override
     public JobId startJob(JobId jobId) throws Exception {
         return hci.startJob(jobId);
     }
