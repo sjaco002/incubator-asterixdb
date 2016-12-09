@@ -322,13 +322,30 @@ public class ClusterControllerService implements IControllerService {
         return runMapHistory;
     }
 
-    public Map<JobId, ActivityClusterGraph> getActivityClusterGraphMap() {
-        return activityClusterGraphMap;
+    public void storeActivityClusterGraph(JobId jobId, ActivityClusterGraph acg) {
+        activityClusterGraphMap.put(jobId, acg);
     }
 
-    public Map<JobId, Set<Constraint>> getActivityClusterGraphConstraintsMap() {
-        return activityClusterGraphConstraintsMap;
+    public void removeActivityClusterGraph(JobId jobId) {
+        activityClusterGraphMap.remove(jobId);
     }
+
+    public ActivityClusterGraph getActivityClusterGraph(JobId jobId) {
+        return activityClusterGraphMap.get(jobId);
+    }
+
+    public void storeActivityClusterGraphConstraints(JobId jobId, Set<Constraint> acgConstraints) {
+        activityClusterGraphConstraintsMap.put(jobId, acgConstraints);
+    }
+
+    public void removeActivityClusterGraphConstraints(JobId jobId) {
+        activityClusterGraphConstraintsMap.remove(jobId);
+    }
+
+    public Set<Constraint> getActivityClusterGraphConstraints(JobId jobId) {
+        return activityClusterGraphConstraintsMap.get(jobId);
+    }
+
 
     public Map<InetAddress, Set<String>> getIpAddressNodeNameMap() {
         return ipAddressNodeNameMap;

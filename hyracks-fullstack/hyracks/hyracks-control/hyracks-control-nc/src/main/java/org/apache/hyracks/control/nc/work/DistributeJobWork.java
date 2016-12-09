@@ -19,8 +19,6 @@
 
 package org.apache.hyracks.control.nc.work;
 
-import java.util.Map;
-
 import org.apache.hyracks.api.exceptions.HyracksException;
 import org.apache.hyracks.api.job.ActivityClusterGraph;
 import org.apache.hyracks.api.job.JobId;
@@ -46,8 +44,7 @@ public class DistributeJobWork extends AbstractWork {
 
     @Override
     public void run() {
-        Map<JobId, ActivityClusterGraph> acgMap = ncs.getActivityClusterGraphMap();
-        ActivityClusterGraph acg = acgMap.get(jobId);
+        ActivityClusterGraph acg = ncs.getActivityClusterGraph(jobId);
         if (acg != null) {
             throw new RuntimeException("Trying to distribute a job that has already been distributed!");
         }
@@ -56,7 +53,7 @@ public class DistributeJobWork extends AbstractWork {
         } catch (HyracksException e) {
             throw new RuntimeException(e);
         }
-        acgMap.put(jobId, acg);
+        ncs.storeActivityClusterGraph(jobId, acg);
     }
 
 }

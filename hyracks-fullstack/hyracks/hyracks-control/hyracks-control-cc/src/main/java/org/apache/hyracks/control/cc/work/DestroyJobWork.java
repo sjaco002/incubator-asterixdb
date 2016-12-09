@@ -18,8 +18,7 @@
  */
 package org.apache.hyracks.control.cc.work;
 
-import java.util.Map;
-
+import org.apache.hyracks.api.exceptions.HyracksException;
 import org.apache.hyracks.api.job.ActivityClusterGraph;
 import org.apache.hyracks.api.job.JobId;
 import org.apache.hyracks.control.cc.ClusterControllerService;
@@ -41,12 +40,11 @@ public class DestroyJobWork extends SynchronizableWork {
     @Override
     protected void doRun() throws Exception {
         try {
-            Map<JobId, ActivityClusterGraph> acgMap = ccs.getActivityClusterGraphMap();
-            ActivityClusterGraph acg = acgMap.get(jobId);
+            ActivityClusterGraph acg = ccs.getActivityClusterGraph(jobId);
             if (acg == null) {
-                throw new RuntimeException("Trying to destroy a job that was never distributed!");
+                throw new HyracksException("Trying to destroy a job that was never distributed!");
             }
-            acgMap.remove(jobId);
+            ccs.removeActivityClusterGraph(jobId);
             for (NodeControllerState node : ccs.getNodeMap().values()) {
                 node.getNodeController().destroyJob(jobId);
             }

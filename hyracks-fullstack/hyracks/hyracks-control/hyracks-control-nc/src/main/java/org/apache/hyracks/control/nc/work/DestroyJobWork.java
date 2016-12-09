@@ -19,15 +19,13 @@
 
 package org.apache.hyracks.control.nc.work;
 
-import java.util.Map;
-
 import org.apache.hyracks.api.job.ActivityClusterGraph;
 import org.apache.hyracks.api.job.JobId;
 import org.apache.hyracks.control.common.work.AbstractWork;
 import org.apache.hyracks.control.nc.NodeControllerService;
 
 /**
- * destroy a permanently distributed job
+ * destroy a pre-distributed job
  *
  */
 public class DestroyJobWork extends AbstractWork {
@@ -42,12 +40,11 @@ public class DestroyJobWork extends AbstractWork {
 
     @Override
     public void run() {
-        Map<JobId, ActivityClusterGraph> acgMap = ncs.getActivityClusterGraphMap();
-        ActivityClusterGraph acg = acgMap.get(jobId);
+        ActivityClusterGraph acg = ncs.getActivityClusterGraph(jobId);
         if (acg == null) {
             throw new RuntimeException("Trying to destroy a job that was never distributed!");
         }
-        acgMap.remove(jobId);
+        ncs.removeActivityClusterGraph(jobId);
     }
 
 }

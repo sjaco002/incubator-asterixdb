@@ -360,8 +360,16 @@ public class NodeControllerService implements IControllerService {
         return jobletMap;
     }
 
-    public Map<JobId, ActivityClusterGraph> getActivityClusterGraphMap() {
-        return activityClusterGraphMap;
+    public void storeActivityClusterGraph(JobId jobId, ActivityClusterGraph acg) {
+        activityClusterGraphMap.put(jobId, acg);
+    }
+
+    public void removeActivityClusterGraph(JobId jobId) {
+        activityClusterGraphMap.remove(jobId);
+    }
+
+    public ActivityClusterGraph getActivityClusterGraph(JobId jobId) {
+        return activityClusterGraphMap.get(jobId);
     }
 
     public NetworkManager getNetworkManager() {

@@ -19,7 +19,6 @@
 package org.apache.hyracks.control.cc.work;
 
 import java.util.EnumSet;
-import java.util.Map;
 import java.util.Set;
 
 import org.apache.hyracks.api.constraints.Constraint;
@@ -55,10 +54,8 @@ public class DistributeJobWork extends SynchronizableWork {
     protected void doRun() throws Exception {
         try {
             final CCApplicationContext appCtx = ccs.getApplicationContext();
-            Map<JobId, ActivityClusterGraph> acgMap = ccs.getActivityClusterGraphMap();
-            Map<JobId, Set<Constraint>> acgConstaintsMap = ccs.getActivityClusterGraphConstraintsMap();
-            ActivityClusterGraph entry = acgMap.get(jobId);
-            Set<Constraint> constaints = acgConstaintsMap.get(jobId);
+            ActivityClusterGraph entry = ccs.getActivityClusterGraph(jobId);
+            Set<Constraint> constaints = ccs.getActivityClusterGraphConstraints(jobId);
             if (entry != null || constaints != null) {
                 throw new HyracksException("Trying to distribute a job with a duplicate jobId");
             }
@@ -67,8 +64,8 @@ public class DistributeJobWork extends SynchronizableWork {
             IActivityClusterGraphGenerator acgg =
                     acggf.createActivityClusterGraphGenerator(jobId, appCtx, EnumSet.noneOf(JobFlag.class));
             ActivityClusterGraph acg = acgg.initialize();
-            acgMap.put(jobId, acg);
-            acgConstaintsMap.put(jobId, acgg.getConstraints());
+            ccs.storeActivityClusterGraph(jobId, acg);
+            ccs.storeActivityClusterGraphConstraints(jobId, acgg.getConstraints());
 
             appCtx.notifyJobCreation(jobId, acggf);
 
