@@ -18,6 +18,10 @@
  */
 package org.apache.hyracks.storage.am.lsm.common.impls;
 
+import java.io.BufferedReader;
+import java.io.FileNotFoundException;
+import java.io.FileReader;
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -40,7 +44,7 @@ import org.apache.hyracks.storage.common.file.IFileMapManager;
 import org.apache.hyracks.storage.common.file.TransientFileMapManager;
 
 public class VirtualBufferCache implements IVirtualBufferCache {
-    private static final Logger LOGGER = Logger.getLogger(ExternalIndexHarness.class.getName());
+    private static final Logger LOGGER = Logger.getLogger(VirtualBufferCache.class.getName());
 
     private static final int OVERFLOW_PADDING = 8;
 
@@ -57,6 +61,11 @@ public class VirtualBufferCache implements IVirtualBufferCache {
 
     private boolean open;
 
+    private String[] flushes = null;
+    private boolean multisizeFlushesFlag = false;
+    private int pageFull = 0;
+    private int flushCounter = 0;
+
     public VirtualBufferCache(ICacheMemoryAllocator allocator, int pageSize, int numPages) {
         this.allocator = allocator;
         this.fileMapManager = new TransientFileMapManager();
@@ -68,6 +77,13 @@ public class VirtualBufferCache implements IVirtualBufferCache {
         nextFree = 0;
         largePages = new AtomicInteger(0);
         open = false;
+
+        if (multisizeFlushesFlag) {
+            initializeFlushSizes();
+            pageFull = Integer.parseInt(flushes[flushCounter]);
+            LOGGER.severe("Constructor Page Full: " + pageFull);
+            flushCounter++;
+        }
     }
 
     @Override
@@ -338,6 +354,17 @@ public class VirtualBufferCache implements IVirtualBufferCache {
 
     @Override
     public boolean isFull() {
+        if (multisizeFlushesFlag) {
+            int end = nextFree - 1;
+            if (pageFull < end) {
+                pageFull = Integer.parseInt(flushes[flushCounter]);
+                LOGGER.severe("Page Full: " + pageFull);
+                flushCounter++;
+                return true;
+            } else {
+                return false;
+            }
+        }
         return (nextFree + largePages.get()) >= numPages;
     }
 
@@ -424,4 +451,21 @@ public class VirtualBufferCache implements IVirtualBufferCache {
 
     }
 
+    private void initializeFlushSizes() {
+        String USER_HOME = System.getProperty("user.home");
+        String FILE_SEPARATOR = System.getProperty("file.separator");
+        try (BufferedReader br = new BufferedReader(new FileReader(USER_HOME + FILE_SEPARATOR + "flushes.txt"))) {
+            String line = br.readLine();
+            flushes = line.split(",");
+            br.close();
+
+        } catch (FileNotFoundException e) {
+
+            e.printStackTrace();
+        } catch (IOException e) {
+
+            e.printStackTrace();
+        }
+
+    }
 }

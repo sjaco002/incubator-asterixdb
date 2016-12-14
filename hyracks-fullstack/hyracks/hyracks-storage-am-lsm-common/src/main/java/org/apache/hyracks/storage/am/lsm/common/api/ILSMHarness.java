@@ -62,4 +62,5 @@ public interface ILSMHarness {
             LSMOperationType opType) throws HyracksDataException;
 
     public void endReplication(ILSMIndexOperationContext ctx) throws HyracksDataException;
+    public ILSMMergePolicy getMergePolicy();
 }

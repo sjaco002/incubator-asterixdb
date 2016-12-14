@@ -20,9 +20,12 @@
 package org.apache.hyracks.storage.am.lsm.btree.impls;
 
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 import org.apache.hyracks.api.dataflow.value.IBinaryComparatorFactory;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
@@ -85,6 +88,12 @@ import org.apache.hyracks.storage.common.file.IFileMapProvider;
 
 public class LSMBTree extends AbstractLSMIndex implements ITreeIndex {
 
+    private static final Logger LOGGER = Logger.getLogger(LSMBTree.class.getName());
+    private long experimentCount = 0;
+    private long experimentDuplCheckTime = 0;
+    private long experimentLogInterval = 25000;
+    private long totalDiskComponents = 0;
+
     // For creating BTree's used in flush and merge.
     protected final LSMBTreeDiskComponentFactory componentFactory;
     // For creating BTree's used in bulk load. Different from diskBTreeFactory
@@ -102,16 +111,15 @@ public class LSMBTree extends AbstractLSMIndex implements ITreeIndex {
     private final boolean hasBloomFilter;
 
     public LSMBTree(IIOManager ioManager, List<IVirtualBufferCache> virtualBufferCaches,
-            ITreeIndexFrameFactory interiorFrameFactory,
-            ITreeIndexFrameFactory insertLeafFrameFactory, ITreeIndexFrameFactory deleteLeafFrameFactory,
-            ILSMIndexFileManager fileManager, TreeIndexFactory<BTree> diskBTreeFactory,
-            TreeIndexFactory<BTree> bulkLoadBTreeFactory, BloomFilterFactory bloomFilterFactory,
-            ILSMComponentFilterFactory filterFactory, ILSMComponentFilterFrameFactory filterFrameFactory,
-            LSMComponentFilterManager filterManager, double bloomFilterFalsePositiveRate,
-            IFileMapProvider diskFileMapProvider, int fieldCount, IBinaryComparatorFactory[] cmpFactories,
-            ILSMMergePolicy mergePolicy, ILSMOperationTracker opTracker, ILSMIOOperationScheduler ioScheduler,
-            ILSMIOOperationCallback ioOpCallback, boolean needKeyDupCheck, int[] btreeFields, int[] filterFields,
-            boolean durable) throws HyracksDataException {
+            ITreeIndexFrameFactory interiorFrameFactory, ITreeIndexFrameFactory insertLeafFrameFactory,
+            ITreeIndexFrameFactory deleteLeafFrameFactory, ILSMIndexFileManager fileManager,
+            TreeIndexFactory<BTree> diskBTreeFactory, TreeIndexFactory<BTree> bulkLoadBTreeFactory,
+            BloomFilterFactory bloomFilterFactory, ILSMComponentFilterFactory filterFactory,
+            ILSMComponentFilterFrameFactory filterFrameFactory, LSMComponentFilterManager filterManager,
+            double bloomFilterFalsePositiveRate, IFileMapProvider diskFileMapProvider, int fieldCount,
+            IBinaryComparatorFactory[] cmpFactories, ILSMMergePolicy mergePolicy, ILSMOperationTracker opTracker,
+            ILSMIOOperationScheduler ioScheduler, ILSMIOOperationCallback ioOpCallback, boolean needKeyDupCheck,
+            int[] btreeFields, int[] filterFields, boolean durable) throws HyracksDataException {
         super(ioManager, virtualBufferCaches, diskBTreeFactory.getBufferCache(), fileManager, diskFileMapProvider,
                 bloomFilterFalsePositiveRate, mergePolicy, opTracker, ioScheduler, ioOpCallback, filterFrameFactory,
                 filterManager, filterFields, durable);
@@ -131,16 +139,15 @@ public class LSMBTree extends AbstractLSMIndex implements ITreeIndex {
             ++i;
         }
         componentFactory = new LSMBTreeDiskComponentFactory(diskBTreeFactory, bloomFilterFactory, filterFactory);
-        bulkLoadComponentFactory = new LSMBTreeDiskComponentFactory(bulkLoadBTreeFactory, bloomFilterFactory,
-                filterFactory);
+        bulkLoadComponentFactory =
+                new LSMBTreeDiskComponentFactory(bulkLoadBTreeFactory, bloomFilterFactory, filterFactory);
         this.needKeyDupCheck = needKeyDupCheck;
         this.btreeFields = btreeFields;
         this.hasBloomFilter = needKeyDupCheck;
     }
 
     // Without memory components
-    public LSMBTree(IIOManager ioManager,
-            ITreeIndexFrameFactory insertLeafFrameFactory,
+    public LSMBTree(IIOManager ioManager, ITreeIndexFrameFactory insertLeafFrameFactory,
             ITreeIndexFrameFactory deleteLeafFrameFactory, ILSMIndexFileManager fileManager,
             TreeIndexFactory<BTree> diskBTreeFactory, TreeIndexFactory<BTree> bulkLoadBTreeFactory,
             BloomFilterFactory bloomFilterFactory, double bloomFilterFalsePositiveRate,
@@ -148,8 +155,7 @@ public class LSMBTree extends AbstractLSMIndex implements ITreeIndex {
             ILSMMergePolicy mergePolicy, ILSMOperationTracker opTracker, ILSMIOOperationScheduler ioScheduler,
             ILSMIOOperationCallback ioOpCallback, boolean needKeyDupCheck, boolean durable) {
         super(ioManager, diskBTreeFactory.getBufferCache(), fileManager, diskFileMapProvider,
-                bloomFilterFalsePositiveRate,
-                mergePolicy, opTracker, ioScheduler, ioOpCallback, durable);
+                bloomFilterFalsePositiveRate, mergePolicy, opTracker, ioScheduler, ioOpCallback, durable);
         this.insertLeafFrameFactory = insertLeafFrameFactory;
         this.deleteLeafFrameFactory = deleteLeafFrameFactory;
         this.cmpFactories = cmpFactories;
@@ -188,9 +194,9 @@ public class LSMBTree extends AbstractLSMIndex implements ITreeIndex {
         for (LSMComponentFileReferences lsmComonentFileReference : validFileReferences) {
             LSMBTreeDiskComponent component;
             try {
-                component = createDiskComponent(componentFactory, lsmComonentFileReference
-                        .getInsertIndexFileReference(),
-                        lsmComonentFileReference.getBloomFilterFileReference(), false);
+                component =
+                        createDiskComponent(componentFactory, lsmComonentFileReference.getInsertIndexFileReference(),
+                                lsmComonentFileReference.getBloomFilterFileReference(), false);
             } catch (IndexException e) {
                 throw new HyracksDataException(e);
             }
@@ -358,11 +364,13 @@ public class LSMBTree extends AbstractLSMIndex implements ITreeIndex {
     }
 
     private boolean insert(ITupleReference tuple, LSMBTreeOpContext ctx) throws HyracksDataException, IndexException {
+        experimentCount++;
         LSMBTreePointSearchCursor searchCursor = ctx.insertSearchCursor;
         IIndexCursor memCursor = ctx.memCursor;
         RangePredicate predicate = (RangePredicate) ctx.getSearchPredicate();
         predicate.setHighKey(tuple);
         predicate.setLowKey(tuple);
+        Date checkStartTime = new Date();
         if (needKeyDupCheck) {
             // first check the inmemory component
             ctx.currentMutableBTreeAccessor.search(memCursor, predicate);
@@ -401,6 +409,20 @@ public class LSMBTree extends AbstractLSMIndex implements ITreeIndex {
                 searchCursor.close();
                 // Add the current active mutable component back
                 ctx.getComponentHolder().add(0, firstComponent);
+            }
+
+        }
+
+        Date checkEndTime = new Date();
+        experimentDuplCheckTime = experimentDuplCheckTime + (checkEndTime.getTime() - checkStartTime.getTime());
+        if (experimentCount % experimentLogInterval == 0) {
+            if (LOGGER.isLoggable(Level.SEVERE)) {
+                ILSMMergePolicy mergePolicy = lsmHarness.getMergePolicy();
+                totalDiskComponents = totalDiskComponents + diskComponents.size();
+                LOGGER.severe("Merge Policy Experiment:" + "," + totalDiskComponents + "," + diskComponents.size() + ","
+                        + mergePolicy.getNumberOfFlushes() + "," + mergePolicy.getNumberOfMerges() + ","
+                        + mergePolicy.getMergeCost() + "," + experimentDuplCheckTime + "," + checkEndTime + ","
+                        + experimentCount);
             }
         }
         ctx.currentMutableBTreeAccessor.upsertIfConditionElseInsert(tuple, AntimatterAwareTupleAcceptor.INSTANCE);
@@ -514,8 +536,8 @@ public class LSMBTree extends AbstractLSMIndex implements ITreeIndex {
         BTree lastBTree = ((LSMBTreeDiskComponent) mergingComponents.get(mergingComponents.size() - 1)).getBTree();
         FileReference firstFile = firstBTree.getFileReference();
         FileReference lastFile = lastBTree.getFileReference();
-        LSMComponentFileReferences relMergeFileRefs = fileManager.getRelMergeFileReference(firstFile.getFile()
-                .getName(), lastFile.getFile().getName());
+        LSMComponentFileReferences relMergeFileRefs =
+                fileManager.getRelMergeFileReference(firstFile.getFile().getName(), lastFile.getFile().getName());
         ILSMIndexAccessorInternal accessor = new LSMBTreeAccessor(lsmHarness, opCtx);
         ioScheduler.scheduleOperation(new LSMBTreeMergeOperation(accessor, mergingComponents, cursor,
                 relMergeFileRefs.getInsertIndexFileReference(), relMergeFileRefs.getBloomFilterFileReference(),
@@ -585,7 +607,7 @@ public class LSMBTree extends AbstractLSMIndex implements ITreeIndex {
 
     protected LSMBTreeDiskComponent createDiskComponent(LSMBTreeDiskComponentFactory factory,
             FileReference btreeFileRef, FileReference bloomFilterFileRef, boolean createComponent)
-            throws HyracksDataException, IndexException {
+                    throws HyracksDataException, IndexException {
         // Create new BTree instance.
         LSMBTreeDiskComponent component = (LSMBTreeDiskComponent) factory
                 .createLSMComponentInstance(new LSMComponentFileReferences(btreeFileRef, null, bloomFilterFileRef));
@@ -662,8 +684,8 @@ public class LSMBTree extends AbstractLSMIndex implements ITreeIndex {
 
             if (hasBloomFilter) {
                 int maxBucketsPerElement = BloomCalculations.maxBucketsPerElement(numElementsHint);
-                BloomFilterSpecification bloomFilterSpec = BloomCalculations.computeBloomSpec(maxBucketsPerElement,
-                        bloomFilterFalsePositiveRate);
+                BloomFilterSpecification bloomFilterSpec =
+                        BloomCalculations.computeBloomSpec(maxBucketsPerElement, bloomFilterFalsePositiveRate);
                 builder = ((LSMBTreeDiskComponent) component).getBloomFilter().createBuilder(numElementsHint,
                         bloomFilterSpec.getNumHashes(), bloomFilterSpec.getNumBucketsPerElements());
             } else {
@@ -807,36 +829,36 @@ public class LSMBTree extends AbstractLSMIndex implements ITreeIndex {
 
     @Override
     public ITreeIndexFrameFactory getInteriorFrameFactory() {
-        LSMBTreeMemoryComponent mutableComponent = (LSMBTreeMemoryComponent) memoryComponents.get(
-                currentMutableComponentId.get());
+        LSMBTreeMemoryComponent mutableComponent =
+                (LSMBTreeMemoryComponent) memoryComponents.get(currentMutableComponentId.get());
         return mutableComponent.getBTree().getInteriorFrameFactory();
     }
 
     @Override
     public int getFieldCount() {
-        LSMBTreeMemoryComponent mutableComponent = (LSMBTreeMemoryComponent) memoryComponents.get(
-                currentMutableComponentId.get());
+        LSMBTreeMemoryComponent mutableComponent =
+                (LSMBTreeMemoryComponent) memoryComponents.get(currentMutableComponentId.get());
         return mutableComponent.getBTree().getFieldCount();
     }
 
     @Override
     public int getFileId() {
-        LSMBTreeMemoryComponent mutableComponent = (LSMBTreeMemoryComponent) memoryComponents.get(
-                currentMutableComponentId.get());
+        LSMBTreeMemoryComponent mutableComponent =
+                (LSMBTreeMemoryComponent) memoryComponents.get(currentMutableComponentId.get());
         return mutableComponent.getBTree().getFileId();
     }
 
     @Override
     public IPageManager getPageManager() {
-        LSMBTreeMemoryComponent mutableComponent = (LSMBTreeMemoryComponent) memoryComponents.get(
-                currentMutableComponentId.get());
+        LSMBTreeMemoryComponent mutableComponent =
+                (LSMBTreeMemoryComponent) memoryComponents.get(currentMutableComponentId.get());
         return mutableComponent.getBTree().getPageManager();
     }
 
     @Override
     public ITreeIndexFrameFactory getLeafFrameFactory() {
-        LSMBTreeMemoryComponent mutableComponent = (LSMBTreeMemoryComponent) memoryComponents.get(
-                currentMutableComponentId.get());
+        LSMBTreeMemoryComponent mutableComponent =
+                (LSMBTreeMemoryComponent) memoryComponents.get(currentMutableComponentId.get());
         return mutableComponent.getBTree().getLeafFrameFactory();
     }
 
@@ -853,8 +875,8 @@ public class LSMBTree extends AbstractLSMIndex implements ITreeIndex {
 
     @Override
     public int getRootPageId() {
-        LSMBTreeMemoryComponent mutableComponent = (LSMBTreeMemoryComponent) memoryComponents.get(
-                currentMutableComponentId.get());
+        LSMBTreeMemoryComponent mutableComponent =
+                (LSMBTreeMemoryComponent) memoryComponents.get(currentMutableComponentId.get());
         return mutableComponent.getBTree().getRootPageId();
     }
 

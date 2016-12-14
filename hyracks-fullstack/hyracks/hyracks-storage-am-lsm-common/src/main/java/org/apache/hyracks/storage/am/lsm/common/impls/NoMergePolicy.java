@@ -27,10 +27,12 @@ import org.apache.hyracks.storage.am.lsm.common.api.ILSMMergePolicy;
 
 public class NoMergePolicy implements ILSMMergePolicy {
 
+    private long numFlushes = 0;
+
     @Override
-    public void diskComponentAdded(final ILSMIndex index, boolean fullMergeIsRequested)
+    public void diskComponentAdded(final ILSMIndex index, boolean fullMergeIsRequested, boolean isMergeOp)
             throws HyracksDataException, IndexException {
-        // Do nothing
+        numFlushes++;
     }
 
     @Override
@@ -41,5 +43,23 @@ public class NoMergePolicy implements ILSMMergePolicy {
     @Override
     public boolean isMergeLagging(ILSMIndex index) {
         return false;
+    }
+
+    @Override
+    public long getNumberOfFlushes() {
+
+        return numFlushes;
+    }
+
+    @Override
+    public long getNumberOfMerges() {
+
+        return 0;
+    }
+
+    @Override
+    public double getMergeCost() {
+
+        return 0;
     }
 }

@@ -25,7 +25,7 @@ import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.apache.hyracks.storage.am.common.api.IndexException;
 
 public interface ILSMMergePolicy {
-    public void diskComponentAdded(ILSMIndex index, boolean fullMergeIsRequested)
+    public void diskComponentAdded(ILSMIndex index, boolean fullMergeIsRequested, boolean isMergeOp)
             throws HyracksDataException, IndexException;
 
     public void configure(Map<String, String> properties);
@@ -56,4 +56,7 @@ public interface ILSMMergePolicy {
      * @throws IndexException
      */
     public boolean isMergeLagging(ILSMIndex index) throws HyracksDataException, IndexException;
+    public long getNumberOfFlushes();
+    public long getNumberOfMerges();
+    public double getMergeCost();
 }

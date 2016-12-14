@@ -19,6 +19,8 @@
 
 package org.apache.hyracks.storage.am.lsm.common.impls;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.logging.Level;
@@ -33,116 +35,116 @@ import org.apache.hyracks.storage.am.lsm.common.api.ILSMIndex;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMIndexAccessor;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMMergePolicy;
 
-public class ConstantMergePolicy implements ILSMMergePolicy {
+public class BinomialMergePolicy implements ILSMMergePolicy {
+
     private int numComponents;
     private long numFlushes = 0;
     private long numMerges = 0;
     private double mergeCost = 0.0;
-    private static final Logger LOGGER = Logger.getLogger(ConstantMergePolicy.class.getName());
+    private static final Logger LOGGER = Logger.getLogger(BinomialMergePolicy.class.getName());
 
     @Override
     public void diskComponentAdded(final ILSMIndex index, boolean fullMergeIsRequested, boolean isMergeOp)
             throws HyracksDataException, IndexException {
 
-        if (!isMergeOp) {
-            numFlushes++;
-        }
-        List<ILSMComponent> immutableComponents = index.getImmutableComponents();
-        if (!areComponentsMergable(immutableComponents)) {
+        if (isMergeOp) {
             return;
         }
-
+        numFlushes++;
+        List<ILSMComponent> immutableComponents = new ArrayList<ILSMComponent>(index.getImmutableComponents());
+        if (!areComponentsReadableWritableState(immutableComponents)) {
+            return;
+        }
         if (fullMergeIsRequested) {
-            ILSMIndexAccessor accessor =
-                    index.createAccessor(NoOpOperationCallback.INSTANCE, NoOpOperationCallback.INSTANCE);
+            ILSMIndexAccessor accessor = (ILSMIndexAccessor) index.createAccessor(NoOpOperationCallback.INSTANCE,
+                    NoOpOperationCallback.INSTANCE);
             accessor.scheduleFullMerge(index.getIOOperationCallback());
             long mergeSize = getMergeSize(immutableComponents);
             logDiskComponentsSnapshot(immutableComponents);
             logMergeInfo(mergeSize, true, immutableComponents.size(), immutableComponents.size());
             numMerges++;
             mergeCost = mergeCost + ((double) mergeSize) / (1024 * 1024 * 1024);
-        } else if (immutableComponents.size() >= numComponents) {
-            ILSMIndexAccessor accessor =
-                    index.createAccessor(NoOpOperationCallback.INSTANCE, NoOpOperationCallback.INSTANCE);
-            accessor.scheduleMerge(index.getIOOperationCallback(), immutableComponents);
-            long mergeSize = getMergeSize(immutableComponents);
-            logDiskComponentsSnapshot(immutableComponents);
-            logMergeInfo(mergeSize, false, immutableComponents.size(), immutableComponents.size());
-            numMerges++;
-            mergeCost = mergeCost + ((double) mergeSize) / (1024 * 1024 * 1024);
+            return;
         }
+        scheduleMerge(index);
     }
 
-    @Override
-    public void configure(Map<String, String> properties) {
-        numComponents = Integer.parseInt(properties.get("num-components"));
-    }
-
-    @Override
-    public boolean isMergeLagging(ILSMIndex index) throws HyracksDataException, IndexException {
-        // see PrefixMergePolicy.isMergeLagging() for the rationale behind this code.
-
-        /**
-         * case 1.
-         * if totalImmutableCommponentCount < threshold,
-         * merge operation is not lagged ==> return false.
-         * case 2.
-         * if a) totalImmutableCommponentCount >= threshold && b) there is an ongoing merge,
-         * merge operation is lagged. ==> return true.
-         * case 3. *SPECIAL CASE*
-         * if a) totalImmutableCommponentCount >= threshold && b) there is *NO* ongoing merge,
-         * merge operation is lagged. ==> *schedule a merge operation* and then return true.
-         * This is a special case that requires to schedule a merge operation.
-         * Otherwise, all flush operations will be hung.
-         * This case can happen in a following situation:
-         * The system may crash when
-         * condition 1) the mergableImmutableCommponentCount >= threshold and
-         * condition 2) merge operation is going on.
-         * After the system is recovered, still condition 1) is true.
-         * If there are flush operations in the same dataset partition after the recovery,
-         * all these flush operations may not proceed since there is no ongoing merge and
-         * there will be no new merge either in this situation.
-         */
-
-        List<ILSMComponent> immutableComponents = index.getImmutableComponents();
-        int totalImmutableComponentCount = immutableComponents.size();
-
-        // [case 1]
-        if (totalImmutableComponentCount < numComponents) {
+    private boolean scheduleMerge(final ILSMIndex index) throws HyracksDataException, IndexException {
+        List<ILSMComponent> immutableComponents = new ArrayList<ILSMComponent>(index.getImmutableComponents());
+        Collections.reverse(immutableComponents);
+        int size = immutableComponents.size();
+        int depth = 0;
+        while ((tree(depth) < numFlushes)) {
+            depth++;
+        }
+        int mergedIndex =
+                binomial_index(depth, Math.min(depth, numComponents) - 1, (int) (numFlushes - tree(depth - 1) - 1));
+        LOGGER.severe("Binomial Index: " + numFlushes + "," + (mergedIndex + 1) + "," + size);
+        if (mergedIndex == size - 1) {
             return false;
         }
+        LOGGER.severe("Binomial Compaction: " + numFlushes + "," + (mergedIndex + 1) + "," + size);
+        long mergeSize = 0;
+        List<ILSMComponent> mergableComponents = new ArrayList<ILSMComponent>();
+        for (int i = mergedIndex; i < immutableComponents.size(); i++) {
+            mergeSize = mergeSize + ((AbstractDiskLSMComponent) immutableComponents.get(i)).getComponentSize();
+            mergableComponents.add(immutableComponents.get(i));
+        }
+        Collections.reverse(mergableComponents);
+        ILSMIndexAccessor accessor = (ILSMIndexAccessor) index.createAccessor(NoOpOperationCallback.INSTANCE,
+                NoOpOperationCallback.INSTANCE);
+        accessor.scheduleMerge(index.getIOOperationCallback(), mergableComponents);
+        logDiskComponentsSnapshot(immutableComponents);
+        logMergeInfo(mergeSize, false, mergableComponents.size(), immutableComponents.size());
+        numMerges++;
+        mergeCost = mergeCost + ((double) mergeSize) / (1024 * 1024 * 1024);
+        return true;
+    }
 
-        boolean isMergeOngoing = isMergeOngoing(immutableComponents);
+    private int binomial_index(int d, int h, int t) {
+        if (t < 0 || t > binomial_choose(d + h, h)) {
+            LOGGER.severe("Binomial Exception");
 
-        // here, implicitly (totalImmutableComponentCount >= numComponents) is true by passing case 1.
-        if (isMergeOngoing) {
-            // [case 2]
-            return true;
+        }
+        if (t == 0) {
+            return 0;
+        } else if (t < binomial_choose(d + h - 1, h)) {
+            return binomial_index(d - 1, h, t);
+        }
+        return binomial_index(d, h - 1, t - binomial_choose(d + h - 1, h)) + 1;
+
+    }
+
+    private int tree(int d) {
+        if (d < 0) {
+            return 0;
+        }
+        return tree(d - 1) + binomial_choose(d + Math.min(d, numComponents) - 1, d);
+    }
+
+    private int binomial_choose(int n, int k) {
+        if (k < 0 || k > n) {
+            return 0;
+        }
+        if (k == 0 || k == n) {
+            return 1;
         } else {
-            // [case 3]
-            // schedule a merge operation after making sure that all components are mergable
-            if (!areComponentsMergable(immutableComponents)) {
-                throw new IllegalStateException();
+            int bin[][] = new int[n + 1][n + 1];
+
+            for (int r = 0; r <= n; r++) {
+                for (int c = 0; c <= r && c <= k; c++) {
+                    if (c == 0 || c == r) {
+                        bin[r][c] = 1;
+                    } else {
+                        bin[r][c] = bin[r - 1][c - 1] + bin[r - 1][c];
+                    }
+                }
             }
-            ILSMIndexAccessor accessor =
-                    index.createAccessor(NoOpOperationCallback.INSTANCE, NoOpOperationCallback.INSTANCE);
-            accessor.scheduleMerge(index.getIOOperationCallback(), immutableComponents);
-            long mergeSize = getMergeSize(immutableComponents);
-            logDiskComponentsSnapshot(immutableComponents);
-            logMergeInfo(mergeSize, false, immutableComponents.size(), immutableComponents.size());
-            numMerges++;
-            mergeCost = mergeCost + ((double) mergeSize) / (1024 * 1024 * 1024);
-            return true;
+            return bin[n][k];
         }
     }
 
-    /**
-     * checks whether all given components are mergable or not
-     *
-     * @param immutableComponents
-     * @return true if all components are mergable, false otherwise.
-     */
-    private boolean areComponentsMergable(List<ILSMComponent> immutableComponents) {
+    private boolean areComponentsReadableWritableState(List<ILSMComponent> immutableComponents) {
         for (ILSMComponent c : immutableComponents) {
             if (c.getState() != ComponentState.READABLE_UNWRITABLE) {
                 return false;
@@ -151,12 +153,6 @@ public class ConstantMergePolicy implements ILSMMergePolicy {
         return true;
     }
 
-    /**
-     * This method returns whether there is an ongoing merge operation or not by checking
-     * each component state of given components.
-     *
-     * @return true if there is an ongoing merge operation, false otherwise.
-     */
     private boolean isMergeOngoing(List<ILSMComponent> immutableComponents) {
         int size = immutableComponents.size();
         for (int i = 0; i < size; i++) {
@@ -165,6 +161,11 @@ public class ConstantMergePolicy implements ILSMMergePolicy {
             }
         }
         return false;
+    }
+
+    @Override
+    public void configure(Map<String, String> properties) {
+        numComponents = Integer.parseInt(properties.get("num-components"));
     }
 
     private void logMergeInfo(long size, boolean isFullMerge, int mergedComponents, int totalComponents) {
@@ -199,6 +200,17 @@ public class ConstantMergePolicy implements ILSMMergePolicy {
             }
             LOGGER.severe("Merge Snapshot: " + snapshotStr);
         }
+    }
+
+    @Override
+    public boolean isMergeLagging(ILSMIndex index) throws HyracksDataException, IndexException {
+        List<ILSMComponent> immutableComponents = index.getImmutableComponents();
+        boolean isMergeOngoing = isMergeOngoing(immutableComponents);
+        if (isMergeOngoing) {
+            return true;
+        }
+        return false;
+
     }
 
     @Override

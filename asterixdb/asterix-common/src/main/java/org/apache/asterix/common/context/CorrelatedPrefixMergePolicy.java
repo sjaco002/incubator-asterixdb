@@ -51,7 +51,7 @@ public class CorrelatedPrefixMergePolicy implements ILSMMergePolicy {
     }
 
     @Override
-    public void diskComponentAdded(final ILSMIndex index, boolean fullMergeIsRequested)
+    public void diskComponentAdded(final ILSMIndex index, boolean fullMergeIsRequested, boolean isMergeOp)
             throws HyracksDataException, IndexException {
         // This merge policy will only look at primary indexes in order to evaluate if a merge operation is needed. If it decides that
         // a merge operation is needed, then it will merge *all* the indexes that belong to the dataset. The criteria to decide if a merge
@@ -70,8 +70,8 @@ public class CorrelatedPrefixMergePolicy implements ILSMMergePolicy {
             }
         }
         if (fullMergeIsRequested) {
-            ILSMIndexAccessor accessor = index.createAccessor(NoOpOperationCallback.INSTANCE,
-                    NoOpOperationCallback.INSTANCE);
+            ILSMIndexAccessor accessor =
+                    index.createAccessor(NoOpOperationCallback.INSTANCE, NoOpOperationCallback.INSTANCE);
             accessor.scheduleFullMerge(index.getIOOperationCallback());
             return;
         }
@@ -101,8 +101,8 @@ public class CorrelatedPrefixMergePolicy implements ILSMMergePolicy {
                     || (isLastComponent && i - startIndex >= maxToleranceComponentCount)) {
 
                 for (ILSMIndex lsmIndex : indexes) {
-                    List<ILSMComponent> reversedImmutableComponents = new ArrayList<ILSMComponent>(
-                            lsmIndex.getImmutableComponents());
+                    List<ILSMComponent> reversedImmutableComponents =
+                            new ArrayList<ILSMComponent>(lsmIndex.getImmutableComponents());
                     // Reverse the components order so that we look at components from oldest to newest.
                     Collections.reverse(reversedImmutableComponents);
 
@@ -113,8 +113,8 @@ public class CorrelatedPrefixMergePolicy implements ILSMMergePolicy {
                     // Reverse the components order back to its original order
                     Collections.reverse(mergableComponents);
 
-                    ILSMIndexAccessor accessor = lsmIndex.createAccessor(NoOpOperationCallback.INSTANCE,
-                            NoOpOperationCallback.INSTANCE);
+                    ILSMIndexAccessor accessor =
+                            lsmIndex.createAccessor(NoOpOperationCallback.INSTANCE, NoOpOperationCallback.INSTANCE);
                     accessor.scheduleMerge(lsmIndex.getIOOperationCallback(), mergableComponents);
                 }
                 break;
@@ -130,7 +130,25 @@ public class CorrelatedPrefixMergePolicy implements ILSMMergePolicy {
 
     @Override
     public boolean isMergeLagging(ILSMIndex index) {
-        //TODO implement properly according to the merge policy
+
         return false;
+    }
+
+    @Override
+    public long getNumberOfFlushes() {
+
+        return 0;
+    }
+
+    @Override
+    public long getNumberOfMerges() {
+
+        return 0;
+    }
+
+    @Override
+    public double getMergeCost() {
+        // TODO Auto-generated method stub
+        return 0;
     }
 }

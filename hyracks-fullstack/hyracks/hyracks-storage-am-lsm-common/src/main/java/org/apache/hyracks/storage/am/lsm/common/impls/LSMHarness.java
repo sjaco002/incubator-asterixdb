@@ -270,7 +270,7 @@ public class LSMHarness implements ILSMHarness {
                                     componentsToBeReplicated.add(newComponent);
                                     triggerReplication(componentsToBeReplicated, false, opType);
                                 }
-                                mergePolicy.diskComponentAdded(lsmIndex, false);
+                                mergePolicy.diskComponentAdded(lsmIndex, false, false);
                             }
                             break;
                         case MERGE:
@@ -282,7 +282,7 @@ public class LSMHarness implements ILSMHarness {
                                     componentsToBeReplicated.add(newComponent);
                                     triggerReplication(componentsToBeReplicated, false, opType);
                                 }
-                                mergePolicy.diskComponentAdded(lsmIndex, fullMergeIsRequested.get());
+                                mergePolicy.diskComponentAdded(lsmIndex, fullMergeIsRequested.get(), true);
                             }
                             break;
                         default:
@@ -504,7 +504,7 @@ public class LSMHarness implements ILSMHarness {
                 componentsToBeReplicated.add(c);
                 triggerReplication(componentsToBeReplicated, true, LSMOperationType.MERGE);
             }
-            mergePolicy.diskComponentAdded(lsmIndex, false);
+            mergePolicy.diskComponentAdded(lsmIndex, false, false);
         }
     }
 
@@ -545,5 +545,10 @@ public class LSMHarness implements ILSMHarness {
         if (ctx.isAccessingComponents()) {
             throw new HyracksDataException("Opeartion already has access to components of index " + lsmIndex);
         }
+    }
+
+    public ILSMMergePolicy getMergePolicy() {
+
+        return mergePolicy;
     }
 }

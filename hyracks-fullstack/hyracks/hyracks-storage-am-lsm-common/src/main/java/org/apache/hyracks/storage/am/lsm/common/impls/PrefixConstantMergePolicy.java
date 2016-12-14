@@ -35,23 +35,22 @@ import org.apache.hyracks.storage.am.lsm.common.api.ILSMIndex;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMIndexAccessor;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMMergePolicy;
 
-public class PrefixMergePolicy implements ILSMMergePolicy {
+public class PrefixConstantMergePolicy implements ILSMMergePolicy {
 
     private long maxMergableComponentSize;
     private int maxToleranceComponentCount;
+    private int maxTotalNumberComponents;
+    private static final Logger LOGGER = Logger.getLogger(PrefixConstantMergePolicy.class.getName());
     private long numFlushes = 0;
     private long numMerges = 0;
     private double mergeCost = 0.0;
-    private static final Logger LOGGER = Logger.getLogger(PrefixMergePolicy.class.getName());
 
     @Override
     public void diskComponentAdded(final ILSMIndex index, boolean fullMergeIsRequested, boolean isMergeOp)
             throws HyracksDataException, IndexException {
-
         if (!isMergeOp) {
             numFlushes++;
         }
-
         List<ILSMComponent> immutableComponents = new ArrayList<ILSMComponent>(index.getImmutableComponents());
 
         if (!areComponentsReadableWritableState(immutableComponents)) {
@@ -77,85 +76,22 @@ public class PrefixMergePolicy implements ILSMMergePolicy {
     public void configure(Map<String, String> properties) {
         maxMergableComponentSize = Long.parseLong(properties.get("max-mergable-component-size"));
         maxToleranceComponentCount = Integer.parseInt(properties.get("max-tolerance-component-count"));
+        maxTotalNumberComponents = Integer.parseInt(properties.get("max-total-number-components"));
     }
 
     @Override
     public boolean isMergeLagging(ILSMIndex index) throws HyracksDataException, IndexException {
 
-        /**
-         * [for flow-control purpose]
-         * when merge operations are lagged, threads which flushed components will be blocked
-         * until merge operations catch up, i.e, until the number of mergable immutable components <= maxToleranceComponentCount
-         * example:
-         * suppose that maxToleranceComponentCount = 3 and maxMergableComponentSize = 1GB
-         * The following shows a set of events occurred in time ti with a brief description.
-         * time
-         * t40: c32-1(1GB, RU) c38-33(192MB, RU) c39-39(32MB, RU) c40-40(32MB, RU)
-         * --> a thread which added c40-40 will trigger a merge including c38-33,c39-39,c40-40
-         * t41: c32-1(1GB, RU) c38-33(192MB, RUM) c39-39(32MB, RUM) c40-40(32MB, RUM) c41-41(32MB, RU)
-         * --> a thread which added c41-41 will not be blocked
-         * t42: c32-1(1GB, RU) c38-33(192MB, RUM) c39-39(32MB, RUM) c40-40(32MB, RUM) c41-41(32MB, RU) c42-42(32MB, RU)
-         * --> a thread which added c42-42 will not be blocked
-         * t43: c32-1(1GB, RU) c38-33(192MB, RUM) c39-39(32MB, RUM) c40-40(32MB, RUM) c41-41(32MB, RU) c42-42(32MB, RU) c43-43(32MB, RU)
-         * --> a thread which added c43-43 will not be blocked and will not trigger a merge since there is an ongoing merge triggered in t1.
-         * t44: c32-1(1GB, RU) c38-33(192MB, RUM) c39-39(32MB, RUM) c40-40(32MB, RUM) c41-41(32MB, RU) c42-42(32MB, RU) c43-43(32MB, RU) 'c44-44(32MB, RU)'
-         * --> a thread which will add c44-44 (even if the disk component is created, but not added to index instance disk components yet)
-         * will be blocked until the number of RU components < maxToleranceComponentCount
-         * t45: c32-1(1GB, RU) *c40-33(256MB, RU)* c41-41(32MB, RU) c42-42(32MB, RU) c43-43(32MB, RU) 'c44-44(32MB, RU)'
-         * --> a thread which completed the merge triggered in t1 added c40-33 and will go ahead and trigger the next merge with c40-33,c41-41,c42-42,c43-43.
-         * Still, the blocked thread will continue being blocked and the c44-44 was not included in the merge since it's not added yet.
-         * t46: c32-1(1GB, RU) c40-33(256MB, RUM) c41-41(32MB, RUM) c42-42(32MB, RUM) c43-43(32MB, RUM) c44-44(32MB, RUM)
-         * --> the merge triggered in t45 is going on and the merge unblocked the blocked thread, so c44-44 was added.
-         * t47: c32-1(1GB, RU) *c43-33(320MB, RU)* c44-44(32MB, RUM)
-         * --> a thread completed the merge triggered in t45 and added c43-33.
-         * t48: c32-1(1GB, RU) c43-33(320MB, RU) c44-44(32MB, RUM) c48-48(32MB, RU)
-         * --> a thread added c48-48 and will not be blocked and will trigger a merge with c43-44, c44-44, c48-48.
-         * ... continues ...
-         * ----------------------------------------
-         * legend:
-         * For example, C32-1 represents a disk component, more specifically, disk component name, where 32-1 represents a timestamp range from t1 to time t32.
-         * This means that the component C32-1 is a component resulting from a merge operation that merged components C1-1 to C32-32.
-         * This also implies that if two timestamps in a component name are equal, the component has not been merged yet after it was created.
-         * RU and RUM are possible state of disk components, where RU represents READABLE_UNWRITABLE and RUM represents READABLE_UNWRITABLE_MERGING.
-         * Now, c32-1(1GB, RU) represents a disk component resulted from merging c1-1 ~ c32-32 and the component size is 1GB.
-         * ----------------------------------------
-         * The flow control allows at most maxToleranceComponentCount mergable components,
-         * where the mergable components are disk components whose i) state == RU and ii) size < maxMergableComponentSize.
-         */
-
-        /**
-         * case 1.
-         * if mergableImmutableCommponentCount < threshold,
-         * merge operation is not lagged ==> return false.
-         * case 2.
-         * if a) mergableImmutableCommponentCount >= threshold && b) there is an ongoing merge,
-         * merge operation is lagged. ==> return true.
-         * case 3. *SPECIAL CASE*
-         * if a) mergableImmutableCommponentCount >= threshold && b) there is *NO* ongoing merge,
-         * merge operation is lagged. ==> *schedule a merge operation* and then return true.
-         * This is a special case that requires to schedule a merge operation.
-         * Otherwise, all flush operations will be hung.
-         * This case can happen in a following situation:
-         * The system may crash when
-         * condition 1) the mergableImmutableCommponentCount >= threshold and
-         * condition 2) merge operation is going on.
-         * After the system is recovered, still condition 1) is true.
-         * If there are flush operations in the same dataset partition after the recovery,
-         * all these flush operations may not proceed since there is no ongoing merge and
-         * there will be no new merge either in this situation.
-         */
-
         List<ILSMComponent> immutableComponents = index.getImmutableComponents();
-        int mergableImmutableComponentCount = getMergableImmutableComponentCount(immutableComponents);
+        int totalImmutableComponentCount = immutableComponents.size();
 
         // [case 1]
-        if (mergableImmutableComponentCount < maxToleranceComponentCount) {
+        if (totalImmutableComponentCount < maxTotalNumberComponents) {
             return false;
         }
 
         boolean isMergeOngoing = isMergeOngoing(immutableComponents);
 
-        // here, implicitly (mergableImmutableComponentCount >= maxToleranceComponentCount) is true by passing case 1.
         if (isMergeOngoing) {
             // [case 2]
             return true;
@@ -243,7 +179,7 @@ public class PrefixMergePolicy implements ILSMMergePolicy {
         List<ILSMComponent> immutableComponents = new ArrayList<ILSMComponent>(index.getImmutableComponents());
         // Reverse the components order so that we look at components from oldest to newest.
         Collections.reverse(immutableComponents);
-
+        boolean merged = false;
         long totalSize = 0;
         int startIndex = -1;
         for (int i = 0; i < immutableComponents.size(); i++) {
@@ -272,7 +208,24 @@ public class PrefixMergePolicy implements ILSMMergePolicy {
                 logMergeInfo(mergeSize, false, mergableComponents.size(), immutableComponents.size());
                 numMerges++;
                 mergeCost = mergeCost + ((double) mergeSize) / (1024 * 1024 * 1024);
+                merged = true;
                 return true;
+            }
+
+        }
+        if (!merged) {
+            if (immutableComponents.size() >= maxTotalNumberComponents) {
+                logDiskComponentsSnapshot(immutableComponents);
+                Collections.reverse(immutableComponents);
+                ILSMIndexAccessor accessor = (ILSMIndexAccessor) index.createAccessor(NoOpOperationCallback.INSTANCE,
+                        NoOpOperationCallback.INSTANCE);
+                accessor.scheduleMerge(index.getIOOperationCallback(), immutableComponents);
+                long mergeSize = getMergeSize(immutableComponents);
+                logMergeInfo(mergeSize, false, immutableComponents.size(), immutableComponents.size());
+                numMerges++;
+                mergeCost = mergeCost + ((double) mergeSize) / (1024 * 1024 * 1024);
+                return true;
+
             }
         }
         return false;
