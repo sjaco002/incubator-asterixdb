@@ -349,7 +349,7 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
                         handleInsertUpsertStatement(metadataProvider, stmt, hcc, hdc, resultDelivery, stats, false);
                         break;
                     case Statement.Kind.DELETE:
-                        handleDeleteStatement(metadataProvider, stmt, hcc);
+                        handleDeleteStatement(metadataProvider, stmt, hcc, false);
                         break;
                     case Statement.Kind.CREATE_PRIMARY_FEED:
                     case Statement.Kind.CREATE_SECONDARY_FEED:
@@ -1894,8 +1894,8 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
         }
     }
 
-    public void handleDeleteStatement(MetadataProvider metadataProvider, Statement stmt,
-            IHyracksClientConnection hcc) throws Exception {
+    public JobSpecification handleDeleteStatement(MetadataProvider metadataProvider, Statement stmt,
+            IHyracksClientConnection hcc, boolean compileOnly) throws Exception {
 
         DeleteStatement stmtDelete = (DeleteStatement) stmt;
         String dataverseName = getActiveDataverse(stmtDelete.getDataverseName());
@@ -1916,9 +1916,10 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
             MetadataManager.INSTANCE.commitTransaction(mdTxnCtx);
             bActiveTxn = false;
 
-            if (jobSpec != null) {
+            if (jobSpec != null && !compileOnly) {
                 JobUtils.runJob(hcc, jobSpec, true);
             }
+            return jobSpec;
 
         } catch (Exception e) {
             if (bActiveTxn) {
