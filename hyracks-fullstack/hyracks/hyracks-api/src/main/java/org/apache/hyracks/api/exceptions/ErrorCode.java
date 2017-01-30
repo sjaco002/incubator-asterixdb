@@ -25,17 +25,30 @@ import java.util.Map;
 import org.apache.hyracks.api.util.ErrorMessageUtil;
 
 /**
- * A registry of runtime error codes
+ * A registry of runtime/compile error codes
+ * Error code:
+ * 0 --- 9999: runtime errors
+ * 10000 ---- 19999: compilation errors
  */
 public class ErrorCode {
     private static final String RESOURCE_PATH = "errormsg" + File.separator + "en.properties";
     public static final String HYRACKS = "HYR";
 
+    // Runtime error codes.
     public static final int INVALID_OPERATOR_OPERATION = 1;
     public static final int ERROR_PROCESSING_TUPLE = 2;
     public static final int FAILURE_ON_NODE = 3;
-    public static final int RUNTIME_FILE_WITH_ABSOULTE_PATH_NOT_WITHIN_ANY_IO_DEVICE = 4;
-    public static final int RUNTIME_FULLTEXT_PHRASE_FOUND = 5;
+    public static final int FILE_WITH_ABSOULTE_PATH_NOT_WITHIN_ANY_IO_DEVICE = 4;
+    public static final int FULLTEXT_PHRASE_FOUND = 5;
+    public static final int JOB_QUEUE_FULL = 6;
+    public static final int INVALID_NETWORK_ADDRESS = 7;
+    public static final int INVALID_INPUT_PARAMETER = 8;
+    public static final int JOB_REQUIREMENTS_EXCEED_CAPACITY = 9;
+    public static final int NO_SUCH_NODE = 10;
+    public static final int CLASS_LOADING_ISSUE = 11;
+
+    // Compilation error codes.
+    public static final int RULECOLLECTION_NOT_INSTANCE_OF_LIST = 10001;
 
     // Loads the map that maps error codes to error message templates.
     private static Map<Integer, String> errorMessageMap = null;

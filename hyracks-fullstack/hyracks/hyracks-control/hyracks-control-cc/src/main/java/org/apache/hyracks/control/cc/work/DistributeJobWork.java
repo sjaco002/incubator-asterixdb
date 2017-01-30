@@ -32,6 +32,7 @@ import org.apache.hyracks.api.util.JavaSerializationUtils;
 import org.apache.hyracks.control.cc.ClusterControllerService;
 import org.apache.hyracks.control.cc.NodeControllerState;
 import org.apache.hyracks.control.cc.application.CCApplicationContext;
+import org.apache.hyracks.control.cc.cluster.INodeManager;
 import org.apache.hyracks.control.common.deployment.DeploymentUtils;
 import org.apache.hyracks.control.common.work.IResultCallback;
 import org.apache.hyracks.control.common.work.SynchronizableWork;
@@ -70,7 +71,9 @@ public class DistributeJobWork extends SynchronizableWork {
             appCtx.notifyJobCreation(jobId, acggf);
 
             byte[] acgBytes = JavaSerializationUtils.serialize(acg);
-            for (NodeControllerState node : ccs.getNodeMap().values()) {
+
+            INodeManager nodeManager = ccs.getNodeManager();
+            for (NodeControllerState node : nodeManager.getAllNodeControllerStates()) {
                 node.getNodeController().distributeJob(jobId, acgBytes);
             }
 

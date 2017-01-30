@@ -16,6 +16,10 @@
  ! specific language governing permissions and limitations
  ! under the License.
 -->
+<#-- TODO(mblow): consume hyracks license via maven artifact
+     WARNING: THIS FILE MUST BE KEPT IN SYNC WITH COPY IN ASTERIXDB
+     (asterixdb/src/main/licenses/templates/hyracks-fullstack_source_licenses.ftl)
+-->
 <#macro license files component="Hyracks admin console" location="${hyracksControlCcLocation!}"
                 filePrefix="${hyracksControlCcResourcesPrefix!}"
                 licenseName="the following license">

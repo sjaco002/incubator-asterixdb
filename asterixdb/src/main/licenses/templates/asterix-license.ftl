@@ -17,9 +17,7 @@
  ! under the License.
 -->
 <@indent spaces=3>
-<#list licenseMap as e>
-  <#assign entry = e.getValue()/>
-  <#assign license = entry.getLicense()/>
+<#list licenses as license>
   <#if license.url == "http://www.apache.org/licenses/LICENSE-2.0.txt">
 ${license.content}
     <#break>
@@ -47,7 +45,7 @@ ${license.content}
    </#if>
    <#list projects as p>
        * ${p.name} (${p.groupId}:${p.artifactId}:${p.version})
-       <#list p.locations as loc>
+     <#list p.locations as loc>
          - ${loc}${p.artifactId}-${p.version}.jar
        </#list>
    </#list>
@@ -71,4 +69,5 @@ ${license.content}
    and condition of the following licenses.
 ===
 <#include "source_licenses.ftl">
-<#include "../../../../../hyracks-fullstack/hyracks-fullstack-license/src/main/licenses/templates/source_licenses.ftl">
+<#-- TODO(mblow): consume hyracks license via maven artifact -->
+<#include "hyracks-fullstack_source_licenses.ftl">

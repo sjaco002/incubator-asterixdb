@@ -87,7 +87,7 @@
    Copyright 2012 Twitter, Inc.
    http://www.apache.org/licenses/LICENSE-2.0.txt
 </@license>
-<@license files=["webui/static/js/smoothie.js", "feed/smoothie.js"]>
+<@license files=["webui/static/js/smoothie.js", "feed/smoothie.js"] licenseName="The MIT License">
 Copyright (c) 2010-2013, Joe Walnes
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -221,4 +221,9 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
     OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
     THE SOFTWARE.
+</@license>
+<@license component="AsterixDB runtime" files="org/apache/asterix/hivecompat/io/*"
+          licenseName="The Apache License, Version 2.0"
+          location="${hivecompatLocation!}" filePrefix="${hivecompatPrefix!}">
+Source files in asterix-hivecompat are derived from portions of Apache Hive Query Language v0.13.0 (org.apache.hive:hive-exec).
 </@license>

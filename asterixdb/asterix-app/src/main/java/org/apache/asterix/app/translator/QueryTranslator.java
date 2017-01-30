@@ -239,6 +239,10 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
         activeDefaultDataverse = MetadataBuiltinEntities.DEFAULT_DATAVERSE;
     }
 
+    public SessionConfig getSessionConfig() {
+        return sessionConfig;
+    }
+
     protected List<FunctionDecl> getDeclaredFunctions(List<Statement> statements) {
         List<FunctionDecl> functionDecls = new ArrayList<>();
         for (Statement st : statements) {

@@ -1063,6 +1063,11 @@
       </compilation-unit>
     </test-case>
     <test-case FilePath="comparison">
+      <compilation-unit name="like">
+        <output-dir compare="Text">like</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="comparison">
       <compilation-unit name="lt_01">
         <output-dir compare="Text">lt_01</output-dir>
       </compilation-unit>
@@ -6822,6 +6827,11 @@
       </compilation-unit>
     </test-case>
     <test-case FilePath="tpch-sql-sugar">
+      <compilation-unit name="q01_pricing_summary_report_parallelism">
+        <output-dir compare="Text">q01_pricing_summary_report_nt</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="tpch-sql-sugar">
       <compilation-unit name="q20_potential_part_promotion">
         <output-dir compare="Text">q20_potential_part_promotion</output-dir>
       </compilation-unit>
@@ -7822,6 +7832,11 @@
     <test-case FilePath="big-object">
       <compilation-unit name="big_object_join">
         <output-dir compare="Text">big_object_join</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="big-object">
+      <compilation-unit name="big_object_load_20M">
+        <output-dir compare="Text">big_object_load_20M</output-dir>
       </compilation-unit>
     </test-case>
   </test-group>

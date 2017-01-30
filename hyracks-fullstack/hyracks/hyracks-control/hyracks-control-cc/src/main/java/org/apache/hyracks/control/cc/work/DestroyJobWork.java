@@ -23,6 +23,7 @@ import org.apache.hyracks.api.job.ActivityClusterGraph;
 import org.apache.hyracks.api.job.JobId;
 import org.apache.hyracks.control.cc.ClusterControllerService;
 import org.apache.hyracks.control.cc.NodeControllerState;
+import org.apache.hyracks.control.cc.cluster.INodeManager;
 import org.apache.hyracks.control.common.work.IResultCallback;
 import org.apache.hyracks.control.common.work.SynchronizableWork;
 
@@ -45,7 +46,8 @@ public class DestroyJobWork extends SynchronizableWork {
                 throw new HyracksException("Trying to destroy a job that was never distributed!");
             }
             ccs.removeActivityClusterGraph(jobId);
-            for (NodeControllerState node : ccs.getNodeMap().values()) {
+            INodeManager nodeManager = ccs.getNodeManager();
+            for (NodeControllerState node : nodeManager.getAllNodeControllerStates()) {
                 node.getNodeController().destroyJob(jobId);
             }
             callback.setValue(jobId);
