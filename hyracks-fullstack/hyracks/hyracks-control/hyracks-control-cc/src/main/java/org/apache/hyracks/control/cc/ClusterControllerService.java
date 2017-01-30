@@ -47,6 +47,7 @@ import org.apache.hyracks.api.deployment.DeploymentId;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.apache.hyracks.api.job.ActivityClusterGraph;
 import org.apache.hyracks.api.job.JobId;
+import org.apache.hyracks.api.job.JobSpecification;
 import org.apache.hyracks.api.job.resource.DefaultJobCapacityController;
 import org.apache.hyracks.api.job.resource.IJobCapacityController;
 import org.apache.hyracks.api.service.IControllerService;
@@ -102,6 +103,8 @@ public class ClusterControllerService implements IControllerService {
 
     private final Map<JobId, ActivityClusterGraph> activityClusterGraphMap;
 
+    private final Map<JobId, JobSpecification> jobSpecificationMap;
+
     private final Map<JobId, Set<Constraint>> activityClusterGraphConstraintsMap;
 
     private final WorkQueue workQueue;
@@ -146,6 +149,7 @@ public class ClusterControllerService implements IControllerService {
         webServer = new WebServer(this);
 
         activityClusterGraphMap = new Hashtable<>();
+        jobSpecificationMap = new Hashtable<>();
         activityClusterGraphConstraintsMap = new Hashtable<>();
 
         // WorkQueue is in charge of heartbeat as well as other events.
@@ -323,6 +327,18 @@ public class ClusterControllerService implements IControllerService {
 
     public ActivityClusterGraph getActivityClusterGraph(JobId jobId) {
         return activityClusterGraphMap.get(jobId);
+    }
+
+    public void storeJobSpecification(JobId jobId, JobSpecification spec) {
+        jobSpecificationMap.put(jobId, spec);
+    }
+
+    public void removeJobSpecification(JobId jobId) {
+        jobSpecificationMap.remove(jobId);
+    }
+
+    public JobSpecification getJobSpecification(JobId jobId) {
+        return jobSpecificationMap.get(jobId);
     }
 
     public void storeActivityClusterGraphConstraints(JobId jobId, Set<Constraint> acgConstraints) {

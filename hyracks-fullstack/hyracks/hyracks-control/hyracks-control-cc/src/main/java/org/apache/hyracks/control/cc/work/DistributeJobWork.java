@@ -66,9 +66,10 @@ public class DistributeJobWork extends SynchronizableWork {
                     acggf.createActivityClusterGraphGenerator(jobId, appCtx, EnumSet.noneOf(JobFlag.class));
             ActivityClusterGraph acg = acgg.initialize();
             ccs.storeActivityClusterGraph(jobId, acg);
+            ccs.storeJobSpecification(jobId, acggf.getJobSpecification());
             ccs.storeActivityClusterGraphConstraints(jobId, acgg.getConstraints());
 
-            appCtx.notifyJobCreation(jobId, acggf);
+            appCtx.notifyJobCreation(jobId, acggf.getJobSpecification());
 
             byte[] acgBytes = JavaSerializationUtils.serialize(acg);
 

@@ -21,7 +21,7 @@ package org.apache.hyracks.api.job;
 import org.apache.hyracks.api.exceptions.HyracksException;
 
 public interface IJobLifecycleListener {
-    public void notifyJobCreation(JobId jobId, IActivityClusterGraphGeneratorFactory acggf) throws HyracksException;
+    public void notifyJobCreation(JobId jobId, JobSpecification spec) throws HyracksException;
 
     public void notifyJobStart(JobId jobId) throws HyracksException;
 

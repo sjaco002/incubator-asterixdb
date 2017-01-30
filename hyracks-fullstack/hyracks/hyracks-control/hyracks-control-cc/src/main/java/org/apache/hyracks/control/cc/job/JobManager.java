@@ -35,7 +35,6 @@ import java.util.logging.Logger;
 import org.apache.hyracks.api.exceptions.ErrorCode;
 import org.apache.hyracks.api.exceptions.HyracksException;
 import org.apache.hyracks.api.job.ActivityClusterGraph;
-import org.apache.hyracks.api.job.IActivityClusterGraphGeneratorFactory;
 import org.apache.hyracks.api.job.JobId;
 import org.apache.hyracks.api.job.JobSpecification;
 import org.apache.hyracks.api.job.JobStatus;
@@ -100,7 +99,7 @@ public class JobManager implements IJobManager {
     @Override
     public void add(JobRun jobRun) throws HyracksException {
         checkJob(jobRun);
-        JobSpecification job = jobRun.getActivityClusterGraphFactory().getJobSpecification();
+        JobSpecification job = jobRun.getJobSpecification();
         IJobCapacityController.JobSubmissionStatus status = jobCapacityController.allocate(job);
         switch (status) {
             case QUEUE:
@@ -209,7 +208,7 @@ public class JobManager implements IJobManager {
         }
 
         // Releases cluster capacitys occupied by the job.
-        JobSpecification job = run.getActivityClusterGraphFactory().getJobSpecification();
+        JobSpecification job = run.getJobSpecification();
         jobCapacityController.release(job);
 
         // Picks the next job to execute.
@@ -268,8 +267,8 @@ public class JobManager implements IJobManager {
             activeRunMap.put(jobId, run);
 
             CCApplicationContext appCtx = ccs.getApplicationContext();
-            IActivityClusterGraphGeneratorFactory acggf = run.getActivityClusterGraphFactory();
-            appCtx.notifyJobCreation(jobId, acggf);
+            JobSpecification spec = run.getJobSpecification();
+            appCtx.notifyJobCreation(jobId, spec);
             run.setStatus(JobStatus.RUNNING, null);
             executeJobInternal(run);
             callback.setValue(jobId);

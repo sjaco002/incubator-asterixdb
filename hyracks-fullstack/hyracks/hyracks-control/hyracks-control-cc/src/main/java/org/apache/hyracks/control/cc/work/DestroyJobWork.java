@@ -46,6 +46,7 @@ public class DestroyJobWork extends SynchronizableWork {
                 throw new HyracksException("Trying to destroy a job that was never distributed!");
             }
             ccs.removeActivityClusterGraph(jobId);
+            ccs.removeJobSpecification(jobId);
             INodeManager nodeManager = ccs.getNodeManager();
             for (NodeControllerState node : nodeManager.getAllNodeControllerStates()) {
                 node.getNodeController().destroyJob(jobId);
