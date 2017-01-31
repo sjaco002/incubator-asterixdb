@@ -64,8 +64,6 @@ public class JobRun implements IJobStatusConditionVariable {
 
     private final JobSpecification spec;
 
-    private IActivityClusterGraphGenerator acgg;
-
     private ActivityClusterGraph acg;
 
     private JobExecutor scheduler;
@@ -91,8 +89,6 @@ public class JobRun implements IJobStatusConditionVariable {
     private long endTime;
 
     private JobStatus status;
-
-    private ClusterControllerService ccs;
 
     private List<Exception> exceptions;
 

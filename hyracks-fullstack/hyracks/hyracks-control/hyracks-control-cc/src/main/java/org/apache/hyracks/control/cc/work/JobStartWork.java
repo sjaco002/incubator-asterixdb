@@ -59,10 +59,9 @@ public class JobStartWork extends SynchronizableWork {
         try {
             final CCApplicationContext appCtx = ccs.getApplicationContext();
             JobRun run;
-            IActivityClusterGraphGeneratorFactory acggf = null;
             if (!predestributed) {
                 //Need to create the ActivityClusterGraph
-                acggf = (IActivityClusterGraphGeneratorFactory) DeploymentUtils
+                IActivityClusterGraphGeneratorFactory acggf = (IActivityClusterGraphGeneratorFactory) DeploymentUtils
                         .deserialize(acggfBytes, deploymentId, appCtx);
                 IActivityClusterGraphGenerator acgg =
                         acggf.createActivityClusterGraphGenerator(jobId, appCtx, jobFlags);
