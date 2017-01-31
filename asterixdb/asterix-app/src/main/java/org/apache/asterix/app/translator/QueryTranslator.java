@@ -46,7 +46,7 @@ import org.apache.asterix.active.EntityId;
 import org.apache.asterix.active.IActiveEntityEventsListener;
 import org.apache.asterix.algebra.extension.IExtensionStatement;
 import org.apache.asterix.api.common.APIFramework;
-import org.apache.asterix.api.http.servlet.APIServlet;
+import org.apache.asterix.api.http.server.ApiServlet;
 import org.apache.asterix.app.external.ExternalIndexingOperations;
 import org.apache.asterix.app.external.FeedJoint;
 import org.apache.asterix.app.external.FeedOperations;
@@ -288,7 +288,7 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
         try {
             for (Statement stmt : statements) {
                 if (sessionConfig.is(SessionConfig.FORMAT_HTML)) {
-                    sessionConfig.out().println(APIServlet.HTML_STATEMENT_SEPARATOR);
+                    sessionConfig.out().println(ApiServlet.HTML_STATEMENT_SEPARATOR);
                 }
                 validateOperation(activeDefaultDataverse, stmt);
                 rewriteStatement(stmt); // Rewrite the statement's AST.
@@ -2176,6 +2176,7 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
         boolean bActiveTxn = true;
         MetadataTransactionContext mdTxnCtx = MetadataManager.INSTANCE.beginTransaction();
         metadataProvider.setMetadataTxnContext(mdTxnCtx);
+        metadataProvider.disableBlockingOperator();
         boolean subscriberRegistered = false;
         IActiveLifecycleEventSubscriber eventSubscriber = new ActiveLifecycleEventSubscriber();
         FeedConnectionId feedConnId = null;
@@ -2415,6 +2416,7 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
         boolean bActiveTxn = true;
         metadataProvider.setMetadataTxnContext(mdTxnCtx);
         metadataProvider.setWriteTransaction(true);
+        metadataProvider.disableBlockingOperator();
         SubscribeFeedStatement bfs = (SubscribeFeedStatement) stmt;
         bfs.initialize(metadataProvider.getMetadataTxnContext());
 

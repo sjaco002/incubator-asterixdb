@@ -21,6 +21,7 @@ package org.apache.hyracks.control.cc;
 import java.io.File;
 import java.io.FileReader;
 import java.lang.reflect.Constructor;
+import java.lang.reflect.InvocationTargetException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.util.ArrayList;
@@ -59,6 +60,7 @@ import org.apache.hyracks.control.cc.cluster.NodeManager;
 import org.apache.hyracks.control.cc.dataset.DatasetDirectoryService;
 import org.apache.hyracks.control.cc.dataset.IDatasetDirectoryService;
 import org.apache.hyracks.control.cc.job.IJobManager;
+import org.apache.hyracks.control.cc.job.JobManager;
 import org.apache.hyracks.control.cc.scheduler.IResourceManager;
 import org.apache.hyracks.control.cc.scheduler.ResourceManager;
 import org.apache.hyracks.control.cc.web.WebServer;
@@ -218,10 +220,19 @@ public class ClusterControllerService implements IControllerService {
         }
 
         // Job manager is in charge of job lifecycle management.
-        Constructor<?> jobManagerConstructor = this.getClass().getClassLoader().loadClass(ccConfig.jobManagerClassName)
-                .getConstructor(CCConfig.class, ClusterControllerService.class, IJobCapacityController.class);
-        jobManager = (IJobManager) jobManagerConstructor.newInstance(ccConfig, this, jobCapacityController);
-
+        try {
+            Constructor<?> jobManagerConstructor = this.getClass().getClassLoader()
+                    .loadClass(ccConfig.jobManagerClassName)
+                    .getConstructor(CCConfig.class, ClusterControllerService.class, IJobCapacityController.class);
+            jobManager = (IJobManager) jobManagerConstructor.newInstance(ccConfig, this, jobCapacityController);
+        } catch (ClassNotFoundException | InstantiationException | IllegalAccessException | NoSuchMethodException
+                | InvocationTargetException e) {
+            if (LOGGER.isLoggable(Level.WARNING)) {
+                LOGGER.log(Level.WARNING, "class " + ccConfig.jobManagerClassName + " could not be used: ", e);
+            }
+            // Falls back to the default implementation if the user-provided class name is not valid.
+            jobManager = new JobManager(ccConfig, this, jobCapacityController);
+        }
     }
 
     private void connectNCs() throws Exception {
