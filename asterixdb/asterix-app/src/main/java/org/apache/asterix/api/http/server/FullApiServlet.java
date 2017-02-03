@@ -20,10 +20,11 @@ package org.apache.asterix.api.http.server;
 
 import java.util.concurrent.ConcurrentMap;
 
+import org.apache.asterix.common.context.IStorageComponentProvider;
 import org.apache.asterix.compiler.provider.ILangCompilationProvider;
 import org.apache.asterix.lang.common.base.Statement;
 import org.apache.asterix.translator.IStatementExecutorFactory;
-import org.apache.hyracks.http.server.IServletRequest;
+import org.apache.hyracks.http.api.IServletRequest;
 
 public class FullApiServlet extends RestApiServlet {
 
@@ -32,8 +33,9 @@ public class FullApiServlet extends RestApiServlet {
             | Statement.Category.DDL | Statement.Category.PROCEDURE;
 
     public FullApiServlet(ConcurrentMap<String, Object> ctx, String[] paths,
-            ILangCompilationProvider compilationProvider, IStatementExecutorFactory statementExecutorFactory) {
-        super(ctx, paths, compilationProvider, statementExecutorFactory);
+            ILangCompilationProvider compilationProvider, IStatementExecutorFactory statementExecutorFactory,
+            IStorageComponentProvider componentProvider) {
+        super(ctx, paths, compilationProvider, statementExecutorFactory, componentProvider);
     }
 
     @Override

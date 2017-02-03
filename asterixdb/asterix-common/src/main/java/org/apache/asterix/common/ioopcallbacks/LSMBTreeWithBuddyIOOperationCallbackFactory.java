@@ -25,13 +25,14 @@ public class LSMBTreeWithBuddyIOOperationCallbackFactory implements ILSMIOOperat
 
     private static final long serialVersionUID = 1L;
 
-    public static LSMBTreeWithBuddyIOOperationCallbackFactory INSTANCE = new LSMBTreeWithBuddyIOOperationCallbackFactory();
+    public static final LSMBTreeWithBuddyIOOperationCallbackFactory INSTANCE =
+            new LSMBTreeWithBuddyIOOperationCallbackFactory();
 
     private LSMBTreeWithBuddyIOOperationCallbackFactory() {
     }
 
     @Override
-    public ILSMIOOperationCallback createIOOperationCallback() {
+    public ILSMIOOperationCallback createIoOpCallback() {
         return new LSMBTreeWithBuddyIOOperationCallback();
     }
 }
