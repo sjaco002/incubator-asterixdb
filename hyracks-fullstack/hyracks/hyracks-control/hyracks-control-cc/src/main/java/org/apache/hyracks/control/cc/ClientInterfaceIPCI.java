@@ -27,7 +27,6 @@ import org.apache.hyracks.api.dataset.DatasetJobRecord.Status;
 import org.apache.hyracks.api.job.JobId;
 import org.apache.hyracks.api.job.JobIdFactory;
 import org.apache.hyracks.api.job.JobInfo;
-import org.apache.hyracks.api.job.JobStatus;
 import org.apache.hyracks.control.cc.work.CliDeployBinaryWork;
 import org.apache.hyracks.control.cc.work.CliUnDeployBinaryWork;
 import org.apache.hyracks.control.cc.work.ClusterShutdownWork;
@@ -105,8 +104,7 @@ class ClientInterfaceIPCI implements IIPCI {
                     //The job is new
                     jobId = jobIdFactory.create();
                     acggfBytes = sjf.getACGGFBytes();
-                }
-                else {
+                } else {
                     //The job has been predistributed. We don't need to send an ActivityClusterGraph
                     predistributed = true;
                 }

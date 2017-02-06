@@ -47,6 +47,7 @@ public class DestroyJobWork extends SynchronizableWork {
             }
             ccs.removeActivityClusterGraph(jobId);
             ccs.removeJobSpecification(jobId);
+            ccs.removeActivityClusterGraphConstraints(jobId);
             INodeManager nodeManager = ccs.getNodeManager();
             for (NodeControllerState node : nodeManager.getAllNodeControllerStates()) {
                 node.getNodeController().destroyJob(jobId);
