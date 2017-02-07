@@ -47,6 +47,8 @@ public class ErrorCode {
     public static final int NO_SUCH_NODE = 10;
     public static final int CLASS_LOADING_ISSUE = 11;
     public static final int ILLEGAL_WRITE_AFTER_FLUSH_ATTEMPT = 12;
+    public static final int ERROR_FINDING_DISTRIBUTED_JOB = 13;
+    public static final int DUPLICATE_DISTRIBUTED_JOB = 14;
 
     // Compilation error codes.
     public static final int RULECOLLECTION_NOT_INSTANCE_OF_LIST = 10001;

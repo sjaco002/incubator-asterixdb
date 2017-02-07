@@ -27,6 +27,7 @@ import java.net.InetSocketAddress;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.Hashtable;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -41,9 +42,13 @@ import java.util.logging.Logger;
 import org.apache.hyracks.api.application.ICCApplicationEntryPoint;
 import org.apache.hyracks.api.client.ClusterControllerInfo;
 import org.apache.hyracks.api.comm.NetworkAddress;
+import org.apache.hyracks.api.constraints.Constraint;
 import org.apache.hyracks.api.context.ICCContext;
 import org.apache.hyracks.api.deployment.DeploymentId;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
+import org.apache.hyracks.api.job.ActivityClusterGraph;
+import org.apache.hyracks.api.job.JobId;
+import org.apache.hyracks.api.job.JobSpecification;
 import org.apache.hyracks.api.job.resource.DefaultJobCapacityController;
 import org.apache.hyracks.api.job.resource.IJobCapacityController;
 import org.apache.hyracks.api.service.IControllerService;
@@ -98,6 +103,12 @@ public class ClusterControllerService implements IControllerService {
 
     private CCApplicationContext appCtx;
 
+    private final Map<JobId, ActivityClusterGraph> activityClusterGraphMap;
+
+    private final Map<JobId, JobSpecification> jobSpecificationMap;
+
+    private final Map<JobId, Set<Constraint>> activityClusterGraphConstraintsMap;
+
     private final WorkQueue workQueue;
 
     private ExecutorService executor;
@@ -138,6 +149,10 @@ public class ClusterControllerService implements IControllerService {
         clientIPC = new IPCSystem(new InetSocketAddress(ccConfig.clientNetIpAddress, ccConfig.clientNetPort), ciIPCI,
                 new JavaSerializationBasedPayloadSerializerDeserializer());
         webServer = new WebServer(this);
+
+        activityClusterGraphMap = new Hashtable<>();
+        jobSpecificationMap = new Hashtable<>();
+        activityClusterGraphConstraintsMap = new Hashtable<>();
 
         // WorkQueue is in charge of heartbeat as well as other events.
         workQueue = new WorkQueue("ClusterController", Thread.MAX_PRIORITY);
@@ -311,6 +326,42 @@ public class ClusterControllerService implements IControllerService {
 
     public INodeManager getNodeManager() {
         return nodeManager;
+    }
+
+    public void storeActivityClusterGraph(JobId jobId, ActivityClusterGraph acg) {
+        activityClusterGraphMap.put(jobId, acg);
+    }
+
+    public void removeActivityClusterGraph(JobId jobId) {
+        activityClusterGraphMap.remove(jobId);
+    }
+
+    public ActivityClusterGraph getActivityClusterGraph(JobId jobId) {
+        return activityClusterGraphMap.get(jobId);
+    }
+
+    public void storeJobSpecification(JobId jobId, JobSpecification spec) {
+        jobSpecificationMap.put(jobId, spec);
+    }
+
+    public void removeJobSpecification(JobId jobId) {
+        jobSpecificationMap.remove(jobId);
+    }
+
+    public JobSpecification getJobSpecification(JobId jobId) {
+        return jobSpecificationMap.get(jobId);
+    }
+
+    public void storeActivityClusterGraphConstraints(JobId jobId, Set<Constraint> acgConstraints) {
+        activityClusterGraphConstraintsMap.put(jobId, acgConstraints);
+    }
+
+    public void removeActivityClusterGraphConstraints(JobId jobId) {
+        activityClusterGraphConstraintsMap.remove(jobId);
+    }
+
+    public Set<Constraint> getActivityClusterGraphConstraints(JobId jobId) {
+        return activityClusterGraphConstraintsMap.get(jobId);
     }
 
     public IResourceManager getResourceManager() {
