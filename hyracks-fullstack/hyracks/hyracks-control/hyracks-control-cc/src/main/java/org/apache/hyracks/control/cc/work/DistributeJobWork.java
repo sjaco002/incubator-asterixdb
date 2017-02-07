@@ -22,6 +22,7 @@ import java.util.EnumSet;
 import java.util.Set;
 
 import org.apache.hyracks.api.constraints.Constraint;
+import org.apache.hyracks.api.exceptions.ErrorCode;
 import org.apache.hyracks.api.exceptions.HyracksException;
 import org.apache.hyracks.api.job.ActivityClusterGraph;
 import org.apache.hyracks.api.job.IActivityClusterGraphGenerator;
@@ -58,7 +59,7 @@ public class DistributeJobWork extends SynchronizableWork {
             ActivityClusterGraph entry = ccs.getActivityClusterGraph(jobId);
             Set<Constraint> constaints = ccs.getActivityClusterGraphConstraints(jobId);
             if (entry != null || constaints != null) {
-                throw new HyracksException("Trying to distribute a job with a duplicate jobId");
+                throw HyracksException.create(ErrorCode.DUPLICATE_DISTRIBUTED_JOB);
             }
             IActivityClusterGraphGeneratorFactory acggf =
                     (IActivityClusterGraphGeneratorFactory) DeploymentUtils.deserialize(acggfBytes, null, appCtx);

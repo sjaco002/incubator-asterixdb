@@ -77,7 +77,7 @@ public interface IHyracksClientConnection extends IClusterInfoCollector {
     public JobId startJob(JobSpecification jobSpec, EnumSet<JobFlag> jobFlags) throws Exception;
 
     /**
-     * Start the specified Job.
+     * Distribute the specified Job.
      *
      * @param jobSpec
      *            Job Specification

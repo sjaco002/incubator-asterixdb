@@ -18,6 +18,7 @@
  */
 package org.apache.hyracks.control.cc.work;
 
+import org.apache.hyracks.api.exceptions.ErrorCode;
 import org.apache.hyracks.api.exceptions.HyracksException;
 import org.apache.hyracks.api.job.ActivityClusterGraph;
 import org.apache.hyracks.api.job.JobId;
@@ -43,7 +44,7 @@ public class DestroyJobWork extends SynchronizableWork {
         try {
             ActivityClusterGraph acg = ccs.getActivityClusterGraph(jobId);
             if (acg == null) {
-                throw new HyracksException("Trying to destroy a job that was never distributed!");
+                throw HyracksException.create(ErrorCode.ERROR_FINDING_DISTRIBUTED_JOB);
             }
             ccs.removeActivityClusterGraph(jobId);
             ccs.removeJobSpecification(jobId);
