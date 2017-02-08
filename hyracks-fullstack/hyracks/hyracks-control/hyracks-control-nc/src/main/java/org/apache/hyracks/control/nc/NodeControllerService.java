@@ -94,11 +94,11 @@ public class NodeControllerService implements IControllerService {
 
     private final IOManager ioManager;
 
-    private final IPCSystem ipc;
+    private IPCSystem ipc;
 
-    private final PartitionManager partitionManager;
+    private PartitionManager partitionManager;
 
-    private final NetworkManager netManager;
+    private NetworkManager netManager;
 
     private IDatasetPartitionManager datasetPartitionManager;
 
@@ -155,18 +155,11 @@ public class NodeControllerService implements IControllerService {
     public NodeControllerService(NCConfig ncConfig) throws Exception {
         this.ncConfig = ncConfig;
         id = ncConfig.nodeId;
-        ipc = new IPCSystem(new InetSocketAddress(ncConfig.clusterNetIPAddress, ncConfig.clusterNetPort),
-                new NodeControllerIPCI(this),
-                new CCNCFunctions.SerializerDeserializer());
 
         ioManager = new IOManager(IODeviceHandle.getDevices(ncConfig.ioDevices));
         if (id == null) {
             throw new Exception("id not set");
         }
-        partitionManager = new PartitionManager(this);
-        netManager = new NetworkManager(ncConfig.dataIPAddress, ncConfig.dataPort, partitionManager,
-                ncConfig.nNetThreads, ncConfig.nNetBuffers, ncConfig.dataPublicIPAddress, ncConfig.dataPublicPort,
-                FullFrameChannelInterfaceFactory.INSTANCE);
 
         lccm = new LifeCycleComponentManager();
         workQueue = new WorkQueue(id, Thread.NORM_PRIORITY); // Reserves MAX_PRIORITY of the heartbeat thread.
@@ -244,7 +237,13 @@ public class NodeControllerService implements IControllerService {
     @Override
     public void start() throws Exception {
         LOGGER.log(Level.INFO, "Starting NodeControllerService");
+        ipc = new IPCSystem(new InetSocketAddress(ncConfig.clusterNetIPAddress, ncConfig.clusterNetPort),
+                new NodeControllerIPCI(this), new CCNCFunctions.SerializerDeserializer());
         ipc.start();
+        partitionManager = new PartitionManager(this);
+        netManager = new NetworkManager(ncConfig.dataIPAddress, ncConfig.dataPort, partitionManager,
+                ncConfig.nNetThreads, ncConfig.nNetBuffers, ncConfig.dataPublicIPAddress, ncConfig.dataPublicPort,
+                FullFrameChannelInterfaceFactory.INSTANCE);
         netManager.start();
 
         startApplication();
