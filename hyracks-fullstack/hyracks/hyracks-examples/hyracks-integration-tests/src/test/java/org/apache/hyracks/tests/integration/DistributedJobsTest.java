@@ -46,7 +46,7 @@ public class DistributedJobsTest extends AbstractIntegrationTest {
         verify(cc, Mockito.timeout(5000).times(2)).storeActivityClusterGraphConstraints(any(), any());
         verify(nc1, Mockito.timeout(5000).times(2)).storeActivityClusterGraph(any(), any());
         verify(nc2, Mockito.timeout(5000).times(2)).storeActivityClusterGraph(any(), any());
-        
+
         //confirm that both jobs are distributed
         Assert.assertTrue(nc1.getActivityClusterGraph(jobId1) != null && nc2.getActivityClusterGraph(jobId1) != null);
         Assert.assertTrue(nc1.getActivityClusterGraph(jobId2) != null && nc2.getActivityClusterGraph(jobId2) != null);
