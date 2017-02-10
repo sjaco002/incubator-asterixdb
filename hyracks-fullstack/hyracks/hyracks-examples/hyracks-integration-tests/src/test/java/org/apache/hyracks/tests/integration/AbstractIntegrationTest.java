@@ -56,7 +56,6 @@ import org.apache.hyracks.dataflow.common.comm.util.ByteBufferInputStream;
 import org.junit.AfterClass;
 import org.junit.Assert;
 import org.junit.BeforeClass;
-import org.mockito.Mockito;
 
 public abstract class AbstractIntegrationTest {
     private static final Logger LOGGER = Logger.getLogger(AbstractIntegrationTest.class.getName());
@@ -64,10 +63,10 @@ public abstract class AbstractIntegrationTest {
     public static final String NC1_ID = "nc1";
     public static final String NC2_ID = "nc2";
 
-    protected static ClusterControllerService cc;
+    private static ClusterControllerService cc;
     protected static NodeControllerService nc1;
     protected static NodeControllerService nc2;
-    protected static IHyracksClientConnection hcc;
+    private static IHyracksClientConnection hcc;
 
     private final List<File> outputFiles;
     private static AtomicInteger aInteger = new AtomicInteger(0);
@@ -96,8 +95,7 @@ public abstract class AbstractIntegrationTest {
         ccRoot.delete();
         ccRoot.mkdir();
         ccConfig.ccRoot = ccRoot.getAbsolutePath();
-        ClusterControllerService ccBase = new ClusterControllerService(ccConfig);
-        cc = Mockito.spy(ccBase);
+        cc = new ClusterControllerService(ccConfig);
         cc.start();
 
         NCConfig ncConfig1 = new NCConfig();
@@ -109,8 +107,7 @@ public abstract class AbstractIntegrationTest {
         ncConfig1.nodeId = NC1_ID;
         ncConfig1.ioDevices = System.getProperty("user.dir") + File.separator + "target" + File.separator + "data"
                 + File.separator + "device0";
-        NodeControllerService nc1Base = new NodeControllerService(ncConfig1);
-        nc1 = Mockito.spy(nc1Base);
+        nc1 = new NodeControllerService(ncConfig1);
         nc1.start();
 
         NCConfig ncConfig2 = new NCConfig();
@@ -122,8 +119,7 @@ public abstract class AbstractIntegrationTest {
         ncConfig2.nodeId = NC2_ID;
         ncConfig2.ioDevices = System.getProperty("user.dir") + File.separator + "target" + File.separator + "data"
                 + File.separator + "device1";
-        NodeControllerService nc2Base = new NodeControllerService(ncConfig2);
-        nc2 = Mockito.spy(nc2Base);
+        nc2 = new NodeControllerService(ncConfig2);
         nc2.start();
 
         hcc = new HyracksConnection(ccConfig.clientNetIpAddress, ccConfig.clientNetPort);
