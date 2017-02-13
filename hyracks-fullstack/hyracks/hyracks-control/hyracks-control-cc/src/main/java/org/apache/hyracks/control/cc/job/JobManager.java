@@ -273,7 +273,9 @@ public class JobManager implements IJobManager {
 
             CCApplicationContext appCtx = ccs.getApplicationContext();
             JobSpecification spec = run.getJobSpecification();
-            appCtx.notifyJobCreation(jobId, spec);
+            if (!run.getExecutor().isPredistributed()) {
+                appCtx.notifyJobCreation(jobId, spec);
+            }
             run.setStatus(JobStatus.RUNNING, null);
             executeJobInternal(run);
             callback.setValue(jobId);

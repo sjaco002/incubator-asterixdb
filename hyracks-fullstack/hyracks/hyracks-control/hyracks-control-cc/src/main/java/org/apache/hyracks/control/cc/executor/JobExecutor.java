@@ -95,6 +95,10 @@ public class JobExecutor {
         random = new Random();
     }
 
+    public boolean isPredistributed() {
+        return predistributed;
+    }
+
     public JobRun getJobRun() {
         return jobRun;
     }
