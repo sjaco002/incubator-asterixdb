@@ -1878,6 +1878,9 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
             locker.lock();
             try {
                 final JobSpecification jobSpec = compiler.compile();
+                if (jobSpec == null) {
+                    return jobSpec;
+                }
                 JobUtils.runJob(hcc, jobSpec, true);
             } finally {
                 locker.unlock();
