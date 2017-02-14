@@ -60,8 +60,7 @@ public class ActiveJobNotificationHandler implements Runnable {
                 }
                 listener.notify(event);
                 if (event.getEventKind() == EventKind.JOB_FINISH) {
-                    removeFinishedJob(event.getJobId(), listener);
-                    removeInactiveListener(listener);
+                    removeJob(event.getJobId(), listener);
                 }
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
@@ -70,6 +69,11 @@ public class ActiveJobNotificationHandler implements Runnable {
             }
         }
         LOGGER.log(Level.INFO, "Stopped " + ActiveJobNotificationHandler.class.getSimpleName());
+    }
+
+    public void removeJob(JobId jobId, IActiveEntityEventsListener listener) {
+        removeFinishedJob(jobId, listener);
+        removeInactiveListener(listener);
     }
 
     private void removeFinishedJob(JobId jobId, IActiveEntityEventsListener listener) {
