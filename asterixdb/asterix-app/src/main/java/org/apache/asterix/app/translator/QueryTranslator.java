@@ -1828,7 +1828,7 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
         }
     }
 
-    public void handleInsertUpsertStatement(MetadataProvider metadataProvider, Statement stmt,
+    public JobSpecification handleInsertUpsertStatement(MetadataProvider metadataProvider, Statement stmt,
             IHyracksClientConnection hcc, IHyracksDataset hdc, ResultDelivery resultDelivery,
             IStatementExecutor.Stats stats, boolean compileOnly) throws Exception {
 
@@ -1860,7 +1860,7 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
                 final JobSpecification jobSpec = rewriteCompileInsertUpsert(hcc, metadataProvider, stmtInsertUpsert);
                 MetadataManager.INSTANCE.commitTransaction(mdTxnCtx);
                 bActiveTxn = false;
-                return compileOnly ? null : jobSpec;
+                return jobSpec;
             } catch (Exception e) {
                 if (bActiveTxn) {
                     abort(e, e, mdTxnCtx);
@@ -1868,6 +1868,9 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
                 throw e;
             }
         };
+        if (compileOnly) {
+            return compiler.compile();
+        }
 
         if (stmtInsertUpsert.getReturnExpression() != null) {
             deliverResult(hcc, hdc, compiler, metadataProvider, locker, resultDelivery, stats);
@@ -1875,14 +1878,12 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
             locker.lock();
             try {
                 final JobSpecification jobSpec = compiler.compile();
-                if (jobSpec == null) {
-                    return;
-                }
                 JobUtils.runJob(hcc, jobSpec, true);
             } finally {
                 locker.unlock();
             }
         }
+        return null;
     }
 
     public JobSpecification handleDeleteStatement(MetadataProvider metadataProvider, Statement stmt,
