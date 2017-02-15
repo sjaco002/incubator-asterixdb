@@ -33,10 +33,11 @@ import org.apache.hyracks.api.dataset.IHyracksDataset;
 import org.apache.hyracks.api.dataset.ResultSetId;
 import org.apache.hyracks.api.job.JobId;
 import org.apache.hyracks.client.dataset.HyracksDataset;
+import org.apache.hyracks.http.api.IServlet;
+import org.apache.hyracks.http.api.IServletRequest;
+import org.apache.hyracks.http.api.IServletResponse;
 import org.apache.hyracks.http.server.AbstractServlet;
-import org.apache.hyracks.http.server.IServlet;
-import org.apache.hyracks.http.server.IServletRequest;
-import org.apache.hyracks.http.server.IServletResponse;
+import org.apache.hyracks.http.server.util.ServletUtils;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -60,7 +61,7 @@ public class QueryStatusApiServlet extends AbstractServlet {
         }
         response.setStatus(HttpResponseStatus.OK);
         try {
-            IServletResponse.setContentType(response, IServlet.ContentType.TEXT_HTML, IServlet.Encoding.UTF8);
+            ServletUtils.setContentType(response, IServlet.ContentType.TEXT_HTML, IServlet.Encoding.UTF8);
         } catch (IOException e) {
             LOGGER.log(Level.WARNING, "Failure setting content type", e);
             response.setStatus(HttpResponseStatus.INTERNAL_SERVER_ERROR);
@@ -93,19 +94,7 @@ public class QueryStatusApiServlet extends AbstractServlet {
             resultReader.open(jobId, rsId);
 
             ObjectNode jsonResponse = om.createObjectNode();
-            String status;
-            switch (resultReader.getStatus()) {
-                case RUNNING:
-                    status = "RUNNING";
-                    break;
-                case SUCCESS:
-                    status = "SUCCESS";
-                    break;
-                default:
-                    status = "ERROR";
-                    break;
-            }
-            jsonResponse.put("status", status);
+            jsonResponse.put("status", resultReader.getStatus().name());
             out.write(jsonResponse.toString());
 
         } catch (Exception e) {

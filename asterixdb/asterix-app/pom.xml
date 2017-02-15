@@ -101,7 +101,7 @@
             </configuration>
           </execution>
           <execution>
-            <id>copy-beer-csv</id>
+            <id>copy-external-data-resources</id>
             <phase>generate-resources</phase>
             <goals>
               <goal>copy-resources</goal>
@@ -114,6 +114,7 @@
                   <directory>../asterix-external-data/src/test/resources</directory>
                   <includes>
                     <include>beer.csv</include>
+                    <include>change_feed.csv</include>
                   </includes>
                 </resource>
               </resources>
@@ -147,7 +148,6 @@
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-dependency-plugin</artifactId>
-        <version>2.10</version>
         <configuration>
           <ignoredUsedUndeclaredDependencies>
             <ignoredUsedUndeclaredDependency>commons-logging:commons-logging-api:*</ignoredUsedUndeclaredDependency>
@@ -191,14 +191,6 @@
     </pluginManagement>
   </build>
   <dependencies>
-    <dependency>
-      <groupId>javax.servlet</groupId>
-      <artifactId>javax.servlet-api</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>org.eclipse.jetty</groupId>
-      <artifactId>jetty-servlet</artifactId>
-    </dependency>
     <dependency>
       <groupId>org.apache.hyracks</groupId>
       <artifactId>hyracks-control-cc</artifactId>
@@ -351,10 +343,6 @@
       <scope>test</scope>
     </dependency>
     <dependency>
-      <groupId>org.apache.hyracks</groupId>
-      <artifactId>hyracks-storage-am-lsm-rtree</artifactId>
-    </dependency>
-    <dependency>
       <groupId>org.apache.commons</groupId>
       <artifactId>commons-compress</artifactId>
       <version>1.4.1</version>
@@ -409,10 +397,6 @@
       <scope>test</scope>
     </dependency>
     <dependency>
-      <groupId>org.apache.hyracks</groupId>
-      <artifactId>hyracks-storage-am-rtree</artifactId>
-    </dependency>
-    <dependency>
       <groupId>commons-lang</groupId>
       <artifactId>commons-lang</artifactId>
     </dependency>
@@ -432,10 +416,6 @@
     <dependency>
       <groupId>org.apache.hyracks</groupId>
       <artifactId>hyracks-dataflow-std</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.hyracks</groupId>
-      <artifactId>hyracks-storage-am-lsm-invertedindex</artifactId>
     </dependency>
     <dependency>
       <groupId>org.apache.hyracks</groupId>

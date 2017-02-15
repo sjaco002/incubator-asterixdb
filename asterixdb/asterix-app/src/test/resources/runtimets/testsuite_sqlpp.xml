@@ -21,6 +21,29 @@
 
 ]>
 <test-suite xmlns="urn:xml.testframework.asterix.apache.org" ResultOffsetPath="results" QueryOffsetPath="queries_sqlpp" QueryFileExtension=".sqlpp">
+  <test-group name="async-deferred">
+    <test-case FilePath="async-deferred">
+      <compilation-unit name="async-failed">
+        <output-dir compare="Text">async-failed</output-dir>
+        <expected-error>Error in processing tuple 0</expected-error>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="async-deferred">
+      <compilation-unit name="deferred">
+        <output-dir compare="Text">deferred</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="async-deferred">
+      <compilation-unit name="async">
+        <output-dir compare="Text">async</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="async-deferred">
+      <compilation-unit name="async-running">
+        <output-dir compare="Text">async-running</output-dir>
+      </compilation-unit>
+    </test-case>
+  </test-group>
   <test-group name="flwor">
     <test-case FilePath="flwor">
       <compilation-unit name="at00">
@@ -3119,7 +3142,7 @@
     <test-case FilePath="misc">
       <compilation-unit name="partition-by-nonexistent-field">
         <output-dir compare="Text">partition-by-nonexistent-field</output-dir>
-        <expected-error>Type not found for partitioning key [id]</expected-error>
+        <expected-error>Field "id" is not found</expected-error>
         <expected-error>Cannot find dataset testds in dataverse test</expected-error>
         <expected-error>Cannot find dataset testds in dataverse test nor an alias with name testds!</expected-error>
       </compilation-unit>

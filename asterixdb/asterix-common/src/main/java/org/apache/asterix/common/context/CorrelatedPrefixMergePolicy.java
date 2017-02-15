@@ -32,10 +32,10 @@ import org.apache.hyracks.storage.am.common.api.IndexException;
 import org.apache.hyracks.storage.am.common.impls.NoOpOperationCallback;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMComponent;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMComponent.ComponentState;
+import org.apache.hyracks.storage.am.lsm.common.api.ILSMDiskComponent;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMIndex;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMIndexAccessor;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMMergePolicy;
-import org.apache.hyracks.storage.am.lsm.common.impls.AbstractDiskLSMComponent;
 
 public class CorrelatedPrefixMergePolicy implements ILSMMergePolicy {
 
@@ -60,11 +60,11 @@ public class CorrelatedPrefixMergePolicy implements ILSMMergePolicy {
         // all such components for which the sum of their sizes exceeds MaxMrgCompSz.  Schedule a merge of those components into a new component.
         // 2.  If a merge from 1 doesn't happen, see if the set of candidate components for merging exceeds MaxTolCompCnt.  If so, schedule
         // a merge all of the current candidates into a new single component.
-        List<ILSMComponent> immutableComponents = new ArrayList<ILSMComponent>(index.getImmutableComponents());
+        List<ILSMDiskComponent> immutableComponents = new ArrayList<>(index.getImmutableComponents());
         // Reverse the components order so that we look at components from oldest to newest.
         Collections.reverse(immutableComponents);
 
-        for (ILSMComponent c : immutableComponents) {
+        for (ILSMDiskComponent c : immutableComponents) {
             if (c.getState() != ComponentState.READABLE_UNWRITABLE) {
                 return;
             }
@@ -89,7 +89,7 @@ public class CorrelatedPrefixMergePolicy implements ILSMMergePolicy {
 
         for (int i = 0; i < minNumComponents; i++) {
             ILSMComponent c = immutableComponents.get(i);
-            long componentSize = ((AbstractDiskLSMComponent) c).getComponentSize();
+            long componentSize = ((ILSMDiskComponent) c).getComponentSize();
             if (componentSize > maxMergableComponentSize) {
                 startIndex = i;
                 totalSize = 0;
@@ -101,12 +101,12 @@ public class CorrelatedPrefixMergePolicy implements ILSMMergePolicy {
                     || (isLastComponent && i - startIndex >= maxToleranceComponentCount)) {
 
                 for (ILSMIndex lsmIndex : indexes) {
-                    List<ILSMComponent> reversedImmutableComponents =
-                            new ArrayList<ILSMComponent>(lsmIndex.getImmutableComponents());
+                    List<ILSMDiskComponent> reversedImmutableComponents =
+                            new ArrayList<>(lsmIndex.getImmutableComponents());
                     // Reverse the components order so that we look at components from oldest to newest.
                     Collections.reverse(reversedImmutableComponents);
 
-                    List<ILSMComponent> mergableComponents = new ArrayList<ILSMComponent>();
+                    List<ILSMDiskComponent> mergableComponents = new ArrayList<>();
                     for (int j = startIndex + 1; j <= i; j++) {
                         mergableComponents.add(reversedImmutableComponents.get(j));
                     }

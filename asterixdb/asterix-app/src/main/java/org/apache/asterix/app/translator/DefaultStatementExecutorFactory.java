@@ -19,18 +19,36 @@
 package org.apache.asterix.app.translator;
 
 import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
+import org.apache.asterix.common.context.IStorageComponentProvider;
 import org.apache.asterix.compiler.provider.ILangCompilationProvider;
 import org.apache.asterix.lang.common.base.Statement;
+import org.apache.asterix.translator.IStatementExecutor;
 import org.apache.asterix.translator.IStatementExecutorFactory;
 import org.apache.asterix.translator.SessionConfig;
+import org.apache.hyracks.control.common.utils.HyracksThreadFactory;
 
 public class DefaultStatementExecutorFactory implements IStatementExecutorFactory {
 
-    @Override
-    public QueryTranslator create(List<Statement> aqlStatements, SessionConfig conf,
-            ILangCompilationProvider compilationProvider) {
-        return new QueryTranslator(aqlStatements, conf, compilationProvider);
+    protected final ExecutorService executorService;
+
+    /*
+     * @deprecated use other constructor
+     */
+    public DefaultStatementExecutorFactory() {
+        this(Executors.newSingleThreadExecutor(
+                new HyracksThreadFactory(DefaultStatementExecutorFactory.class.getSimpleName())));
     }
 
+    public DefaultStatementExecutorFactory(ExecutorService executorService) {
+        this.executorService = executorService;
+    }
+
+    @Override
+    public IStatementExecutor create(List<Statement> statements, SessionConfig conf,
+            ILangCompilationProvider compilationProvider, IStorageComponentProvider storageComponentProvider) {
+        return new QueryTranslator(statements, conf, compilationProvider, storageComponentProvider, executorService);
+    }
 }

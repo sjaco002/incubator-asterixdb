@@ -21,6 +21,9 @@ package org.apache.hyracks.control.cc.work;
 import java.util.EnumSet;
 
 import org.apache.hyracks.api.deployment.DeploymentId;
+import org.apache.hyracks.api.exceptions.ErrorCode;
+import org.apache.hyracks.api.exceptions.HyracksException;
+import org.apache.hyracks.api.job.ActivityClusterGraph;
 import org.apache.hyracks.api.job.IActivityClusterGraphGenerator;
 import org.apache.hyracks.api.job.IActivityClusterGraphGeneratorFactory;
 import org.apache.hyracks.api.job.JobFlag;
@@ -40,15 +43,17 @@ public class JobStartWork extends SynchronizableWork {
     private final DeploymentId deploymentId;
     private final JobId jobId;
     private final IResultCallback<JobId> callback;
+    private final boolean predestributed;
 
     public JobStartWork(ClusterControllerService ccs, DeploymentId deploymentId, byte[] acggfBytes,
-            EnumSet<JobFlag> jobFlags, JobId jobId, IResultCallback<JobId> callback) {
+            EnumSet<JobFlag> jobFlags, JobId jobId, IResultCallback<JobId> callback, boolean predestributed) {
         this.deploymentId = deploymentId;
         this.jobId = jobId;
         this.ccs = ccs;
         this.acggfBytes = acggfBytes;
         this.jobFlags = jobFlags;
         this.callback = callback;
+        this.predestributed = predestributed;
     }
 
     @Override
@@ -56,11 +61,24 @@ public class JobStartWork extends SynchronizableWork {
         IJobManager jobManager = ccs.getJobManager();
         try {
             final CCApplicationContext appCtx = ccs.getApplicationContext();
-            IActivityClusterGraphGeneratorFactory acggf = (IActivityClusterGraphGeneratorFactory) DeploymentUtils
-                    .deserialize(acggfBytes, deploymentId, appCtx);
-            IActivityClusterGraphGenerator acgg = acggf.createActivityClusterGraphGenerator(jobId, appCtx, jobFlags);
-            JobRun run = new JobRun(ccs, deploymentId, jobId, acggf, acgg, jobFlags, callback);
+            JobRun run;
+            if (!predestributed) {
+                //Need to create the ActivityClusterGraph
+                IActivityClusterGraphGeneratorFactory acggf = (IActivityClusterGraphGeneratorFactory) DeploymentUtils
+                        .deserialize(acggfBytes, deploymentId, appCtx);
+                IActivityClusterGraphGenerator acgg =
+                        acggf.createActivityClusterGraphGenerator(jobId, appCtx, jobFlags);
+                run = new JobRun(ccs, deploymentId, jobId, acggf, acgg, jobFlags, callback);
+            } else {
+                //ActivityClusterGraph has already been distributed
+                ActivityClusterGraph entry = ccs.getActivityClusterGraph(jobId);
+                if (entry == null) {
+                    throw HyracksException.create(ErrorCode.ERROR_FINDING_DISTRIBUTED_JOB);
+                }
+                run = new JobRun(ccs, deploymentId, jobId, callback);
+            }
             jobManager.add(run);
+
         } catch (Exception e) {
             callback.setException(e);
         }

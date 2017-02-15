@@ -19,9 +19,9 @@
 package org.apache.hyracks.data.std.api;
 
 public interface IValueReference {
-    public byte[] getByteArray();
+    byte[] getByteArray();
 
-    public int getStartOffset();
+    int getStartOffset();
 
-    public int getLength();
+    int getLength();
 }

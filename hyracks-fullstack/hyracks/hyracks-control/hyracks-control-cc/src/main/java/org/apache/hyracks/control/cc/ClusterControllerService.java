@@ -27,6 +27,7 @@ import java.net.InetSocketAddress;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.Hashtable;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -41,9 +42,13 @@ import java.util.logging.Logger;
 import org.apache.hyracks.api.application.ICCApplicationEntryPoint;
 import org.apache.hyracks.api.client.ClusterControllerInfo;
 import org.apache.hyracks.api.comm.NetworkAddress;
+import org.apache.hyracks.api.constraints.Constraint;
 import org.apache.hyracks.api.context.ICCContext;
 import org.apache.hyracks.api.deployment.DeploymentId;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
+import org.apache.hyracks.api.job.ActivityClusterGraph;
+import org.apache.hyracks.api.job.JobId;
+import org.apache.hyracks.api.job.JobSpecification;
 import org.apache.hyracks.api.job.resource.DefaultJobCapacityController;
 import org.apache.hyracks.api.job.resource.IJobCapacityController;
 import org.apache.hyracks.api.service.IControllerService;
@@ -90,13 +95,19 @@ public class ClusterControllerService implements IControllerService {
 
     private final LogFile jobLog;
 
-    private final ServerContext serverCtx;
+    private ServerContext serverCtx;
 
-    private final WebServer webServer;
+    private WebServer webServer;
 
     private ClusterControllerInfo info;
 
     private CCApplicationContext appCtx;
+
+    private final Map<JobId, ActivityClusterGraph> activityClusterGraphMap;
+
+    private final Map<JobId, JobSpecification> jobSpecificationMap;
+
+    private final Map<JobId, Set<Constraint>> activityClusterGraphConstraintsMap;
 
     private final WorkQueue workQueue;
 
@@ -130,14 +141,10 @@ public class ClusterControllerService implements IControllerService {
         this.ccConfig = ccConfig;
         File jobLogFolder = new File(ccConfig.ccRoot, "logs/jobs");
         jobLog = new LogFile(jobLogFolder);
-        serverCtx = new ServerContext(ServerContext.ServerType.CLUSTER_CONTROLLER, new File(ccConfig.ccRoot));
-        IIPCI ccIPCI = new ClusterControllerIPCI(this);
-        clusterIPC = new IPCSystem(new InetSocketAddress(ccConfig.clusterNetPort), ccIPCI,
-                new CCNCFunctions.SerializerDeserializer());
-        IIPCI ciIPCI = new ClientInterfaceIPCI(this);
-        clientIPC = new IPCSystem(new InetSocketAddress(ccConfig.clientNetIpAddress, ccConfig.clientNetPort), ciIPCI,
-                new JavaSerializationBasedPayloadSerializerDeserializer());
-        webServer = new WebServer(this);
+
+        activityClusterGraphMap = new Hashtable<>();
+        jobSpecificationMap = new Hashtable<>();
+        activityClusterGraphConstraintsMap = new Hashtable<>();
 
         // WorkQueue is in charge of heartbeat as well as other events.
         workQueue = new WorkQueue("ClusterController", Thread.MAX_PRIORITY);
@@ -171,6 +178,14 @@ public class ClusterControllerService implements IControllerService {
     @Override
     public void start() throws Exception {
         LOGGER.log(Level.INFO, "Starting ClusterControllerService: " + this);
+        serverCtx = new ServerContext(ServerContext.ServerType.CLUSTER_CONTROLLER, new File(ccConfig.ccRoot));
+        IIPCI ccIPCI = new ClusterControllerIPCI(this);
+        clusterIPC = new IPCSystem(new InetSocketAddress(ccConfig.clusterNetPort), ccIPCI,
+                new CCNCFunctions.SerializerDeserializer());
+        IIPCI ciIPCI = new ClientInterfaceIPCI(this);
+        clientIPC = new IPCSystem(new InetSocketAddress(ccConfig.clientNetIpAddress, ccConfig.clientNetPort), ciIPCI,
+                new JavaSerializationBasedPayloadSerializerDeserializer());
+        webServer = new WebServer(this);
         clusterIPC.start();
         clientIPC.start();
         webServer.setPort(ccConfig.httpPort);
@@ -313,6 +328,42 @@ public class ClusterControllerService implements IControllerService {
         return nodeManager;
     }
 
+    public void storeActivityClusterGraph(JobId jobId, ActivityClusterGraph acg) {
+        activityClusterGraphMap.put(jobId, acg);
+    }
+
+    public void removeActivityClusterGraph(JobId jobId) {
+        activityClusterGraphMap.remove(jobId);
+    }
+
+    public ActivityClusterGraph getActivityClusterGraph(JobId jobId) {
+        return activityClusterGraphMap.get(jobId);
+    }
+
+    public void storeJobSpecification(JobId jobId, JobSpecification spec) {
+        jobSpecificationMap.put(jobId, spec);
+    }
+
+    public void removeJobSpecification(JobId jobId) {
+        jobSpecificationMap.remove(jobId);
+    }
+
+    public JobSpecification getJobSpecification(JobId jobId) {
+        return jobSpecificationMap.get(jobId);
+    }
+
+    public void storeActivityClusterGraphConstraints(JobId jobId, Set<Constraint> acgConstraints) {
+        activityClusterGraphConstraintsMap.put(jobId, acgConstraints);
+    }
+
+    public void removeActivityClusterGraphConstraints(JobId jobId) {
+        activityClusterGraphConstraintsMap.remove(jobId);
+    }
+
+    public Set<Constraint> getActivityClusterGraphConstraints(JobId jobId) {
+        return activityClusterGraphConstraintsMap.get(jobId);
+    }
+
     public IResourceManager getResourceManager() {
         return resourceManager;
     }
@@ -325,8 +376,12 @@ public class ClusterControllerService implements IControllerService {
         return workQueue;
     }
 
-    public Executor getExecutor() {
+    public ExecutorService getExecutorService() {
         return executor;
+    }
+
+    public Executor getExecutor() {
+        return getExecutorService();
     }
 
     public CCConfig getConfig() {

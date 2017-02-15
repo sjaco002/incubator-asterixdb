@@ -27,6 +27,7 @@ import java.util.logging.Logger;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.apache.hyracks.storage.am.common.api.IndexException;
 import org.apache.hyracks.storage.am.common.impls.NoOpOperationCallback;
+import org.apache.hyracks.storage.am.lsm.common.api.ILSMDiskComponent;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMComponent;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMComponent.ComponentState;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMIndex;
@@ -43,6 +44,10 @@ public class ConstantMergePolicy implements ILSMMergePolicy {
     @Override
     public void diskComponentAdded(final ILSMIndex index, boolean fullMergeIsRequested, boolean isMergeOp)
             throws HyracksDataException, IndexException {
+<<<<<<< HEAD
+=======
+        List<ILSMDiskComponent> immutableComponents = index.getImmutableComponents();
+>>>>>>> steven/procedures
 
         if (!isMergeOp) {
             numFlushes++;
@@ -104,7 +109,7 @@ public class ConstantMergePolicy implements ILSMMergePolicy {
          * there will be no new merge either in this situation.
          */
 
-        List<ILSMComponent> immutableComponents = index.getImmutableComponents();
+        List<ILSMDiskComponent> immutableComponents = index.getImmutableComponents();
         int totalImmutableComponentCount = immutableComponents.size();
 
         // [case 1]
@@ -142,7 +147,7 @@ public class ConstantMergePolicy implements ILSMMergePolicy {
      * @param immutableComponents
      * @return true if all components are mergable, false otherwise.
      */
-    private boolean areComponentsMergable(List<ILSMComponent> immutableComponents) {
+    private boolean areComponentsMergable(List<ILSMDiskComponent> immutableComponents) {
         for (ILSMComponent c : immutableComponents) {
             if (c.getState() != ComponentState.READABLE_UNWRITABLE) {
                 return false;
@@ -157,7 +162,7 @@ public class ConstantMergePolicy implements ILSMMergePolicy {
      *
      * @return true if there is an ongoing merge operation, false otherwise.
      */
-    private boolean isMergeOngoing(List<ILSMComponent> immutableComponents) {
+    private boolean isMergeOngoing(List<ILSMDiskComponent> immutableComponents) {
         int size = immutableComponents.size();
         for (int i = 0; i < size; i++) {
             if (immutableComponents.get(i).getState() == ComponentState.READABLE_MERGING) {

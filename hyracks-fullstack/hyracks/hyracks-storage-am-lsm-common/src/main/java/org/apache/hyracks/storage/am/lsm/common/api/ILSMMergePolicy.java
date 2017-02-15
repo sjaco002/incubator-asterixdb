@@ -28,7 +28,7 @@ public interface ILSMMergePolicy {
     public void diskComponentAdded(ILSMIndex index, boolean fullMergeIsRequested, boolean isMergeOp)
             throws HyracksDataException, IndexException;
 
-    public void configure(Map<String, String> properties);
+    void configure(Map<String, String> properties);
 
     /**
      * This method is used for flush-operation flow control:
@@ -59,4 +59,5 @@ public interface ILSMMergePolicy {
     public long getNumberOfFlushes();
     public long getNumberOfMerges();
     public double getMergeCost();
+
 }

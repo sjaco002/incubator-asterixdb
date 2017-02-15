@@ -20,6 +20,7 @@ package org.apache.asterix.api.http.server;
 
 import static org.apache.asterix.api.http.servlet.ServletConstants.HYRACKS_CONNECTION_ATTR;
 import static org.apache.asterix.api.http.servlet.ServletConstants.HYRACKS_DATASET_ATTR;
+import static org.apache.asterix.translator.IStatementExecutor.ResultDelivery;
 
 import java.io.IOException;
 import java.io.PrintWriter;
@@ -33,9 +34,9 @@ import java.util.logging.Logger;
 
 import org.apache.asterix.app.result.ResultReader;
 import org.apache.asterix.app.result.ResultUtil;
-import org.apache.asterix.app.translator.QueryTranslator;
 import org.apache.asterix.common.api.IClusterManagementWork;
 import org.apache.asterix.common.config.GlobalConfig;
+import org.apache.asterix.common.context.IStorageComponentProvider;
 import org.apache.asterix.common.exceptions.AsterixException;
 import org.apache.asterix.common.utils.JSONUtil;
 import org.apache.asterix.compiler.provider.ILangCompilationProvider;
@@ -43,7 +44,7 @@ import org.apache.asterix.lang.aql.parser.TokenMgrError;
 import org.apache.asterix.lang.common.base.IParser;
 import org.apache.asterix.lang.common.base.Statement;
 import org.apache.asterix.metadata.MetadataManager;
-import org.apache.asterix.runtime.util.ClusterStateManager;
+import org.apache.asterix.runtime.utils.ClusterStateManager;
 import org.apache.asterix.translator.IStatementExecutor;
 import org.apache.asterix.translator.IStatementExecutor.Stats;
 import org.apache.asterix.translator.IStatementExecutorFactory;
@@ -53,10 +54,11 @@ import org.apache.hyracks.algebricks.core.algebra.prettyprint.AlgebricksAppendab
 import org.apache.hyracks.api.client.IHyracksClientConnection;
 import org.apache.hyracks.api.dataset.IHyracksDataset;
 import org.apache.hyracks.client.dataset.HyracksDataset;
+import org.apache.hyracks.http.api.IServlet;
+import org.apache.hyracks.http.api.IServletRequest;
+import org.apache.hyracks.http.api.IServletResponse;
 import org.apache.hyracks.http.server.AbstractServlet;
-import org.apache.hyracks.http.server.IServlet;
-import org.apache.hyracks.http.server.IServletRequest;
-import org.apache.hyracks.http.server.IServletResponse;
+import org.apache.hyracks.http.server.util.ServletUtils;
 
 import com.fasterxml.jackson.core.JsonParseException;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -72,13 +74,15 @@ public class QueryServiceServlet extends AbstractServlet {
     private static final Logger LOGGER = Logger.getLogger(QueryServiceServlet.class.getName());
     private final ILangCompilationProvider compilationProvider;
     private final IStatementExecutorFactory statementExecutorFactory;
+    private final IStorageComponentProvider componentProvider;
 
     public QueryServiceServlet(ConcurrentMap<String, Object> ctx, String[] paths,
-            ILangCompilationProvider compilationProvider,
-            IStatementExecutorFactory statementExecutorFactory) {
+            ILangCompilationProvider compilationProvider, IStatementExecutorFactory statementExecutorFactory,
+            IStorageComponentProvider componentProvider) {
         super(ctx, paths);
         this.compilationProvider = compilationProvider;
         this.statementExecutorFactory = statementExecutorFactory;
+        this.componentProvider = componentProvider;
     }
 
     @Override
@@ -152,6 +156,7 @@ public class QueryServiceServlet extends AbstractServlet {
     }
 
     public enum ResultStatus {
+        STARTED("started"),
         SUCCESS("success"),
         TIMEOUT("timeout"),
         ERRORS("errors"),
@@ -310,23 +315,14 @@ public class QueryServiceServlet extends AbstractServlet {
             }
         };
 
-        SessionConfig.ResultDecorator resultPostfix = (AlgebricksAppendable app) -> app.append("\t,\n");
-
-        SessionConfig.ResultDecorator handlePrefix = new SessionConfig.ResultDecorator() {
-            @Override
-            public AlgebricksAppendable append(AlgebricksAppendable app) throws AlgebricksException {
-                app.append("\t\"");
-                app.append(ResultFields.HANDLE.str());
-                app.append("\": ");
-                return app;
-            }
-        };
-
-        SessionConfig.ResultDecorator handlePostfix = (AlgebricksAppendable app) -> app.append(",\n");
+        SessionConfig.ResultDecorator resultPostfix = app -> app.append("\t,\n");
+        SessionConfig.ResultDecorator handlePrefix =
+                app -> app.append("\t\"").append(ResultFields.HANDLE.str()).append("\": ");
+        SessionConfig.ResultDecorator handlePostfix = app -> app.append(",\n");
 
         SessionConfig.OutputFormat format = getFormat(param.format);
-        SessionConfig sessionConfig = new SessionConfig(resultWriter, format, resultPrefix, resultPostfix,
-                handlePrefix, handlePostfix);
+        SessionConfig sessionConfig =
+                new SessionConfig(resultWriter, format, resultPrefix, resultPostfix, handlePrefix, handlePostfix);
         sessionConfig.set(SessionConfig.FORMAT_WRAPPER_ARRAY, true);
         sessionConfig.set(SessionConfig.FORMAT_INDENT_JSON, param.pretty);
         sessionConfig.set(SessionConfig.FORMAT_QUOTE_RECORD,
@@ -341,11 +337,18 @@ public class QueryServiceServlet extends AbstractServlet {
     }
 
     private static void printField(PrintWriter pw, String name, String value, boolean comma) {
+        printFieldInternal(pw, name, "\"" + value + "\"", comma);
+    }
+
+    private static void printField(PrintWriter pw, String name, long value, boolean comma) {
+        printFieldInternal(pw, name, String.valueOf(value), comma);
+    }
+
+    private static void printFieldInternal(PrintWriter pw, String name, String value, boolean comma) {
         pw.print("\t\"");
         pw.print(name);
-        pw.print("\": \"");
+        pw.print("\": ");
         pw.print(value);
-        pw.print('"');
         if (comma) {
             pw.print(',');
         }
@@ -413,9 +416,9 @@ public class QueryServiceServlet extends AbstractServlet {
         pw.print("\t");
         printField(pw, Metrics.EXECUTION_TIME.str(), TimeUnit.formatNanos(executionTime));
         pw.print("\t");
-        printField(pw, Metrics.RESULT_COUNT.str(), String.valueOf(resultCount));
+        printField(pw, Metrics.RESULT_COUNT.str(), resultCount, true);
         pw.print("\t");
-        printField(pw, Metrics.RESULT_SIZE.str(), String.valueOf(resultSize), false);
+        printField(pw, Metrics.RESULT_SIZE.str(), resultSize, false);
         pw.print("\t}\n");
     }
 
@@ -463,13 +466,13 @@ public class QueryServiceServlet extends AbstractServlet {
         return request.getHttpRequest().content().toString(StandardCharsets.UTF_8);
     }
 
-    private static QueryTranslator.ResultDelivery parseResultDelivery(String mode) {
+    private static ResultDelivery parseResultDelivery(String mode) {
         if ("async".equals(mode)) {
-            return QueryTranslator.ResultDelivery.ASYNC;
+            return ResultDelivery.ASYNC;
         } else if ("deferred".equals(mode)) {
-            return QueryTranslator.ResultDelivery.DEFERRED;
+            return ResultDelivery.DEFERRED;
         } else {
-            return QueryTranslator.ResultDelivery.IMMEDIATE;
+            return ResultDelivery.IMMEDIATE;
         }
     }
 
@@ -479,10 +482,10 @@ public class QueryServiceServlet extends AbstractServlet {
         final StringWriter stringWriter = new StringWriter();
         final PrintWriter resultWriter = new PrintWriter(stringWriter);
 
-        QueryTranslator.ResultDelivery delivery = parseResultDelivery(param.mode);
+        ResultDelivery delivery = parseResultDelivery(param.mode);
 
         SessionConfig sessionConfig = createSessionConfig(param, resultWriter);
-        IServletResponse.setContentType(response, IServlet.ContentType.APPLICATION_JSON, IServlet.Encoding.UTF8);
+        ServletUtils.setContentType(response, IServlet.ContentType.APPLICATION_JSON, IServlet.Encoding.UTF8);
 
         HttpResponseStatus status = HttpResponseStatus.OK;
         Stats stats = new Stats();
@@ -517,12 +520,12 @@ public class QueryServiceServlet extends AbstractServlet {
             IParser parser = compilationProvider.getParserFactory().createParser(param.statement);
             List<Statement> statements = parser.parse();
             MetadataManager.INSTANCE.init();
-            IStatementExecutor translator = statementExecutorFactory.create(statements, sessionConfig,
-                    compilationProvider);
+            IStatementExecutor translator =
+                    statementExecutorFactory.create(statements, sessionConfig, compilationProvider, componentProvider);
             execStart = System.nanoTime();
             translator.compileAndExecute(hcc, hds, delivery, stats);
             execEnd = System.nanoTime();
-            printStatus(resultWriter, ResultStatus.SUCCESS);
+            printStatus(resultWriter, ResultDelivery.ASYNC == delivery ? ResultStatus.STARTED : ResultStatus.SUCCESS);
         } catch (AsterixException | TokenMgrError | org.apache.asterix.aqlplus.parser.TokenMgrError pe) {
             GlobalConfig.ASTERIX_LOGGER.log(Level.SEVERE, pe.getMessage(), pe);
             printError(resultWriter, pe);
