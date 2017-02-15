@@ -31,6 +31,7 @@ import org.apache.hyracks.storage.am.common.api.IndexException;
 import org.apache.hyracks.storage.am.common.impls.NoOpOperationCallback;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMComponent;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMComponent.ComponentState;
+import org.apache.hyracks.storage.am.lsm.common.api.ILSMDiskComponent;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMIndex;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMIndexAccessor;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMMergePolicy;
@@ -53,7 +54,7 @@ public class KSlotMergePolicy implements ILSMMergePolicy {
             return;
         }
         numFlushes++;
-        List<ILSMComponent> immutableComponents = new ArrayList<ILSMComponent>(index.getImmutableComponents());
+        List<ILSMDiskComponent> immutableComponents = new ArrayList<>(index.getImmutableComponents());
         if (!areComponentsReadableWritableState(immutableComponents)) {
             return;
         }
@@ -74,7 +75,7 @@ public class KSlotMergePolicy implements ILSMMergePolicy {
     }
 
     private boolean scheduleMerge(final ILSMIndex index) throws HyracksDataException, IndexException {
-        List<ILSMComponent> immutableComponents = new ArrayList<ILSMComponent>(index.getImmutableComponents());
+        List<ILSMDiskComponent> immutableComponents = new ArrayList<ILSMDiskComponent>(index.getImmutableComponents());
         Collections.reverse(immutableComponents);
         int mergedIndex = -1;
         long delta = 0;
@@ -84,17 +85,17 @@ public class KSlotMergePolicy implements ILSMMergePolicy {
         int startIndex = -1;
         if (size <= numComponents) {
             startIndex = size - 2;
-            delta = ((AbstractDiskLSMComponent) immutableComponents.get(size - 1)).getComponentSize();
+            delta = immutableComponents.get(size - 1).getComponentSize();
         } else {
             startIndex = numComponents - 2;
-            delta = ((AbstractDiskLSMComponent) immutableComponents.get(numComponents - 1)).getComponentSize()
-                    + ((AbstractDiskLSMComponent) immutableComponents.get(numComponents)).getComponentSize();
+            delta = immutableComponents.get(numComponents - 1).getComponentSize()
+                    + immutableComponents.get(numComponents).getComponentSize();
         }
 
         for (int i = startIndex; i >= -1; i--) {
             if (i == -1) {
                 mergedIndex = i + 1;
-            } else if (((AbstractDiskLSMComponent) immutableComponents.get(i)).getComponentSize() >= mergeCosts[i]
+            } else if (immutableComponents.get(i).getComponentSize() >= mergeCosts[i]
                     + delta) {
                 mergedIndex = i + 1;
                 break;
@@ -103,9 +104,9 @@ public class KSlotMergePolicy implements ILSMMergePolicy {
         updateMergeCosts(mergedIndex, delta);
         if (mergedIndex != size - 1) {
             long mergeSize = 0;
-            List<ILSMComponent> mergableComponents = new ArrayList<ILSMComponent>();
+            List<ILSMDiskComponent> mergableComponents = new ArrayList<>();
             for (int j = mergedIndex; j < immutableComponents.size(); j++) {
-                mergeSize = mergeSize + ((AbstractDiskLSMComponent) immutableComponents.get(j)).getComponentSize();
+                mergeSize = mergeSize + immutableComponents.get(j).getComponentSize();
                 mergableComponents.add(immutableComponents.get(j));
             }
             Collections.reverse(mergableComponents);
@@ -123,7 +124,7 @@ public class KSlotMergePolicy implements ILSMMergePolicy {
     }
 
     private int needMerge(final ILSMIndex index) {
-        List<ILSMComponent> immutableComponents = new ArrayList<ILSMComponent>(index.getImmutableComponents());
+        List<ILSMDiskComponent> immutableComponents = new ArrayList<>(index.getImmutableComponents());
         Collections.reverse(immutableComponents);
         int mergedIndex = -1;
         int size = immutableComponents.size();
@@ -138,7 +139,7 @@ public class KSlotMergePolicy implements ILSMMergePolicy {
         for (int i = startIndex; i >= -1; i--) {
             if (i == -1) {
                 mergedIndex = i + 1;
-            } else if (((AbstractDiskLSMComponent) immutableComponents.get(i)).getComponentSize() >= mergeCosts[i]) {
+            } else if (immutableComponents.get(i).getComponentSize() >= mergeCosts[i]) {
                 mergedIndex = i + 1;
                 break;
             }
@@ -153,11 +154,11 @@ public class KSlotMergePolicy implements ILSMMergePolicy {
     private boolean scheduleLaggedMerge(final ILSMIndex index, int mergedIndex)
             throws HyracksDataException, IndexException {
         long mergeSize = 0;
-        List<ILSMComponent> immutableComponents = new ArrayList<ILSMComponent>(index.getImmutableComponents());
+        List<ILSMDiskComponent> immutableComponents = new ArrayList<>(index.getImmutableComponents());
         Collections.reverse(immutableComponents);
-        List<ILSMComponent> mergableComponents = new ArrayList<ILSMComponent>();
+        List<ILSMDiskComponent> mergableComponents = new ArrayList<>();
         for (int j = mergedIndex; j < immutableComponents.size(); j++) {
-            mergeSize = mergeSize + ((AbstractDiskLSMComponent) immutableComponents.get(j)).getComponentSize();
+            mergeSize = mergeSize + immutableComponents.get(j).getComponentSize();
             mergableComponents.add(immutableComponents.get(j));
         }
         Collections.reverse(mergableComponents);
@@ -172,7 +173,7 @@ public class KSlotMergePolicy implements ILSMMergePolicy {
 
     }
 
-    private boolean areComponentsReadableWritableState(List<ILSMComponent> immutableComponents) {
+    private boolean areComponentsReadableWritableState(List<ILSMDiskComponent> immutableComponents) {
         for (ILSMComponent c : immutableComponents) {
             if (c.getState() != ComponentState.READABLE_UNWRITABLE) {
                 return false;
@@ -181,7 +182,7 @@ public class KSlotMergePolicy implements ILSMMergePolicy {
         return true;
     }
 
-    private boolean isMergeOngoing(List<ILSMComponent> immutableComponents) {
+    private boolean isMergeOngoing(List<ILSMDiskComponent> immutableComponents) {
         int size = immutableComponents.size();
         for (int i = 0; i < size; i++) {
             if (immutableComponents.get(i).getState() == ComponentState.READABLE_MERGING) {
@@ -218,22 +219,22 @@ public class KSlotMergePolicy implements ILSMMergePolicy {
         }
     }
 
-    private long getMergeSize(List<ILSMComponent> immutableComponents) {
+    private long getMergeSize(List<ILSMDiskComponent> immutableComponents) {
         long mergeSize = 0;
         for (int j = 0; j < immutableComponents.size(); j++) {
-            mergeSize = mergeSize + ((AbstractDiskLSMComponent) immutableComponents.get(j)).getComponentSize();
+            mergeSize = mergeSize + immutableComponents.get(j).getComponentSize();
         }
         return mergeSize;
     }
 
-    private void logDiskComponentsSnapshot(List<ILSMComponent> immutableComponents) {
+    private void logDiskComponentsSnapshot(List<ILSMDiskComponent> immutableComponents) {
 
         if (LOGGER.isLoggable(Level.SEVERE)) {
             String snapshotStr = "";
             for (int j = 0; j < immutableComponents.size(); j++) {
 
                 snapshotStr =
-                        snapshotStr + "," + ((AbstractDiskLSMComponent) immutableComponents.get(j)).getComponentSize();
+ snapshotStr + "," + immutableComponents.get(j).getComponentSize();
             }
             if (snapshotStr.length() > 1) {
                 snapshotStr = snapshotStr.substring(1);
@@ -244,7 +245,7 @@ public class KSlotMergePolicy implements ILSMMergePolicy {
 
     @Override
     public boolean isMergeLagging(ILSMIndex index) throws HyracksDataException, IndexException {
-        List<ILSMComponent> immutableComponents = index.getImmutableComponents();
+        List<ILSMDiskComponent> immutableComponents = index.getImmutableComponents();
         /*int mergedIndex = needMerge(index);
         if (mergedIndex==-1){
         return false;

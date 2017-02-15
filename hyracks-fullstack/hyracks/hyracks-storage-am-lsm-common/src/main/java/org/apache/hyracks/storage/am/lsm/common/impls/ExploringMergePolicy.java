@@ -30,6 +30,7 @@ import org.apache.hyracks.storage.am.common.api.IndexException;
 import org.apache.hyracks.storage.am.common.impls.NoOpOperationCallback;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMComponent;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMComponent.ComponentState;
+import org.apache.hyracks.storage.am.lsm.common.api.ILSMDiskComponent;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMIndex;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMIndexAccessor;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMMergePolicy;
@@ -52,7 +53,7 @@ public class ExploringMergePolicy implements ILSMMergePolicy {
         } else {
             return;
         }
-        List<ILSMComponent> immutableComponents = new ArrayList<ILSMComponent>(index.getImmutableComponents());
+        List<ILSMDiskComponent> immutableComponents = new ArrayList<>(index.getImmutableComponents());
         if (!areComponentsReadableWritableState(immutableComponents)) {
             return;
         }
@@ -72,16 +73,16 @@ public class ExploringMergePolicy implements ILSMMergePolicy {
     }
 
     private boolean scheduleMerge(final ILSMIndex index) throws HyracksDataException, IndexException {
-        List<ILSMComponent> immutableComponents = new ArrayList<ILSMComponent>(index.getImmutableComponents());
+        List<ILSMDiskComponent> immutableComponents = new ArrayList<>(index.getImmutableComponents());
         Collections.reverse(immutableComponents);
         int length = immutableComponents.size();
         if (length <= min - 1) {
             return false;
         }
         boolean mightBeStuck = (length > max) ? true : false;
-        List<ILSMComponent> bestSelection = new ArrayList<ILSMComponent>(0);
-        List<ILSMComponent> smallest = new ArrayList<ILSMComponent>(0);
-        List<ILSMComponent> mergableComponents = new ArrayList<ILSMComponent>();
+        List<ILSMDiskComponent> bestSelection = new ArrayList<>(0);
+        List<ILSMDiskComponent> smallest = new ArrayList<>(0);
+        List<ILSMDiskComponent> mergableComponents = new ArrayList<>();
         long bestSize = 0;
         long smallestSize = Long.MAX_VALUE;
         int bestStart = -1;
@@ -95,7 +96,7 @@ public class ExploringMergePolicy implements ILSMMergePolicy {
 
         for (int start = 0; start < length; start++) {
             for (int currentEnd = start + min - 1; currentEnd < length; currentEnd++) {
-                List<ILSMComponent> potentialMatchFiles = immutableComponents.subList(start, currentEnd + 1);
+                List<ILSMDiskComponent> potentialMatchFiles = immutableComponents.subList(start, currentEnd + 1);
                 if (potentialMatchFiles.size() < min) {
                     continue;
                 }
@@ -122,12 +123,12 @@ public class ExploringMergePolicy implements ILSMMergePolicy {
             special = true;
             mergeStart = smallestStart;
             mergeEnd = smallestEnd;
-            mergableComponents = new ArrayList<ILSMComponent>(smallest);
+            mergableComponents = new ArrayList<>(smallest);
         } else if (bestStart != -1 && bestEnd != -1) {
             merging = true;
             mergeStart = bestStart;
             mergeEnd = bestEnd;
-            mergableComponents = new ArrayList<ILSMComponent>(bestSelection);
+            mergableComponents = new ArrayList<>(bestSelection);
 
         }
         if (merging) {
@@ -147,7 +148,8 @@ public class ExploringMergePolicy implements ILSMMergePolicy {
 
     }
 
-    public boolean isBetterSelection(List<ILSMComponent> bestSelection, long bestSize, List<ILSMComponent> selection,
+    public boolean isBetterSelection(List<ILSMDiskComponent> bestSelection, long bestSize,
+            List<ILSMDiskComponent> selection,
             long size, boolean mightBeStuck) {
         if (mightBeStuck && bestSize > 0 && size > 0) {
             double thresholdQuantity = ((double) bestSelection.size() / bestSize);
@@ -156,13 +158,13 @@ public class ExploringMergePolicy implements ILSMMergePolicy {
         return selection.size() > bestSelection.size() || (selection.size() == bestSelection.size() && size < bestSize);
     }
 
-    public boolean fileInRatio(final List<ILSMComponent> files) {
+    public boolean fileInRatio(final List<ILSMDiskComponent> files) {
         if (files.size() < 2) {
             return true;
         }
         long totalFileSize = getTotalSize(files);
-        for (ILSMComponent file : files) {
-            long singleFileSize = ((AbstractDiskLSMComponent) file).getComponentSize();
+        for (ILSMDiskComponent file : files) {
+            long singleFileSize = file.getComponentSize();
             long sumAllOtherFileSizes = totalFileSize - singleFileSize;
             if (singleFileSize > sumAllOtherFileSizes * ratio) {
                 return false;
@@ -171,7 +173,7 @@ public class ExploringMergePolicy implements ILSMMergePolicy {
         return true;
     }
 
-    private boolean areComponentsReadableWritableState(List<ILSMComponent> immutableComponents) {
+    private boolean areComponentsReadableWritableState(List<ILSMDiskComponent> immutableComponents) {
         for (ILSMComponent c : immutableComponents) {
             if (c.getState() != ComponentState.READABLE_UNWRITABLE) {
                 return false;
@@ -180,7 +182,7 @@ public class ExploringMergePolicy implements ILSMMergePolicy {
         return true;
     }
 
-    private boolean isMergeOngoing(List<ILSMComponent> immutableComponents) {
+    private boolean isMergeOngoing(List<ILSMDiskComponent> immutableComponents) {
         int size = immutableComponents.size();
         for (int i = 0; i < size; i++) {
             if (immutableComponents.get(i).getState() == ComponentState.READABLE_MERGING) {
@@ -190,10 +192,10 @@ public class ExploringMergePolicy implements ILSMMergePolicy {
         return false;
     }
 
-    private long getTotalSize(List<ILSMComponent> files) {
+    private long getTotalSize(List<ILSMDiskComponent> files) {
         long sum = 0;
         for (int i = 0; i < files.size(); i++) {
-            sum = sum + ((AbstractDiskLSMComponent) files.get(i)).getComponentSize();
+            sum = sum + files.get(i).getComponentSize();
         }
         return sum;
     }
@@ -218,22 +220,22 @@ public class ExploringMergePolicy implements ILSMMergePolicy {
         }
     }
 
-    private long getMergeSize(List<ILSMComponent> files) {
+    private long getMergeSize(List<ILSMDiskComponent> files) {
         long mergeSize = 0;
         for (int j = 0; j < files.size(); j++) {
-            mergeSize = mergeSize + ((AbstractDiskLSMComponent) files.get(j)).getComponentSize();
+            mergeSize = mergeSize + files.get(j).getComponentSize();
         }
         return mergeSize;
     }
 
-    private void logDiskComponentsSnapshot(List<ILSMComponent> immutableComponents, boolean special) {
+    private void logDiskComponentsSnapshot(List<ILSMDiskComponent> immutableComponents, boolean special) {
 
         if (LOGGER.isLoggable(Level.SEVERE)) {
             String snapshotStr = "";
             for (int j = 0; j < immutableComponents.size(); j++) {
 
                 snapshotStr =
-                        snapshotStr + "," + ((AbstractDiskLSMComponent) immutableComponents.get(j)).getComponentSize();
+ snapshotStr + "," + immutableComponents.get(j).getComponentSize();
             }
             if (snapshotStr.length() > 1) {
                 snapshotStr = snapshotStr.substring(1);
@@ -248,7 +250,7 @@ public class ExploringMergePolicy implements ILSMMergePolicy {
 
     @Override
     public boolean isMergeLagging(ILSMIndex index) throws HyracksDataException, IndexException {
-        List<ILSMComponent> immutableComponents = index.getImmutableComponents();
+        List<ILSMDiskComponent> immutableComponents = index.getImmutableComponents();
         boolean isMergeOngoing = isMergeOngoing(immutableComponents);
         if (isMergeOngoing) {
             return true;

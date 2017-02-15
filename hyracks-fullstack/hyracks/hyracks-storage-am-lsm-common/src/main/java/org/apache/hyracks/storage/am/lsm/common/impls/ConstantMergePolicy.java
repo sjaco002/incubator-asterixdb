@@ -27,9 +27,9 @@ import java.util.logging.Logger;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.apache.hyracks.storage.am.common.api.IndexException;
 import org.apache.hyracks.storage.am.common.impls.NoOpOperationCallback;
-import org.apache.hyracks.storage.am.lsm.common.api.ILSMDiskComponent;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMComponent;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMComponent.ComponentState;
+import org.apache.hyracks.storage.am.lsm.common.api.ILSMDiskComponent;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMIndex;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMIndexAccessor;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMMergePolicy;
@@ -44,15 +44,12 @@ public class ConstantMergePolicy implements ILSMMergePolicy {
     @Override
     public void diskComponentAdded(final ILSMIndex index, boolean fullMergeIsRequested, boolean isMergeOp)
             throws HyracksDataException, IndexException {
-<<<<<<< HEAD
-=======
-        List<ILSMDiskComponent> immutableComponents = index.getImmutableComponents();
->>>>>>> steven/procedures
+
 
         if (!isMergeOp) {
             numFlushes++;
         }
-        List<ILSMComponent> immutableComponents = index.getImmutableComponents();
+        List<ILSMDiskComponent> immutableComponents = index.getImmutableComponents();
         if (!areComponentsMergable(immutableComponents)) {
             return;
         }
@@ -182,22 +179,21 @@ public class ConstantMergePolicy implements ILSMMergePolicy {
         }
     }
 
-    private long getMergeSize(List<ILSMComponent> immutableComponents) {
+    private long getMergeSize(List<ILSMDiskComponent> immutableComponents) {
         long mergeSize = 0;
         for (int j = 0; j < immutableComponents.size(); j++) {
-            mergeSize = mergeSize + ((AbstractDiskLSMComponent) immutableComponents.get(j)).getComponentSize();
+            mergeSize = mergeSize + immutableComponents.get(j).getComponentSize();
         }
         return mergeSize;
     }
 
-    private void logDiskComponentsSnapshot(List<ILSMComponent> immutableComponents) {
+    private void logDiskComponentsSnapshot(List<ILSMDiskComponent> immutableComponents) {
 
         if (LOGGER.isLoggable(Level.SEVERE)) {
             String snapshotStr = "";
             for (int j = 0; j < immutableComponents.size(); j++) {
 
-                snapshotStr =
-                        snapshotStr + "," + ((AbstractDiskLSMComponent) immutableComponents.get(j)).getComponentSize();
+                snapshotStr = snapshotStr + "," + immutableComponents.get(j).getComponentSize();
             }
             if (snapshotStr.length() > 1) {
                 snapshotStr = snapshotStr.substring(1);

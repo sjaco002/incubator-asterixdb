@@ -30,6 +30,7 @@ import org.apache.hyracks.storage.am.common.api.IndexException;
 import org.apache.hyracks.storage.am.common.impls.NoOpOperationCallback;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMComponent;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMComponent.ComponentState;
+import org.apache.hyracks.storage.am.lsm.common.api.ILSMDiskComponent;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMIndex;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMIndexAccessor;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMMergePolicy;
@@ -47,7 +48,7 @@ public class GoogleDefaultMergePolicy implements ILSMMergePolicy {
         if (!isMergeOp) {
             numFlushes++;
         }
-        List<ILSMComponent> immutableComponents = new ArrayList<ILSMComponent>(index.getImmutableComponents());
+        List<ILSMDiskComponent> immutableComponents = new ArrayList<>(index.getImmutableComponents());
         if (!areComponentsReadableWritableState(immutableComponents)) {
             return;
         }
@@ -66,7 +67,7 @@ public class GoogleDefaultMergePolicy implements ILSMMergePolicy {
     }
 
     private boolean scheduleMerge(final ILSMIndex index) throws HyracksDataException, IndexException {
-        List<ILSMComponent> immutableComponents = new ArrayList<ILSMComponent>(index.getImmutableComponents());
+        List<ILSMDiskComponent> immutableComponents = new ArrayList<>(index.getImmutableComponents());
         Collections.reverse(immutableComponents);
         int size = immutableComponents.size();
         if (size <= numComponents)
@@ -76,17 +77,16 @@ public class GoogleDefaultMergePolicy implements ILSMMergePolicy {
         int mergedIndex = endIndex;
 
         for (int i = 0; i < endIndex; i++) {
-            if (((AbstractDiskLSMComponent) immutableComponents.get(i)).getComponentSize() <= sum
-                    - ((AbstractDiskLSMComponent) immutableComponents.get(i)).getComponentSize()) {
+            if (immutableComponents.get(i).getComponentSize() <= sum - immutableComponents.get(i).getComponentSize()) {
                 mergedIndex = i;
                 break;
             }
-            sum = sum - ((AbstractDiskLSMComponent) immutableComponents.get(i)).getComponentSize();
+            sum = sum - immutableComponents.get(i).getComponentSize();
         }
         long mergeSize = 0;
-        List<ILSMComponent> mergableComponents = new ArrayList<ILSMComponent>();
+        List<ILSMDiskComponent> mergableComponents = new ArrayList<ILSMDiskComponent>();
         for (int i = mergedIndex; i < immutableComponents.size(); i++) {
-            mergeSize = mergeSize + ((AbstractDiskLSMComponent) immutableComponents.get(i)).getComponentSize();
+            mergeSize = mergeSize + immutableComponents.get(i).getComponentSize();
             mergableComponents.add(immutableComponents.get(i));
         }
         Collections.reverse(mergableComponents);
@@ -101,7 +101,7 @@ public class GoogleDefaultMergePolicy implements ILSMMergePolicy {
 
     }
 
-    private boolean areComponentsReadableWritableState(List<ILSMComponent> immutableComponents) {
+    private boolean areComponentsReadableWritableState(List<ILSMDiskComponent> immutableComponents) {
         for (ILSMComponent c : immutableComponents) {
             if (c.getState() != ComponentState.READABLE_UNWRITABLE) {
                 return false;
@@ -110,7 +110,7 @@ public class GoogleDefaultMergePolicy implements ILSMMergePolicy {
         return true;
     }
 
-    private boolean isMergeOngoing(List<ILSMComponent> immutableComponents) {
+    private boolean isMergeOngoing(List<ILSMDiskComponent> immutableComponents) {
         int size = immutableComponents.size();
         for (int i = 0; i < size; i++) {
             if (immutableComponents.get(i).getState() == ComponentState.READABLE_MERGING) {
@@ -120,10 +120,10 @@ public class GoogleDefaultMergePolicy implements ILSMMergePolicy {
         return false;
     }
 
-    private long getTotalSize(List<ILSMComponent> immutableComponents) {
+    private long getTotalSize(List<ILSMDiskComponent> immutableComponents) {
         long sum = 0;
         for (int i = 0; i < immutableComponents.size(); i++) {
-            sum = sum + ((AbstractDiskLSMComponent) immutableComponents.get(i)).getComponentSize();
+            sum = sum + immutableComponents.get(i).getComponentSize();
         }
         return sum;
     }
@@ -143,22 +143,22 @@ public class GoogleDefaultMergePolicy implements ILSMMergePolicy {
         }
     }
 
-    private long getMergeSize(List<ILSMComponent> immutableComponents) {
+    private long getMergeSize(List<ILSMDiskComponent> immutableComponents) {
         long mergeSize = 0;
         for (int j = 0; j < immutableComponents.size(); j++) {
-            mergeSize = mergeSize + ((AbstractDiskLSMComponent) immutableComponents.get(j)).getComponentSize();
+            mergeSize = mergeSize + immutableComponents.get(j).getComponentSize();
         }
         return mergeSize;
     }
 
-    private void logDiskComponentsSnapshot(List<ILSMComponent> immutableComponents) {
+    private void logDiskComponentsSnapshot(List<ILSMDiskComponent> immutableComponents) {
 
         if (LOGGER.isLoggable(Level.SEVERE)) {
             String snapshotStr = "";
             for (int j = 0; j < immutableComponents.size(); j++) {
 
                 snapshotStr =
-                        snapshotStr + "," + ((AbstractDiskLSMComponent) immutableComponents.get(j)).getComponentSize();
+ snapshotStr + "," + immutableComponents.get(j).getComponentSize();
             }
             if (snapshotStr.length() > 1) {
                 snapshotStr = snapshotStr.substring(1);
@@ -168,7 +168,7 @@ public class GoogleDefaultMergePolicy implements ILSMMergePolicy {
     }
 
     public boolean isMergeLagging(ILSMIndex index) throws HyracksDataException, IndexException {
-        List<ILSMComponent> immutableComponents = index.getImmutableComponents();
+        List<ILSMDiskComponent> immutableComponents = index.getImmutableComponents();
         int size = immutableComponents.size();
         if (size <= numComponents) {
             return false;
