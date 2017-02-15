@@ -19,11 +19,7 @@
 package org.apache.hyracks.control.cc.work;
 
 import java.util.EnumSet;
-import java.util.Set;
 
-import org.apache.hyracks.api.constraints.Constraint;
-import org.apache.hyracks.api.exceptions.ErrorCode;
-import org.apache.hyracks.api.exceptions.HyracksException;
 import org.apache.hyracks.api.job.ActivityClusterGraph;
 import org.apache.hyracks.api.job.IActivityClusterGraphGenerator;
 import org.apache.hyracks.api.job.IActivityClusterGraphGeneratorFactory;
@@ -56,19 +52,14 @@ public class DistributeJobWork extends SynchronizableWork {
     protected void doRun() throws Exception {
         try {
             final CCApplicationContext appCtx = ccs.getApplicationContext();
-            ActivityClusterGraph entry = ccs.getActivityClusterGraph(jobId);
-            Set<Constraint> constaints = ccs.getActivityClusterGraphConstraints(jobId);
-            if (entry != null || constaints != null) {
-                throw HyracksException.create(ErrorCode.DUPLICATE_DISTRIBUTED_JOB);
-            }
+            ccs.getDistributedJobStore().checkForExistingDistributedJobDescriptor(jobId);
             IActivityClusterGraphGeneratorFactory acggf =
                     (IActivityClusterGraphGeneratorFactory) DeploymentUtils.deserialize(acggfBytes, null, appCtx);
             IActivityClusterGraphGenerator acgg =
                     acggf.createActivityClusterGraphGenerator(jobId, appCtx, EnumSet.noneOf(JobFlag.class));
             ActivityClusterGraph acg = acgg.initialize();
-            ccs.storeActivityClusterGraph(jobId, acg);
-            ccs.storeJobSpecification(jobId, acggf.getJobSpecification());
-            ccs.storeActivityClusterGraphConstraints(jobId, acgg.getConstraints());
+            ccs.getDistributedJobStore().addDistributedJobDescriptor(jobId, acg, acggf.getJobSpecification(),
+                    acgg.getConstraints());
 
             appCtx.notifyJobCreation(jobId, acggf.getJobSpecification());
 

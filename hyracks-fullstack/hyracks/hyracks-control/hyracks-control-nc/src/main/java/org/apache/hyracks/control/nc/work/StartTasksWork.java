@@ -190,7 +190,7 @@ public class StartTasksWork extends AbstractWork {
             ActivityClusterGraph acg = ncs.getActivityClusterGraph(jobId);
             if (acg == null) {
                 if (acgBytes == null) {
-                    throw HyracksException.create(ErrorCode.ERROR_FINDING_DISTRIBUTED_JOB);
+                    throw HyracksException.create(ErrorCode.ERROR_FINDING_DISTRIBUTED_JOB, jobId);
                 }
                 acg = (ActivityClusterGraph) DeploymentUtils.deserialize(acgBytes, deploymentId, appCtx);
             }

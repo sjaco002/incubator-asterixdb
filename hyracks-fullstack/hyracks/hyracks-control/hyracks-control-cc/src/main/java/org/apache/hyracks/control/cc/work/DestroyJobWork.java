@@ -18,9 +18,6 @@
  */
 package org.apache.hyracks.control.cc.work;
 
-import org.apache.hyracks.api.exceptions.ErrorCode;
-import org.apache.hyracks.api.exceptions.HyracksException;
-import org.apache.hyracks.api.job.ActivityClusterGraph;
 import org.apache.hyracks.api.job.JobId;
 import org.apache.hyracks.control.cc.ClusterControllerService;
 import org.apache.hyracks.control.cc.NodeControllerState;
@@ -42,13 +39,7 @@ public class DestroyJobWork extends SynchronizableWork {
     @Override
     protected void doRun() throws Exception {
         try {
-            ActivityClusterGraph acg = ccs.getActivityClusterGraph(jobId);
-            if (acg == null) {
-                throw HyracksException.create(ErrorCode.ERROR_FINDING_DISTRIBUTED_JOB);
-            }
-            ccs.removeActivityClusterGraph(jobId);
-            ccs.removeJobSpecification(jobId);
-            ccs.removeActivityClusterGraphConstraints(jobId);
+            ccs.getDistributedJobStore().removeDistributedJobDescriptor(jobId);
             INodeManager nodeManager = ccs.getNodeManager();
             for (NodeControllerState node : nodeManager.getAllNodeControllerStates()) {
                 node.getNodeController().destroyJob(jobId);

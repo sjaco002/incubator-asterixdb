@@ -46,6 +46,7 @@ import org.apache.hyracks.api.job.JobSpecification;
 import org.apache.hyracks.api.job.JobStatus;
 import org.apache.hyracks.api.partitions.PartitionId;
 import org.apache.hyracks.control.cc.ClusterControllerService;
+import org.apache.hyracks.control.cc.DistributedJobStore.DistributedJobDescriptor;
 import org.apache.hyracks.control.cc.executor.ActivityPartitionDetails;
 import org.apache.hyracks.control.cc.executor.JobExecutor;
 import org.apache.hyracks.control.cc.partitions.PartitionMatchMaker;
@@ -119,14 +120,12 @@ public class JobRun implements IJobStatusConditionVariable {
     }
 
     //Run a Pre-distributed job by passing the JobId
-    public JobRun(ClusterControllerService ccs, DeploymentId deploymentId, JobId jobId, IResultCallback<JobId> callback)
+    public JobRun(ClusterControllerService ccs, DeploymentId deploymentId, JobId jobId, IResultCallback<JobId> callback,
+            DistributedJobDescriptor distributedJobDescriptor)
             throws HyracksException {
-        this(deploymentId, jobId, EnumSet.noneOf(JobFlag.class), callback, ccs.getJobSpecification(jobId), ccs.getActivityClusterGraph(jobId));
-        ActivityClusterGraph entry = ccs.getActivityClusterGraph(jobId);
-        Set<Constraint> constaints = ccs.getActivityClusterGraphConstraints(jobId);
-        if (entry == null || constaints == null) {
-            throw new HyracksException("Trying to run a pre-destributed job with no cluster map");
-        }
+        this(deploymentId, jobId, EnumSet.noneOf(JobFlag.class), callback,
+                distributedJobDescriptor.getJobSpecification(), distributedJobDescriptor.getActivityClusterGraph());
+        Set<Constraint> constaints = distributedJobDescriptor.getActivityClusterGraphConstraints();
         this.scheduler = new JobExecutor(ccs, this, constaints, true);
     }
 

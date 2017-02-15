@@ -46,6 +46,8 @@ import org.apache.hyracks.api.client.NodeControllerInfo;
 import org.apache.hyracks.api.comm.NetworkAddress;
 import org.apache.hyracks.api.dataset.IDatasetPartitionManager;
 import org.apache.hyracks.api.deployment.DeploymentId;
+import org.apache.hyracks.api.exceptions.ErrorCode;
+import org.apache.hyracks.api.exceptions.HyracksException;
 import org.apache.hyracks.api.io.IODeviceHandle;
 import org.apache.hyracks.api.job.ActivityClusterGraph;
 import org.apache.hyracks.api.job.JobId;
@@ -364,15 +366,27 @@ public class NodeControllerService implements IControllerService {
         return jobletMap;
     }
 
-    public void storeActivityClusterGraph(JobId jobId, ActivityClusterGraph acg) {
+    public void storeActivityClusterGraph(JobId jobId, ActivityClusterGraph acg) throws HyracksException {
+        if (activityClusterGraphMap.get(jobId) != null) {
+            throw HyracksException.create(ErrorCode.DUPLICATE_DISTRIBUTED_JOB, jobId);
+        }
         activityClusterGraphMap.put(jobId, acg);
     }
 
-    public void removeActivityClusterGraph(JobId jobId) {
+    public void removeActivityClusterGraph(JobId jobId) throws HyracksException {
+        if (activityClusterGraphMap.get(jobId) == null) {
+            throw HyracksException.create(ErrorCode.ERROR_FINDING_DISTRIBUTED_JOB, jobId);
+        }
         activityClusterGraphMap.remove(jobId);
     }
 
-    public ActivityClusterGraph getActivityClusterGraph(JobId jobId) {
+    public void checkForDuplicateDistributedJob(JobId jobId) throws HyracksException {
+        if (activityClusterGraphMap.get(jobId) != null) {
+            throw HyracksException.create(ErrorCode.DUPLICATE_DISTRIBUTED_JOB, jobId);
+        }
+    }
+
+    public ActivityClusterGraph getActivityClusterGraph(JobId jobId) throws HyracksException {
         return activityClusterGraphMap.get(jobId);
     }
 

@@ -16,39 +16,24 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+package org.apache.hyracks.control.cc.work;
 
-package org.apache.hyracks.control.nc.work;
-
+import org.apache.hyracks.api.exceptions.ErrorCode;
 import org.apache.hyracks.api.exceptions.HyracksException;
 import org.apache.hyracks.api.job.JobId;
-import org.apache.hyracks.control.common.work.AbstractWork;
-import org.apache.hyracks.control.nc.NodeControllerService;
+import org.apache.hyracks.control.common.work.SynchronizableWork;
 
-/**
- * destroy a pre-distributed job
- *
- */
-public class DestroyJobWork extends AbstractWork {
+public class DistributedJobFailureWork extends SynchronizableWork {
+    protected final JobId jobId;
+    protected final String nodeId;
 
-    private final NodeControllerService ncs;
-    private final JobId jobId;
-
-    public DestroyJobWork(NodeControllerService ncs, JobId jobId) {
-        this.ncs = ncs;
+    public DistributedJobFailureWork(JobId jobId, String nodeId) {
         this.jobId = jobId;
+        this.nodeId = nodeId;
     }
 
     @Override
-    public void run() {
-        try {
-            ncs.removeActivityClusterGraph(jobId);
-        } catch (HyracksException e) {
-            try {
-                ncs.getClusterController().notifyDistributedJobFailure(jobId, ncs.getId());
-            } catch (Exception e1) {
-                e1.printStackTrace();
-            }
-        }
+    public void doRun() throws HyracksException {
+        throw HyracksException.create(ErrorCode.DISTRIBUTED_JOB_FAILURE, jobId, nodeId);
     }
-
 }

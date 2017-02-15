@@ -43,13 +43,13 @@ import org.mockito.Mockito;
 public class DistributedJobsTest {
     private static final Logger LOGGER = Logger.getLogger(DistributedJobsTest.class.getName());
 
-    public static final String NC1_ID = "nc1";
-    public static final String NC2_ID = "nc2";
+    private static final String NC1_ID = "nc1";
+    private static final String NC2_ID = "nc2";
 
-    protected static ClusterControllerService cc;
-    protected static NodeControllerService nc1;
-    protected static NodeControllerService nc2;
-    protected static IHyracksClientConnection hcc;
+    private static ClusterControllerService cc;
+    private static NodeControllerService nc1;
+    private static NodeControllerService nc2;
+    private static IHyracksClientConnection hcc;
 
     @BeforeClass
     public static void init() throws Exception {
@@ -113,17 +113,15 @@ public class DistributedJobsTest {
         JobId jobId2 = hcc.distributeJob(spec2);
 
         //make sure it finished
-        verify(cc, Mockito.timeout(5000).times(2)).storeActivityClusterGraphConstraints(any(), any());
+        verify(cc, Mockito.timeout(5000).times(4)).getDistributedJobStore();
         verify(nc1, Mockito.timeout(5000).times(2)).storeActivityClusterGraph(any(), any());
         verify(nc2, Mockito.timeout(5000).times(2)).storeActivityClusterGraph(any(), any());
 
         //confirm that both jobs are distributed
         Assert.assertTrue(nc1.getActivityClusterGraph(jobId1) != null && nc2.getActivityClusterGraph(jobId1) != null);
         Assert.assertTrue(nc1.getActivityClusterGraph(jobId2) != null && nc2.getActivityClusterGraph(jobId2) != null);
-        Assert.assertTrue(cc.getActivityClusterGraph(jobId1) != null
-                && cc.getActivityClusterGraphConstraints(jobId1) != null && cc.getJobSpecification(jobId1) != null);
-        Assert.assertTrue(cc.getActivityClusterGraph(jobId2) != null
-                && cc.getActivityClusterGraphConstraints(jobId2) != null && cc.getJobSpecification(jobId2) != null);
+        Assert.assertTrue(cc.getDistributedJobStore().getDistributedJobDescriptor(jobId1) != null);
+        Assert.assertTrue(cc.getDistributedJobStore().getDistributedJobDescriptor(jobId2) != null);
 
         //run the first job
         hcc.startJob(jobId1);
@@ -133,15 +131,13 @@ public class DistributedJobsTest {
         hcc.destroyJob(jobId1);
 
         //make sure it finished
-        verify(cc, Mockito.timeout(5000).times(1)).removeActivityClusterGraphConstraints(any());
+        verify(cc, Mockito.timeout(5000).times(8)).getDistributedJobStore();
         verify(nc1, Mockito.timeout(5000).times(1)).removeActivityClusterGraph(any());
         verify(nc2, Mockito.timeout(5000).times(1)).removeActivityClusterGraph(any());
 
         //confirm the first job is destroyed
         Assert.assertTrue(nc1.getActivityClusterGraph(jobId1) == null && nc2.getActivityClusterGraph(jobId1) == null);
-        Assert.assertTrue(
-                cc.getActivityClusterGraph(jobId1) == null && cc.getActivityClusterGraphConstraints(jobId1) == null);
-        Assert.assertTrue(cc.getJobSpecification(jobId1) == null);
+        cc.getDistributedJobStore().checkForExistingDistributedJobDescriptor(jobId1);
 
         //run the second job
         hcc.startJob(jobId2);
@@ -155,15 +151,13 @@ public class DistributedJobsTest {
         hcc.destroyJob(jobId2);
 
         //make sure it finished
-        verify(cc, Mockito.timeout(5000).times(2)).removeActivityClusterGraphConstraints(any());
+        verify(cc, Mockito.timeout(5000).times(12)).getDistributedJobStore();
         verify(nc1, Mockito.timeout(5000).times(2)).removeActivityClusterGraph(any());
         verify(nc2, Mockito.timeout(5000).times(2)).removeActivityClusterGraph(any());
 
         //confirm the second job is destroyed
         Assert.assertTrue(nc1.getActivityClusterGraph(jobId2) == null && nc2.getActivityClusterGraph(jobId2) == null);
-        Assert.assertTrue(
-                cc.getActivityClusterGraph(jobId2) == null && cc.getActivityClusterGraphConstraints(jobId2) == null);
-        Assert.assertTrue(cc.getJobSpecification(jobId2) == null);
+        cc.getDistributedJobStore().checkForExistingDistributedJobDescriptor(jobId2);
     }
 
     @AfterClass
