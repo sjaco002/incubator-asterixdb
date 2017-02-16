@@ -39,7 +39,7 @@ public class DestroyJobWork extends SynchronizableWork {
     @Override
     protected void doRun() throws Exception {
         try {
-            ccs.getDistributedJobStore().removeDistributedJobDescriptor(jobId);
+            ccs.getPreDistributedJobStore().removeDistributedJobDescriptor(jobId);
             INodeManager nodeManager = ccs.getNodeManager();
             for (NodeControllerState node : nodeManager.getAllNodeControllerStates()) {
                 node.getNodeController().destroyJob(jobId);

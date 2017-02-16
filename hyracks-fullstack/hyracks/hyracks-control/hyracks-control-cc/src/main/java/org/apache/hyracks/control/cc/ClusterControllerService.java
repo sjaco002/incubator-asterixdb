@@ -99,7 +99,7 @@ public class ClusterControllerService implements IControllerService {
 
     private CCApplicationContext appCtx;
 
-    private final DistributedJobStore distributedJobStore = new DistributedJobStore();
+    private final PreDistributedJobStore preDistributedJobStore = new PreDistributedJobStore();
 
     private final WorkQueue workQueue;
 
@@ -316,8 +316,8 @@ public class ClusterControllerService implements IControllerService {
         return nodeManager;
     }
 
-    public DistributedJobStore getDistributedJobStore() throws HyracksException {
-        return distributedJobStore;
+    public PreDistributedJobStore getPreDistributedJobStore() throws HyracksException {
+        return preDistributedJobStore;
     }
 
     public IResourceManager getResourceManager() {

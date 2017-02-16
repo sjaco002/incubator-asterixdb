@@ -46,7 +46,7 @@ import org.apache.hyracks.api.job.JobSpecification;
 import org.apache.hyracks.api.job.JobStatus;
 import org.apache.hyracks.api.partitions.PartitionId;
 import org.apache.hyracks.control.cc.ClusterControllerService;
-import org.apache.hyracks.control.cc.DistributedJobStore.DistributedJobDescriptor;
+import org.apache.hyracks.control.cc.PreDistributedJobStore.PreDistributedJobDescriptor;
 import org.apache.hyracks.control.cc.executor.ActivityPartitionDetails;
 import org.apache.hyracks.control.cc.executor.JobExecutor;
 import org.apache.hyracks.control.cc.partitions.PartitionMatchMaker;
@@ -121,7 +121,7 @@ public class JobRun implements IJobStatusConditionVariable {
 
     //Run a Pre-distributed job by passing the JobId
     public JobRun(ClusterControllerService ccs, DeploymentId deploymentId, JobId jobId, IResultCallback<JobId> callback,
-            DistributedJobDescriptor distributedJobDescriptor)
+            PreDistributedJobDescriptor distributedJobDescriptor)
             throws HyracksException {
         this(deploymentId, jobId, EnumSet.noneOf(JobFlag.class), callback,
                 distributedJobDescriptor.getJobSpecification(), distributedJobDescriptor.getActivityClusterGraph());

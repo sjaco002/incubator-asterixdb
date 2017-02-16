@@ -52,13 +52,13 @@ public class DistributeJobWork extends SynchronizableWork {
     protected void doRun() throws Exception {
         try {
             final CCApplicationContext appCtx = ccs.getApplicationContext();
-            ccs.getDistributedJobStore().checkForExistingDistributedJobDescriptor(jobId);
+            ccs.getPreDistributedJobStore().checkForExistingDistributedJobDescriptor(jobId);
             IActivityClusterGraphGeneratorFactory acggf =
                     (IActivityClusterGraphGeneratorFactory) DeploymentUtils.deserialize(acggfBytes, null, appCtx);
             IActivityClusterGraphGenerator acgg =
                     acggf.createActivityClusterGraphGenerator(jobId, appCtx, EnumSet.noneOf(JobFlag.class));
             ActivityClusterGraph acg = acgg.initialize();
-            ccs.getDistributedJobStore().addDistributedJobDescriptor(jobId, acg, acggf.getJobSpecification(),
+            ccs.getPreDistributedJobStore().addDistributedJobDescriptor(jobId, acg, acggf.getJobSpecification(),
                     acgg.getConstraints());
 
             appCtx.notifyJobCreation(jobId, acggf.getJobSpecification());

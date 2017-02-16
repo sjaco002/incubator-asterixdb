@@ -484,10 +484,7 @@ public class JobExecutor {
                 jobRun.getConnectorPolicyMap());
         INodeManager nodeManager = ccs.getNodeManager();
         try {
-            byte[] acgBytes = null;
-            if (!predistributed) {
-                acgBytes = JavaSerializationUtils.serialize(acg);
-            }
+            byte[] acgBytes = predistributed ? null : JavaSerializationUtils.serialize(acg);
             for (Map.Entry<String, List<TaskAttemptDescriptor>> entry : taskAttemptMap.entrySet()) {
                 String nodeId = entry.getKey();
                 final List<TaskAttemptDescriptor> taskDescriptors = entry.getValue();
