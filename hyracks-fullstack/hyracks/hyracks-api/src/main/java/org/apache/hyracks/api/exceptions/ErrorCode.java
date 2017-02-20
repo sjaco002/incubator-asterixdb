@@ -57,6 +57,7 @@ public class ErrorCode {
     public static final int NOT_A_JOBID = 20;
     public static final int ERROR_FINDING_DISTRIBUTED_JOB = 21;
     public static final int DUPLICATE_DISTRIBUTED_JOB = 22;
+    public static final int DISTRIBUTED_JOB_FAILURE = 23;
 
     // Compilation error codes.
     public static final int RULECOLLECTION_NOT_INSTANCE_OF_LIST = 10001;

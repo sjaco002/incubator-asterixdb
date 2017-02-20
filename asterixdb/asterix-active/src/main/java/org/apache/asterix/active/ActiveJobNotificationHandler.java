@@ -79,7 +79,7 @@ public class ActiveJobNotificationHandler implements Runnable {
     private void removeFinishedJob(JobId jobId, IActiveEntityEventsListener listener) {
         if (!listener.isEntityActive()) {
             if (DEBUG) {
-                LOGGER.log(Level.WARNING, "Removing the job");
+                LOGGER.log(Level.WARNING, "Remove job" + jobId);
             }
             jobId2ActiveJobInfos.remove(jobId);
         }

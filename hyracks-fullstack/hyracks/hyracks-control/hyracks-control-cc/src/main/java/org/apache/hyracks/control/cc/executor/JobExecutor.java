@@ -484,6 +484,7 @@ public class JobExecutor {
                 jobRun.getConnectorPolicyMap());
         INodeManager nodeManager = ccs.getNodeManager();
         try {
+            byte[] acgBytes = predistributed ? null : JavaSerializationUtils.serialize(acg);
             for (Map.Entry<String, List<TaskAttemptDescriptor>> entry : taskAttemptMap.entrySet()) {
                 String nodeId = entry.getKey();
                 final List<TaskAttemptDescriptor> taskDescriptors = entry.getValue();
@@ -493,10 +494,6 @@ public class JobExecutor {
                     boolean changed = jobRun.getParticipatingNodeIds().add(nodeId);
                     if (LOGGER.isLoggable(Level.FINE)) {
                         LOGGER.fine("Starting: " + taskDescriptors + " at " + entry.getKey());
-                    }
-                    byte[] acgBytes = null;
-                    if (!predistributed && changed) {
-                        acgBytes = JavaSerializationUtils.serialize(acg);
                     }
                     byte[] jagBytes = changed ? acgBytes : null;
                     node.getNodeController().startTasks(deploymentId, jobId, jagBytes, taskDescriptors,

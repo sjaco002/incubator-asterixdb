@@ -21,9 +21,6 @@ package org.apache.hyracks.control.cc.work;
 import java.util.EnumSet;
 
 import org.apache.hyracks.api.deployment.DeploymentId;
-import org.apache.hyracks.api.exceptions.ErrorCode;
-import org.apache.hyracks.api.exceptions.HyracksException;
-import org.apache.hyracks.api.job.ActivityClusterGraph;
 import org.apache.hyracks.api.job.IActivityClusterGraphGenerator;
 import org.apache.hyracks.api.job.IActivityClusterGraphGeneratorFactory;
 import org.apache.hyracks.api.job.JobFlag;
@@ -71,11 +68,8 @@ public class JobStartWork extends SynchronizableWork {
                 run = new JobRun(ccs, deploymentId, jobId, acggf, acgg, jobFlags, callback);
             } else {
                 //ActivityClusterGraph has already been distributed
-                ActivityClusterGraph entry = ccs.getActivityClusterGraph(jobId);
-                if (entry == null) {
-                    throw HyracksException.create(ErrorCode.ERROR_FINDING_DISTRIBUTED_JOB);
-                }
-                run = new JobRun(ccs, deploymentId, jobId, callback);
+                run = new JobRun(ccs, deploymentId, jobId, callback,
+                        ccs.getPreDistributedJobStore().getDistributedJobDescriptor(jobId));
             }
             jobManager.add(run);
 

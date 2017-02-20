@@ -44,16 +44,19 @@ public class DistributeJobWork extends AbstractWork {
 
     @Override
     public void run() {
-        ActivityClusterGraph acg = ncs.getActivityClusterGraph(jobId);
-        if (acg != null) {
-            throw new RuntimeException("Trying to distribute a job that has already been distributed!");
-        }
         try {
-            acg = (ActivityClusterGraph) DeploymentUtils.deserialize(acgBytes, null, ncs.getApplicationContext());
+            ncs.checkForDuplicateDistributedJob(jobId);
+            ActivityClusterGraph acg =
+                    (ActivityClusterGraph) DeploymentUtils.deserialize(acgBytes, null, ncs.getApplicationContext());
+            ncs.storeActivityClusterGraph(jobId, acg);
         } catch (HyracksException e) {
-            throw new RuntimeException(e);
+            try {
+                ncs.getClusterController().notifyDistributedJobFailure(jobId, ncs.getId());
+            } catch (Exception e1) {
+                e1.printStackTrace();
+            }
         }
-        ncs.storeActivityClusterGraph(jobId, acg);
+
     }
 
 }

@@ -102,6 +102,7 @@ public class CCNCFunctions {
 
         DISTRIBUTE_JOB,
         DESTROY_JOB,
+        DISTRIBUTED_JOB_FAILURE,
 
         STATE_DUMP_REQUEST,
         STATE_DUMP_RESPONSE,
@@ -282,6 +283,31 @@ public class CCNCFunctions {
 
         public List<Exception> getExceptions() {
             return exceptions;
+        }
+    }
+
+    public static class ReportDistributedJobFailureFunction extends Function {
+        private static final long serialVersionUID = 1L;
+
+        private final JobId jobId;
+        private final String nodeId;
+
+        public ReportDistributedJobFailureFunction(JobId jobId, String nodeId) {
+            this.jobId = jobId;
+            this.nodeId = nodeId;
+        }
+
+        @Override
+        public FunctionId getFunctionId() {
+            return FunctionId.DISTRIBUTED_JOB_FAILURE;
+        }
+
+        public JobId getJobId() {
+            return jobId;
+        }
+
+        public String getNodeId() {
+            return nodeId;
         }
     }
 
