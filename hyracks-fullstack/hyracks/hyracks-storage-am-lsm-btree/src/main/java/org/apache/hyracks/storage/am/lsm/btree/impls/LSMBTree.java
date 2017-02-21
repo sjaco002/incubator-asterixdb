@@ -421,7 +421,8 @@ public class LSMBTree extends AbstractLSMIndex implements ITreeIndex {
             if (LOGGER.isLoggable(Level.SEVERE)) {
                 ILSMMergePolicy mergePolicy = lsmHarness.getMergePolicy();
                 totalDiskComponents = totalDiskComponents + diskComponents.size();
-                LOGGER.severe("Merge Policy Experiment:" + "," + totalDiskComponents + "," + diskComponents.size() + ","
+                LOGGER.severe("Merge Policy Experiment Write Count: " + writeCount + " " + new Date() + " , "
+                        + totalDiskComponents + "," + diskComponents.size() + ","
                         + mergePolicy.getNumberOfFlushes() + "," + mergePolicy.getNumberOfMerges() + ","
                         + mergePolicy.getMergeCost() + "," + experimentDuplCheckTime + "," + checkEndTime + ","
                         + writeCount);

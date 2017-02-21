@@ -482,7 +482,8 @@ public class LSMHarness implements ILSMHarness {
     public void merge(ILSMIndexOperationContext ctx, ILSMIOOperation operation)
             throws HyracksDataException, IndexException {
         if (LOGGER.isLoggable(Level.INFO)) {
-            LOGGER.info("Merge Policy Experiment started a merge operation for index: " + lsmIndex + new Date());
+            LOGGER.info(
+                    "Merge Policy Experiment started a merge operation at " + new Date() + " for index: " + lsmIndex);
         }
 
         ILSMDiskComponent newComponent = null;
@@ -498,7 +499,9 @@ public class LSMHarness implements ILSMHarness {
             operation.getCallback().afterFinalize(LSMOperationType.MERGE, newComponent);
         }
         if (LOGGER.isLoggable(Level.INFO)) {
-            LOGGER.info("Merge Policy Experiment finished the merge operation for index: " + lsmIndex + new Date());
+            LOGGER.info(
+"Merge Policy Experiment finished the merge operation at " + new Date() + " for index: "
+                    + lsmIndex);
         }
     }
 
