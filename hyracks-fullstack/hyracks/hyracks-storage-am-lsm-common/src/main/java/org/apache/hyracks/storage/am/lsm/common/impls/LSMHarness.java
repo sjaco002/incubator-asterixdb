@@ -20,6 +20,7 @@
 package org.apache.hyracks.storage.am.lsm.common.impls;
 
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -34,10 +35,10 @@ import org.apache.hyracks.storage.am.common.api.ISearchPredicate;
 import org.apache.hyracks.storage.am.common.api.IndexException;
 import org.apache.hyracks.storage.am.common.impls.NoOpOperationCallback;
 import org.apache.hyracks.storage.am.common.ophelpers.IndexOperation;
-import org.apache.hyracks.storage.am.lsm.common.api.ILSMDiskComponent;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMComponent;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMComponent.ComponentState;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMComponent.LSMComponentType;
+import org.apache.hyracks.storage.am.lsm.common.api.ILSMDiskComponent;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMHarness;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMIOOperation;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMIOOperationCallback;
@@ -57,6 +58,8 @@ public class LSMHarness implements ILSMHarness {
     protected final AtomicBoolean fullMergeIsRequested;
     protected final boolean replicationEnabled;
     protected List<ILSMDiskComponent> componentsToBeReplicated;
+    private long readCount = 0;
+    private long readLogInterval = 25000;
 
     public LSMHarness(ILSMIndex lsmIndex, ILSMMergePolicy mergePolicy, ILSMOperationTracker opTracker,
             boolean replicationEnabled) {
@@ -391,7 +394,15 @@ public class LSMHarness implements ILSMHarness {
         getAndEnterComponents(ctx, opType, false);
         try {
             ctx.getSearchOperationCallback().before(pred.getLowKey());
+            readCount++;
             lsmIndex.search(ctx, cursor, pred);
+            if (readCount % readLogInterval == 0) {
+                if (lsmIndex.toString().contains("Tweets1")) {
+                    if (LOGGER.isLoggable(Level.SEVERE)) {
+                        LOGGER.severe("Merge Policy Experiment Read Count: " + readCount + " " + new Date());
+                    }
+                }
+            }
         } catch (HyracksDataException | IndexException e) {
             exitComponents(ctx, opType, null, true);
             throw e;
@@ -471,7 +482,7 @@ public class LSMHarness implements ILSMHarness {
     public void merge(ILSMIndexOperationContext ctx, ILSMIOOperation operation)
             throws HyracksDataException, IndexException {
         if (LOGGER.isLoggable(Level.INFO)) {
-            LOGGER.info("Started a merge operation for index: " + lsmIndex + " ...");
+            LOGGER.info("Merge Policy Experiment started a merge operation for index: " + lsmIndex + new Date());
         }
 
         ILSMDiskComponent newComponent = null;
@@ -487,7 +498,7 @@ public class LSMHarness implements ILSMHarness {
             operation.getCallback().afterFinalize(LSMOperationType.MERGE, newComponent);
         }
         if (LOGGER.isLoggable(Level.INFO)) {
-            LOGGER.info("Finished the merge operation for index: " + lsmIndex);
+            LOGGER.info("Merge Policy Experiment finished the merge operation for index: " + lsmIndex + new Date());
         }
     }
 
