@@ -89,9 +89,11 @@ import org.apache.hyracks.storage.common.file.IFileMapProvider;
 public class LSMBTree extends AbstractLSMIndex implements ITreeIndex {
 
     private static final Logger LOGGER = Logger.getLogger(LSMBTree.class.getName());
-    private long experimentCount = 0;
+    private long writeCount = 0;
+    private long readCount = 0;
     private long experimentDuplCheckTime = 0;
-    private long experimentLogInterval = 25000;
+    private long writeLogInterval = 25000;
+    private long readLogInterval = 100;
     private long totalDiskComponents = 0;
 
     // For creating BTree's used in flush and merge.
@@ -366,14 +368,14 @@ public class LSMBTree extends AbstractLSMIndex implements ITreeIndex {
     }
 
     private boolean insert(ITupleReference tuple, LSMBTreeOpContext ctx) throws HyracksDataException, IndexException {
-        experimentCount++;
+        writeCount++;
         LSMBTreePointSearchCursor searchCursor = ctx.insertSearchCursor;
         IIndexCursor memCursor = ctx.memCursor;
         RangePredicate predicate = (RangePredicate) ctx.getSearchPredicate();
         predicate.setHighKey(tuple);
         predicate.setLowKey(tuple);
         Date checkStartTime = new Date();
-        if (needKeyDupCheck) {
+        if (false) {//needKeyDupCheck) {
             // first check the inmemory component
             ctx.currentMutableBTreeAccessor.search(memCursor, predicate);
             try {
@@ -417,14 +419,14 @@ public class LSMBTree extends AbstractLSMIndex implements ITreeIndex {
 
         Date checkEndTime = new Date();
         experimentDuplCheckTime = experimentDuplCheckTime + (checkEndTime.getTime() - checkStartTime.getTime());
-        if (experimentCount % experimentLogInterval == 0) {
+        if (writeCount % writeLogInterval == 0) {
             if (LOGGER.isLoggable(Level.SEVERE)) {
                 ILSMMergePolicy mergePolicy = lsmHarness.getMergePolicy();
                 totalDiskComponents = totalDiskComponents + diskComponents.size();
                 LOGGER.severe("Merge Policy Experiment:" + "," + totalDiskComponents + "," + diskComponents.size() + ","
                         + mergePolicy.getNumberOfFlushes() + "," + mergePolicy.getNumberOfMerges() + ","
                         + mergePolicy.getMergeCost() + "," + experimentDuplCheckTime + "," + checkEndTime + ","
-                        + experimentCount);
+                        + writeCount);
             }
         }
         ctx.currentMutableBTreeAccessor.upsertIfConditionElseInsert(tuple, AntimatterAwareTupleAcceptor.INSTANCE);
@@ -434,10 +436,16 @@ public class LSMBTree extends AbstractLSMIndex implements ITreeIndex {
     @Override
     public void search(ILSMIndexOperationContext ictx, IIndexCursor cursor, ISearchPredicate pred)
             throws HyracksDataException, IndexException {
+        readCount++;
         LSMBTreeOpContext ctx = (LSMBTreeOpContext) ictx;
         List<ILSMComponent> operationalComponents = ctx.getComponentHolder();
         ctx.searchInitialState.reset(pred, operationalComponents);
         cursor.open(ctx.searchInitialState, pred);
+        if (readCount % readLogInterval == 0) {
+            if (LOGGER.isLoggable(Level.SEVERE)) {
+                LOGGER.severe("Merge Policy Experiment Read Count: " + readCount);
+            }
+        }
     }
 
     @Override
