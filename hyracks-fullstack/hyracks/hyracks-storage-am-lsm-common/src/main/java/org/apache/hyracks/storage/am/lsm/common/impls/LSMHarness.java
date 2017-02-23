@@ -59,7 +59,7 @@ public class LSMHarness implements ILSMHarness {
     protected final boolean replicationEnabled;
     protected List<ILSMDiskComponent> componentsToBeReplicated;
     private long readCount = 0;
-    private long readLogInterval = 100;
+    private long readLogInterval = 1000;
 
     public LSMHarness(ILSMIndex lsmIndex, ILSMMergePolicy mergePolicy, ILSMOperationTracker opTracker,
             boolean replicationEnabled) {

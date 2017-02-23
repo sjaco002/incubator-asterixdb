@@ -91,7 +91,7 @@ public class LSMBTree extends AbstractLSMIndex implements ITreeIndex {
     private static final Logger LOGGER = Logger.getLogger(LSMBTree.class.getName());
     private long writeCount = 0;
     private long experimentDuplCheckTime = 0;
-    private long writeLogInterval = 25000;
+    private long writeLogInterval = 1000;
     private long totalDiskComponents = 0;
 
     // For creating BTree's used in flush and merge.
@@ -373,7 +373,7 @@ public class LSMBTree extends AbstractLSMIndex implements ITreeIndex {
         predicate.setHighKey(tuple);
         predicate.setLowKey(tuple);
         Date checkStartTime = new Date();
-        if (needKeyDupCheck) {
+        if (false) {//needKeyDupCheck) {
             // first check the inmemory component
             ctx.currentMutableBTreeAccessor.search(memCursor, predicate);
             try {
