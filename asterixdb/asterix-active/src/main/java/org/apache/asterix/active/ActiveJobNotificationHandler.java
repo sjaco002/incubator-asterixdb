@@ -57,11 +57,8 @@ public class ActiveJobNotificationHandler implements Runnable {
                     LOGGER.log(Level.FINER, "Next event is of type " + event.getEventKind());
                     LOGGER.log(Level.FINER, "Notifying the listener");
                     listener.notify(event);
-                    if (event.getEventKind() == Kind.JOB_FINISHED) {
-                        LOGGER.log(Level.FINER, "Removing the job");
-                        jobId2ActiveJobInfos.remove(event.getJobId());
-                        LOGGER.log(Level.FINER, "Removing the listener since it is not active anymore");
-                        entityEventListeners.remove(listener.getEntityId());
+                    if (event.getEventKind() == Kind.JOB_FINISHED && !listener.isRepeatable()) {
+                        removeJob(event.getJobId(), listener);
                     }
                 } else {
                     LOGGER.log(Level.SEVERE, "Entity not found for received message for job " + event.getJobId());
@@ -73,6 +70,13 @@ public class ActiveJobNotificationHandler implements Runnable {
             }
         }
         LOGGER.log(Level.INFO, "Stopped " + ActiveJobNotificationHandler.class.getSimpleName());
+    }
+
+    public void removeJob(JobId hyracksJobId, IActiveEntityEventsListener listener) {
+        LOGGER.log(Level.FINER, "Removing the job");
+        jobId2ActiveJobInfos.remove(hyracksJobId);
+        LOGGER.log(Level.FINER, "Removing the listener since it is not active anymore");
+        entityEventListeners.remove(listener.getEntityId());
     }
 
     public IActiveEntityEventsListener getActiveEntityListener(EntityId entityId) {
