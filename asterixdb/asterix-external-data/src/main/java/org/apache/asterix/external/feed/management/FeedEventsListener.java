@@ -25,6 +25,7 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import org.apache.asterix.active.ActiveEvent;
+import org.apache.asterix.active.ActiveJobNotificationHandler;
 import org.apache.asterix.active.ActivityState;
 import org.apache.asterix.active.EntityId;
 import org.apache.asterix.active.IActiveEventSubscriber;
@@ -106,6 +107,7 @@ public class FeedEventsListener extends ActiveEntityEventsListener {
         IHyracksClientConnection hcc = AppContextInfo.INSTANCE.getHcc();
         JobStatus status = hcc.getJobStatus(jobId);
         state = status.equals(JobStatus.FAILURE) ? ActivityState.FAILED : ActivityState.STOPPED;
+        ActiveJobNotificationHandler.INSTANCE.removeListener(this);
     }
 
     private void start(ActiveEvent event) {
