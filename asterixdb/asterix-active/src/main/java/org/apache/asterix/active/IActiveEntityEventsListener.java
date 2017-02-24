@@ -41,12 +41,6 @@ public interface IActiveEntityEventsListener {
     ActivityState getState();
 
     /**
-     * @return whether the listener is for a repeatable job
-     * Repeatable jobs won't delete listeners after job is finished
-     */
-    boolean isRepeatable();
-
-    /**
      * get a subscriber that waits till state has been reached.
      *
      * @param state

@@ -52,7 +52,6 @@ public class FeedEventsListener extends ActiveEntityEventsListener {
         this.sources = sources;
         subscribers = new ArrayList<>();
         state = ActivityState.STOPPED;
-        repeatableJob = false;
     }
 
     @Override

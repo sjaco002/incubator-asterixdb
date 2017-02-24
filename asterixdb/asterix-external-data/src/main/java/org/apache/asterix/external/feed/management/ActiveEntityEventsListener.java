@@ -33,7 +33,6 @@ public abstract class ActiveEntityEventsListener implements IActiveEntityEventsL
     protected List<IDataset> datasets;
     protected volatile ActivityState state;
     protected JobId jobId;
-    protected boolean repeatableJob;
 
     @Override
     public EntityId getEntityId() {
@@ -52,10 +51,5 @@ public abstract class ActiveEntityEventsListener implements IActiveEntityEventsL
 
     public JobId getJobId() {
         return jobId;
-    }
-
-    @Override
-    public boolean isRepeatable() {
-        return repeatableJob;
     }
 }
