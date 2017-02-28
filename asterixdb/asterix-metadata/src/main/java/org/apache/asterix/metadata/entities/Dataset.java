@@ -36,6 +36,7 @@ import org.apache.asterix.common.ioopcallbacks.LSMBTreeIOOperationCallbackFactor
 import org.apache.asterix.common.ioopcallbacks.LSMBTreeWithBuddyIOOperationCallbackFactory;
 import org.apache.asterix.common.ioopcallbacks.LSMInvertedIndexIOOperationCallbackFactory;
 import org.apache.asterix.common.ioopcallbacks.LSMRTreeIOOperationCallbackFactory;
+import org.apache.asterix.common.metadata.IDataset;
 import org.apache.asterix.common.transactions.IRecoveryManager.ResourceType;
 import org.apache.asterix.common.transactions.JobId;
 import org.apache.asterix.common.utils.JobUtils;
@@ -93,7 +94,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 /**
  * Metadata describing a dataset.
  */
-public class Dataset implements IMetadataEntity<Dataset> {
+public class Dataset implements IMetadataEntity<Dataset>, IDataset {
 
     /*
      * Constants
@@ -278,7 +279,9 @@ public class Dataset implements IMetadataEntity<Dataset> {
             // prepare job spec(s) that would disconnect any active feeds involving the dataset.
             IActiveEntityEventsListener[] activeListeners = ActiveJobNotificationHandler.INSTANCE.getEventListeners();
             for (IActiveEntityEventsListener listener : activeListeners) {
-                if (listener.isEntityActive() && listener.isEntityUsingDataset(dataverseName, datasetName)) {
+                IDataset ds = MetadataManager.INSTANCE.getDataset(metadataProvider.getMetadataTxnContext(),
+                        dataverseName, datasetName);
+                if (listener.isEntityUsingDataset(ds)) {
                     throw new CompilationException(ErrorCode.COMPILATION_CANT_DROP_ACTIVE_DATASET,
                             RecordUtil.toFullyQualifiedName(dataverseName, datasetName),
                             listener.getEntityId().toString());

@@ -18,12 +18,21 @@
  */
 package org.apache.hyracks.http.server;
 
+import java.util.Arrays;
 import java.util.concurrent.ConcurrentMap;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 import org.apache.hyracks.http.api.IServlet;
 import org.apache.hyracks.http.api.IServletRequest;
+import org.apache.hyracks.http.api.IServletResponse;
+
+import io.netty.handler.codec.http.HttpMethod;
+import io.netty.handler.codec.http.HttpResponseStatus;
 
 public abstract class AbstractServlet implements IServlet {
+    private static final Logger LOGGER = Logger.getLogger(AbstractServlet.class.getName());
+
     protected final String[] paths;
     protected final ConcurrentMap<String, Object> ctx;
     private final int[] trims;
@@ -54,6 +63,67 @@ public abstract class AbstractServlet implements IServlet {
         return ctx;
     }
 
+    @Override
+    public void handle(IServletRequest request, IServletResponse response) {
+        try {
+            final HttpMethod method = request.getHttpRequest().method();
+            if (HttpMethod.GET.equals(method)) {
+                get(request, response);
+            } else if (HttpMethod.HEAD.equals(method)) {
+                head(request, response);
+            } else if (HttpMethod.POST.equals(method)) {
+                post(request, response);
+            } else if (HttpMethod.PUT.equals(method)) {
+                put(request, response);
+            } else if (HttpMethod.DELETE.equals(method)) {
+                delete(request, response);
+            } else if (HttpMethod.OPTIONS.equals(method)) {
+                options(request, response);
+            } else {
+                response.setStatus(HttpResponseStatus.METHOD_NOT_ALLOWED);
+            }
+        } catch (Exception e) {
+            LOGGER.log(Level.WARNING, "Unhandled exception", e);
+            response.setStatus(HttpResponseStatus.INTERNAL_SERVER_ERROR);
+        }
+    }
+
+    @SuppressWarnings("squid:S1172")
+    protected void get(IServletRequest request, IServletResponse response) throws Exception {
+        // designed to be extended but an error in standard case
+        response.setStatus(HttpResponseStatus.METHOD_NOT_ALLOWED);
+    }
+
+    @SuppressWarnings("squid:S1172")
+    protected void head(IServletRequest request, IServletResponse response) throws Exception {
+        // designed to be extended but an error in standard case
+        response.setStatus(HttpResponseStatus.METHOD_NOT_ALLOWED);
+    }
+
+    @SuppressWarnings("squid:S1172")
+    protected void post(IServletRequest request, IServletResponse response) throws Exception {
+        // designed to be extended but an error in standard case
+        response.setStatus(HttpResponseStatus.METHOD_NOT_ALLOWED);
+    }
+
+    @SuppressWarnings("squid:S1172")
+    protected void put(IServletRequest request, IServletResponse response) throws Exception {
+        // designed to be extended but an error in standard case
+        response.setStatus(HttpResponseStatus.METHOD_NOT_ALLOWED);
+    }
+
+    @SuppressWarnings("squid:S1172")
+    protected void delete(IServletRequest request, IServletResponse response) throws Exception {
+        // designed to be extended but an error in standard case
+        response.setStatus(HttpResponseStatus.METHOD_NOT_ALLOWED);
+    }
+
+    @SuppressWarnings("squid:S1172")
+    protected void options(IServletRequest request, IServletResponse response) throws Exception {
+        // designed to be extended but an error in standard case
+        response.setStatus(HttpResponseStatus.METHOD_NOT_ALLOWED);
+    }
+
     public String path(IServletRequest request) {
         int trim = -1;
         if (paths.length > 1) {
@@ -68,5 +138,10 @@ public abstract class AbstractServlet implements IServlet {
             trim = trims[0];
         }
         return request.getHttpRequest().uri().substring(trim);
+    }
+
+    @Override
+    public String toString() {
+        return this.getClass().getSimpleName() + Arrays.toString(paths);
     }
 }

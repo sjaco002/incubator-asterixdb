@@ -31,7 +31,7 @@ import org.apache.hyracks.api.util.ErrorMessageUtil;
 // 3000 ---- 3999: feed errors
 // 4000 ---- 4999: lifecycle management errors
 public class ErrorCode {
-    private static final String RESOURCE_PATH = "asx_errormsg" + File.separator + "en.properties";
+    private static final String RESOURCE_PATH = "asx_errormsg/en.properties";
     public static final String ASTERIX = "ASX";
 
     // Extension errors
@@ -77,6 +77,8 @@ public class ErrorCode {
     public static final int COMPILATION_PRIMARY_KEY_CANNOT_BE_NULLABLE = 1021;
     public static final int COMPILATION_ILLEGAL_PRIMARY_KEY_TYPE = 1022;
     public static final int COMPILATION_CANT_DROP_ACTIVE_DATASET = 1023;
+    public static final int COMPILATION_AQLPLUS_IDENTIFIER_NOT_FOUND = 1024;
+    public static final int COMPILATION_AQLPLUS_NO_SUCH_JOIN_TYPE = 1025;
 
     // Feed errors
     public static final int DATAFLOW_ILLEGAL_STATE = 3001;

@@ -32,12 +32,6 @@ ansible-playbook -i "localhost," $AWS_PATH/ansible/aws_start.yml
 # Generates an Ansible inventory file and an AsterixDB configuration file.
 temp=/tmp/asterixdb
 inventory=$temp/inventory
-conf=$temp/cc.conf
-java -cp "${DIST_PATH}/repo/*" org.apache.asterixdb.aws.ConfigGenerator $temp/nodes $inventory $conf
-
-# Waits a while so that all instances are up and running.
-# TODO(yingyi) pull the "status check" field of each instance.
-sleep 90
 
 # Installs asterixdb on all AWS instances.
 export ANSIBLE_HOST_KEY_CHECKING=false

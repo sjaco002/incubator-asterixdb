@@ -33,11 +33,10 @@ import org.apache.hyracks.api.dataset.IHyracksDataset;
 import org.apache.hyracks.api.dataset.ResultSetId;
 import org.apache.hyracks.api.job.JobId;
 import org.apache.hyracks.client.dataset.HyracksDataset;
-import org.apache.hyracks.http.api.IServlet;
 import org.apache.hyracks.http.api.IServletRequest;
 import org.apache.hyracks.http.api.IServletResponse;
 import org.apache.hyracks.http.server.AbstractServlet;
-import org.apache.hyracks.http.server.util.ServletUtils;
+import org.apache.hyracks.http.server.utils.HttpUtil;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -54,14 +53,10 @@ public class QueryStatusApiServlet extends AbstractServlet {
     }
 
     @Override
-    public void handle(IServletRequest request, IServletResponse response) {
-        if (request.getHttpRequest().method() != HttpMethod.GET) {
-            response.setStatus(HttpResponseStatus.METHOD_NOT_ALLOWED);
-            return;
-        }
+    protected void get(IServletRequest request, IServletResponse response) {
         response.setStatus(HttpResponseStatus.OK);
         try {
-            ServletUtils.setContentType(response, IServlet.ContentType.TEXT_HTML, IServlet.Encoding.UTF8);
+            HttpUtil.setContentType(response, HttpUtil.ContentType.TEXT_HTML, HttpUtil.Encoding.UTF8);
         } catch (IOException e) {
             LOGGER.log(Level.WARNING, "Failure setting content type", e);
             response.setStatus(HttpResponseStatus.INTERNAL_SERVER_ERROR);

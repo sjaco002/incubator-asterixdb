@@ -54,11 +54,10 @@ import org.apache.hyracks.algebricks.core.algebra.prettyprint.AlgebricksAppendab
 import org.apache.hyracks.api.client.IHyracksClientConnection;
 import org.apache.hyracks.api.dataset.IHyracksDataset;
 import org.apache.hyracks.client.dataset.HyracksDataset;
-import org.apache.hyracks.http.api.IServlet;
 import org.apache.hyracks.http.api.IServletRequest;
 import org.apache.hyracks.http.api.IServletResponse;
 import org.apache.hyracks.http.server.AbstractServlet;
-import org.apache.hyracks.http.server.util.ServletUtils;
+import org.apache.hyracks.http.server.utils.HttpUtil;
 
 import com.fasterxml.jackson.core.JsonParseException;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -86,11 +85,7 @@ public class QueryServiceServlet extends AbstractServlet {
     }
 
     @Override
-    public void handle(IServletRequest request, IServletResponse response) {
-        if (request.getHttpRequest().method() != HttpMethod.POST) {
-            response.setStatus(HttpResponseStatus.METHOD_NOT_ALLOWED);
-            return;
-        }
+    protected void post(IServletRequest request, IServletResponse response) {
         try {
             handleRequest(getRequestParameters(request), response);
         } catch (IOException e) {
@@ -284,13 +279,13 @@ public class QueryServiceServlet extends AbstractServlet {
 
     private static SessionConfig.OutputFormat getFormat(String format) {
         if (format != null) {
-            if (format.startsWith(IServlet.ContentType.CSV)) {
+            if (format.startsWith(HttpUtil.ContentType.CSV)) {
                 return SessionConfig.OutputFormat.CSV;
             }
-            if (format.equals(IServlet.ContentType.APPLICATION_ADM)) {
+            if (format.equals(HttpUtil.ContentType.APPLICATION_ADM)) {
                 return SessionConfig.OutputFormat.ADM;
             }
-            if (format.startsWith(IServlet.ContentType.APPLICATION_JSON)) {
+            if (format.startsWith(HttpUtil.ContentType.APPLICATION_JSON)) {
                 return Boolean.parseBoolean(getParameterValue(format, Attribute.LOSSLESS.str()))
                         ? SessionConfig.OutputFormat.LOSSLESS_JSON : SessionConfig.OutputFormat.CLEAN_JSON;
             }
@@ -374,10 +369,10 @@ public class QueryServiceServlet extends AbstractServlet {
     private static void printType(PrintWriter pw, SessionConfig sessionConfig) {
         switch (sessionConfig.fmt()) {
             case ADM:
-                printField(pw, ResultFields.TYPE.str(), IServlet.ContentType.APPLICATION_ADM);
+                printField(pw, ResultFields.TYPE.str(), HttpUtil.ContentType.APPLICATION_ADM);
                 break;
             case CSV:
-                String contentType = IServlet.ContentType.CSV + "; header="
+                String contentType = HttpUtil.ContentType.CSV + "; header="
                         + (sessionConfig.is(SessionConfig.FORMAT_CSV_HEADER) ? "present" : "absent");
                 printField(pw, ResultFields.TYPE.str(), contentType);
                 break;
@@ -437,7 +432,7 @@ public class QueryServiceServlet extends AbstractServlet {
         int sep = contentTypeParam.indexOf(';');
         final String contentType = sep < 0 ? contentTypeParam.trim() : contentTypeParam.substring(0, sep).trim();
         RequestParameters param = new RequestParameters();
-        if (IServlet.ContentType.APPLICATION_JSON.equals(contentType)) {
+        if (HttpUtil.ContentType.APPLICATION_JSON.equals(contentType)) {
             try {
                 JsonNode jsonRequest = new ObjectMapper().readTree(getRequestBody(request));
                 param.statement = jsonRequest.get(Parameter.STATEMENT.str()).asText();
@@ -485,7 +480,7 @@ public class QueryServiceServlet extends AbstractServlet {
         ResultDelivery delivery = parseResultDelivery(param.mode);
 
         SessionConfig sessionConfig = createSessionConfig(param, resultWriter);
-        ServletUtils.setContentType(response, IServlet.ContentType.APPLICATION_JSON, IServlet.Encoding.UTF8);
+        HttpUtil.setContentType(response, HttpUtil.ContentType.APPLICATION_JSON, HttpUtil.Encoding.UTF8);
 
         HttpResponseStatus status = HttpResponseStatus.OK;
         Stats stats = new Stats();

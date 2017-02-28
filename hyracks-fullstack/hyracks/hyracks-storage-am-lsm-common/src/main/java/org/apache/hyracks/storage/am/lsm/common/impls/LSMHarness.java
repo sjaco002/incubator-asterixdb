@@ -19,6 +19,8 @@
 
 package org.apache.hyracks.storage.am.lsm.common.impls;
 
+import java.time.Duration;
+import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.LinkedList;
@@ -59,7 +61,7 @@ public class LSMHarness implements ILSMHarness {
     protected final boolean replicationEnabled;
     protected List<ILSMDiskComponent> componentsToBeReplicated;
     private long readCount = 0;
-    private long readLogInterval = 1000;
+    private long readLogInterval = 50;
 
     public LSMHarness(ILSMIndex lsmIndex, ILSMMergePolicy mergePolicy, ILSMOperationTracker opTracker,
             boolean replicationEnabled) {
@@ -391,15 +393,18 @@ public class LSMHarness implements ILSMHarness {
             throws HyracksDataException, IndexException {
         LSMOperationType opType = LSMOperationType.SEARCH;
         ctx.setSearchPredicate(pred);
+        ZonedDateTime startTime = ZonedDateTime.now();
         getAndEnterComponents(ctx, opType, false);
         try {
             ctx.getSearchOperationCallback().before(pred.getLowKey());
             readCount++;
             lsmIndex.search(ctx, cursor, pred);
+            Duration readTime = Duration.between(startTime, ZonedDateTime.now());
             if (readCount % readLogInterval == 0) {
                 if (lsmIndex.toString().contains("Tweets1")) {
                     if (LOGGER.isLoggable(Level.SEVERE)) {
-                        LOGGER.severe("Merge Policy Experiment Read Count: " + readCount + " " + new Date());
+                        LOGGER.severe("Merge Policy Experiment Read Count: " + readCount + " " + new Date() + " "
+                                + readTime.toNanos());
                     }
                 }
             }

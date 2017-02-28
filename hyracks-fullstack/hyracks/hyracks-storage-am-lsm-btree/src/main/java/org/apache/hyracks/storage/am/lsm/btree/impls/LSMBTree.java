@@ -19,6 +19,8 @@
 
 package org.apache.hyracks.storage.am.lsm.btree.impls;
 
+import java.time.Duration;
+import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashSet;
@@ -91,7 +93,7 @@ public class LSMBTree extends AbstractLSMIndex implements ITreeIndex {
     private static final Logger LOGGER = Logger.getLogger(LSMBTree.class.getName());
     private long writeCount = 0;
     private long experimentDuplCheckTime = 0;
-    private long writeLogInterval = 1000;
+    private long writeLogInterval = 50;
     private long totalDiskComponents = 0;
 
     // For creating BTree's used in flush and merge.
@@ -417,18 +419,22 @@ public class LSMBTree extends AbstractLSMIndex implements ITreeIndex {
 
         Date checkEndTime = new Date();
         experimentDuplCheckTime = experimentDuplCheckTime + (checkEndTime.getTime() - checkStartTime.getTime());
+        ZonedDateTime startTime = ZonedDateTime.now();
+        ctx.currentMutableBTreeAccessor.upsertIfConditionElseInsert(tuple, AntimatterAwareTupleAcceptor.INSTANCE);
+        Duration readTime = Duration.between(startTime, ZonedDateTime.now());
         if (writeCount % writeLogInterval == 0 && toString().contains("Tweets1")) {
             if (LOGGER.isLoggable(Level.SEVERE)) {
                 ILSMMergePolicy mergePolicy = lsmHarness.getMergePolicy();
                 totalDiskComponents = totalDiskComponents + diskComponents.size();
-                LOGGER.severe("Merge Policy Experiment Write Count: " + writeCount + " " + new Date() + " , "
+                LOGGER.severe("Merge Policy Experiment Write Count: " + writeCount + " " + new Date() + " "
+                        + readTime.toNanos()
+                        + " , "
                         + totalDiskComponents + "," + diskComponents.size() + ","
                         + mergePolicy.getNumberOfFlushes() + "," + mergePolicy.getNumberOfMerges() + ","
                         + mergePolicy.getMergeCost() + "," + experimentDuplCheckTime + "," + checkEndTime + ","
                         + writeCount);
             }
         }
-        ctx.currentMutableBTreeAccessor.upsertIfConditionElseInsert(tuple, AntimatterAwareTupleAcceptor.INSTANCE);
         return true;
     }
 

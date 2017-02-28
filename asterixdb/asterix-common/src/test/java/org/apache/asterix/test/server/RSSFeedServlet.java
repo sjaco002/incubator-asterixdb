@@ -31,7 +31,7 @@ import org.apache.asterix.common.config.GlobalConfig;
 import org.apache.hyracks.http.api.IServletRequest;
 import org.apache.hyracks.http.api.IServletResponse;
 import org.apache.hyracks.http.server.AbstractServlet;
-import org.apache.hyracks.http.server.util.ServletUtils;
+import org.apache.hyracks.http.server.utils.HttpUtil;
 
 import com.rometools.rome.feed.synd.SyndContent;
 import com.rometools.rome.feed.synd.SyndContentImpl;
@@ -61,13 +61,14 @@ public class RSSFeedServlet extends AbstractServlet {
         defaultFeedType = (defaultFeedType != null) ? defaultFeedType : "atom_0.3";
     }
 
-    protected void doGet(IServletRequest req, IServletResponse res) throws IOException {
+    @Override
+    protected void get(IServletRequest req, IServletResponse res) throws IOException {
         try {
             SyndFeed feed = getFeed(req);
             String feedType = req.getParameter(FEED_TYPE);
             feedType = (feedType != null) ? feedType : defaultFeedType;
             feed.setFeedType(feedType);
-            ServletUtils.setContentType(res, MIME_TYPE);
+            HttpUtil.setContentType(res, MIME_TYPE);
             SyndFeedOutput output = new SyndFeedOutput();
             output.output(feed, res.writer());
         } catch (FeedException | ParseException ex) {
@@ -78,28 +79,13 @@ public class RSSFeedServlet extends AbstractServlet {
         }
     }
 
-    @Override
-    public void handle(IServletRequest req, IServletResponse res) {
-        if (req.getHttpRequest().method() == HttpMethod.GET) {
-            try {
-                doGet(req, res);
-            } catch (IOException e) {
-                // Servlet methods should not throw exceptions
-                // http://cwe.mitre.org/data/definitions/600.html
-                GlobalConfig.ASTERIX_LOGGER.log(Level.SEVERE, e.getMessage(), e);
-            }
-        } else {
-            res.setStatus(HttpResponseStatus.METHOD_NOT_ALLOWED);
-        }
-    }
-
     protected SyndFeed getFeed(IServletRequest req) throws IOException, FeedException, ParseException {
         SyndFeed feed = new SyndFeedImpl();
         feed.setTitle("Sample Feed (created with ROME)");
         feed.setLink("http://rome.dev.java.net");
         feed.setDescription("This feed has been created using ROME (Java syndication utilities");
 
-        List<SyndEntry> entries = new ArrayList<SyndEntry>();
+        List<SyndEntry> entries = new ArrayList<>();
         SyndEntry entry;
         SyndContent description;
 
