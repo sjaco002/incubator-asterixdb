@@ -25,4 +25,4 @@ popd > /dev/null
 AWS_PATH=`dirname "${SCRIPT_PATH}"`
 
 # Terminates an AWS cluster.
-ansible-playbook -i "localhost," $AWS_PATH/ansible/aws_stop.yml
+ansible-playbook -i "localhost," $AWS_PATH/yaml/aws_stop.yml

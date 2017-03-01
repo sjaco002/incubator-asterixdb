@@ -19,7 +19,6 @@
 <!-- Keep test-suite list in Alphabetical order. -->
 <!DOCTYPE test-suite [
 
-             <!ENTITY APIQueries SYSTEM "queries/api/APIQueries.xml">
              <!ENTITY ComparisonQueries SYSTEM "queries/comparison/ComparisonQueries.xml">
              <!ENTITY DeepEqualQueries SYSTEM "queries/comparison/deep_equal/DeepEqualQueries.xml">
              <!ENTITY RecordsQueries SYSTEM "queries/objects/ObjectsQueries.xml">
@@ -32,7 +31,6 @@
              ResultOffsetPath="results"
              QueryOffsetPath="queries"
              QueryFileExtension=".aql">
-  &APIQueries;
   <test-group name="external-library">
     <test-case FilePath="external-library">
       <compilation-unit name="typed_adapter">
@@ -6965,6 +6963,20 @@
     <test-case FilePath="types">
       <compilation-unit name="any-object">
         <output-dir compare="Text">any-object</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="types">
+      <compilation-unit name="domain_boundaries">
+        <output-dir compare="Text">domain_boundaries</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="types">
+      <compilation-unit name="domain_boundaries_error">
+        <output-dir compare="Text">domain_boundaries_error</output-dir>
+        <expected-error>ASX0006: Invalid format for int8 in int8</expected-error>
+        <expected-error>ASX0006: Invalid format for int16 in int16</expected-error>
+        <expected-error>ASX0006: Invalid format for int32 in int32</expected-error>
+        <expected-error>ASX0006: Invalid format for int64 in int64</expected-error>
       </compilation-unit>
     </test-case>
     <test-case FilePath="types">
