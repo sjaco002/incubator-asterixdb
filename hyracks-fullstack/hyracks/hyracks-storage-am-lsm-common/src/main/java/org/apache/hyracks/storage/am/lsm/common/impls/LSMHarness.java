@@ -401,7 +401,7 @@ public class LSMHarness implements ILSMHarness {
             if (readCount % readLogInterval == 0) {
                 if (lsmIndex.toString().contains("Tweets1")) {
                     if (LOGGER.isLoggable(Level.SEVERE)) {
-                        LOGGER.severe("Merge Policy Experiment Read Count: " + readCount + " " + new Date() + " ");
+                        // LOGGER.severe("Merge Policy Experiment Read: " + readCount + " " + new Date() + " ");
                         // + readTime.toNanos());
                     }
                 }

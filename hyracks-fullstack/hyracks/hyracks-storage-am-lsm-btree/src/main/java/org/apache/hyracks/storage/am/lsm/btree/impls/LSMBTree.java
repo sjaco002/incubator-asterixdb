@@ -93,7 +93,7 @@ public class LSMBTree extends AbstractLSMIndex implements ITreeIndex {
     private static final Logger LOGGER = Logger.getLogger(LSMBTree.class.getName());
     private long writeCount = 0;
     private long experimentDuplCheckTime = 0;
-    private long writeLogInterval = 50;
+    private long writeLogInterval = 50000;
     private long totalDiskComponents = 0;
 
     // For creating BTree's used in flush and merge.
@@ -375,7 +375,7 @@ public class LSMBTree extends AbstractLSMIndex implements ITreeIndex {
         predicate.setHighKey(tuple);
         predicate.setLowKey(tuple);
         Date checkStartTime = new Date();
-        if (false) {//needKeyDupCheck) {
+        if (needKeyDupCheck) {
             // first check the inmemory component
             ctx.currentMutableBTreeAccessor.search(memCursor, predicate);
             try {
@@ -404,7 +404,7 @@ public class LSMBTree extends AbstractLSMIndex implements ITreeIndex {
 
             // This is a hack to avoid searching the current active mutable component twice. It is critical to add it back once the search is over.
             ILSMComponent firstComponent = ctx.getComponentHolder().remove(0);
-            search(ctx, searchCursor, predicate);
+            search(ctx, searchCursor, predicate, false);
             try {
                 if (searchCursor.hasNext()) {
                     throw new TreeIndexDuplicateKeyException("Failed to insert key since key already exists.");
@@ -438,9 +438,21 @@ public class LSMBTree extends AbstractLSMIndex implements ITreeIndex {
         return true;
     }
 
+    public void search(ILSMIndexOperationContext ictx, IIndexCursor cursor, ISearchPredicate pred, boolean trueSearch)
+            throws HyracksDataException, IndexException {
+        LSMBTreeOpContext ctx = (LSMBTreeOpContext) ictx;
+        List<ILSMComponent> operationalComponents = ctx.getComponentHolder();
+        ctx.searchInitialState.reset(pred, operationalComponents);
+        cursor.open(ctx.searchInitialState, pred);
+    }
+
     @Override
     public void search(ILSMIndexOperationContext ictx, IIndexCursor cursor, ISearchPredicate pred)
             throws HyracksDataException, IndexException {
+        if (toString().contains("Tweets1") && LOGGER.isLoggable(Level.SEVERE)) {
+            LOGGER.severe(
+                    "Merge Policy Experiment Read: on stack size " + diskComponents.size() + " " + new Date() + " ");
+        }
         LSMBTreeOpContext ctx = (LSMBTreeOpContext) ictx;
         List<ILSMComponent> operationalComponents = ctx.getComponentHolder();
         ctx.searchInitialState.reset(pred, operationalComponents);
@@ -569,7 +581,7 @@ public class LSMBTree extends AbstractLSMIndex implements ITreeIndex {
         RangePredicate rangePred = new RangePredicate(null, null, true, true, null, null);
         ILSMIndexOperationContext opCtx = ((LSMIndexSearchCursor) cursor).getOpCtx();
         opCtx.getComponentHolder().addAll(mergeOp.getMergingComponents());
-        search(opCtx, cursor, rangePred);
+        search(opCtx, cursor, rangePred, false);
         List<ILSMComponent> mergedComponents = mergeOp.getMergingComponents();
 
         long numElements = 0L;
