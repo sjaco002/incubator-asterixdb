@@ -18,22 +18,34 @@
  */
 package org.apache.asterix.runtime.utils;
 
+import java.io.IOException;
+import java.util.function.Supplier;
+import java.util.logging.Logger;
+
 import org.apache.asterix.common.cluster.IGlobalRecoveryManager;
-import org.apache.asterix.common.config.*;
+import org.apache.asterix.common.config.ActiveProperties;
+import org.apache.asterix.common.config.BuildProperties;
+import org.apache.asterix.common.config.CompilerProperties;
+import org.apache.asterix.common.config.ExtensionProperties;
+import org.apache.asterix.common.config.ExternalProperties;
+import org.apache.asterix.common.config.IPropertiesProvider;
+import org.apache.asterix.common.config.MessagingProperties;
+import org.apache.asterix.common.config.MetadataProperties;
+import org.apache.asterix.common.config.NodeProperties;
+import org.apache.asterix.common.config.PropertiesAccessor;
+import org.apache.asterix.common.config.ReplicationProperties;
+import org.apache.asterix.common.config.StorageProperties;
+import org.apache.asterix.common.config.TransactionProperties;
 import org.apache.asterix.common.dataflow.IApplicationContextInfo;
 import org.apache.asterix.common.exceptions.AsterixException;
 import org.apache.asterix.common.library.ILibraryManager;
 import org.apache.asterix.common.metadata.IMetadataBootstrap;
 import org.apache.asterix.common.replication.IFaultToleranceStrategy;
 import org.apache.asterix.common.transactions.IResourceIdManager;
-import org.apache.hyracks.api.application.ICCApplicationContext;
+import org.apache.hyracks.api.application.ICCServiceContext;
 import org.apache.hyracks.api.client.IHyracksClientConnection;
 import org.apache.hyracks.storage.am.common.api.IIndexLifecycleManagerProvider;
 import org.apache.hyracks.storage.common.IStorageManager;
-
-import java.io.IOException;
-import java.util.function.Supplier;
-import java.util.logging.Logger;
 
 /*
  * Acts as an holder class for IndexRegistryProvider, AsterixStorageManager
@@ -43,7 +55,7 @@ import java.util.logging.Logger;
 public class AppContextInfo implements IApplicationContextInfo, IPropertiesProvider {
 
     public static final AppContextInfo INSTANCE = new AppContextInfo();
-    private ICCApplicationContext appCtx;
+    private ICCServiceContext ccServiceCtx;
     private IGlobalRecoveryManager globalRecoveryManager;
     private ILibraryManager libraryManager;
     private IResourceIdManager resourceIdManager;
@@ -52,11 +64,12 @@ public class AppContextInfo implements IApplicationContextInfo, IPropertiesProvi
     private MetadataProperties metadataProperties;
     private StorageProperties storageProperties;
     private TransactionProperties txnProperties;
-    private FeedProperties feedProperties;
+    private ActiveProperties activeProperties;
     private BuildProperties buildProperties;
     private ReplicationProperties replicationProperties;
     private ExtensionProperties extensionProperties;
     private MessagingProperties messagingProperties;
+    private NodeProperties nodeProperties;
     private Supplier<IMetadataBootstrap> metadataBootstrapSupplier;
     private IHyracksClientConnection hcc;
     private Object extensionManager;
@@ -66,7 +79,7 @@ public class AppContextInfo implements IApplicationContextInfo, IPropertiesProvi
     private AppContextInfo() {
     }
 
-    public static synchronized void initialize(ICCApplicationContext ccAppCtx, IHyracksClientConnection hcc,
+    public static synchronized void initialize(ICCServiceContext ccServiceCtx, IHyracksClientConnection hcc,
             ILibraryManager libraryManager, IResourceIdManager resourceIdManager,
             Supplier<IMetadataBootstrap> metadataBootstrapSupplier, IGlobalRecoveryManager globalRecoveryManager,
             IFaultToleranceStrategy ftStrategy)
@@ -75,25 +88,26 @@ public class AppContextInfo implements IApplicationContextInfo, IPropertiesProvi
             throw new AsterixException(AppContextInfo.class.getSimpleName() + " has been initialized already");
         }
         INSTANCE.initialized = true;
-        INSTANCE.appCtx = ccAppCtx;
+        INSTANCE.ccServiceCtx = ccServiceCtx;
         INSTANCE.hcc = hcc;
         INSTANCE.libraryManager = libraryManager;
         INSTANCE.resourceIdManager = resourceIdManager;
         // Determine whether to use old-style asterix-configuration.xml or new-style configuration.
         // QQQ strip this out eventually
-        PropertiesAccessor propertiesAccessor = PropertiesAccessor.getInstance(ccAppCtx.getAppConfig());
+        PropertiesAccessor propertiesAccessor = PropertiesAccessor.getInstance(ccServiceCtx.getAppConfig());
         INSTANCE.compilerProperties = new CompilerProperties(propertiesAccessor);
         INSTANCE.externalProperties = new ExternalProperties(propertiesAccessor);
         INSTANCE.metadataProperties = new MetadataProperties(propertiesAccessor);
         INSTANCE.storageProperties = new StorageProperties(propertiesAccessor);
         INSTANCE.txnProperties = new TransactionProperties(propertiesAccessor);
-        INSTANCE.feedProperties = new FeedProperties(propertiesAccessor);
+        INSTANCE.activeProperties = new ActiveProperties(propertiesAccessor);
         INSTANCE.extensionProperties = new ExtensionProperties(propertiesAccessor);
         INSTANCE.replicationProperties = new ReplicationProperties(propertiesAccessor);
         INSTANCE.ftStrategy = ftStrategy;
         INSTANCE.hcc = hcc;
         INSTANCE.buildProperties = new BuildProperties(propertiesAccessor);
         INSTANCE.messagingProperties = new MessagingProperties(propertiesAccessor);
+        INSTANCE.nodeProperties = new NodeProperties(propertiesAccessor);
         INSTANCE.metadataBootstrapSupplier = metadataBootstrapSupplier;
         INSTANCE.globalRecoveryManager = globalRecoveryManager;
 
@@ -106,8 +120,8 @@ public class AppContextInfo implements IApplicationContextInfo, IPropertiesProvi
     }
 
     @Override
-    public ICCApplicationContext getCCApplicationContext() {
-        return appCtx;
+    public ICCServiceContext getCCServiceContext() {
+        return ccServiceCtx;
     }
 
     @Override
@@ -136,8 +150,8 @@ public class AppContextInfo implements IApplicationContextInfo, IPropertiesProvi
     }
 
     @Override
-    public FeedProperties getFeedProperties() {
-        return feedProperties;
+    public ActiveProperties getActiveProperties() {
+        return activeProperties;
     }
 
     @Override
@@ -189,6 +203,11 @@ public class AppContextInfo implements IApplicationContextInfo, IPropertiesProvi
     @Override
     public MessagingProperties getMessagingProperties() {
         return messagingProperties;
+    }
+
+    @Override
+    public NodeProperties getNodeProperties() {
+        return nodeProperties;
     }
 
     public IResourceIdManager getResourceIdManager() {

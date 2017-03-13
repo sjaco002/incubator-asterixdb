@@ -45,6 +45,14 @@ public interface IJobManager {
     void add(JobRun jobRun) throws HyracksException;
 
     /**
+     * Cancel a job with a given job id.
+     *
+     * @param jobId,
+     *            the id of the job.
+     */
+    void cancel(JobId jobId) throws HyracksException;
+
+    /**
      * This method is called when the master process decides to complete job.
      * The implementation of this method should instruct all involved worker processes to clean the state of each
      * individual parallel partition up.
@@ -110,4 +118,8 @@ public interface IJobManager {
      */
     Collection<JobRun> getArchivedJobs();
 
+    /**
+     * @return the maximum number of jobs to queue before rejecting new jobs
+     */
+    int getJobQueueCapacity();
 }

@@ -22,12 +22,10 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import org.apache.asterix.common.api.IAppRuntimeContext;
-import org.apache.asterix.common.exceptions.ExceptionUtils;
 import org.apache.asterix.common.messaging.api.INCMessageBroker;
 import org.apache.asterix.common.replication.INCLifecycleMessage;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.apache.hyracks.api.service.IControllerService;
-import org.apache.hyracks.control.nc.NodeControllerService;
 
 public class TakeoverMetadataNodeRequestMessage implements INCLifecycleMessage {
 
@@ -36,25 +34,23 @@ public class TakeoverMetadataNodeRequestMessage implements INCLifecycleMessage {
 
     @Override
     public void handle(IControllerService cs) throws HyracksDataException, InterruptedException {
-        NodeControllerService ncs = (NodeControllerService) cs;
-        IAppRuntimeContext appContext =
-                (IAppRuntimeContext) ncs.getApplicationContext().getApplicationObject();
-        INCMessageBroker broker = (INCMessageBroker) ncs.getApplicationContext().getMessageBroker();
+        IAppRuntimeContext appContext = (IAppRuntimeContext) cs.getApplicationContext();
+        INCMessageBroker broker = (INCMessageBroker) cs.getContext().getMessageBroker();
         HyracksDataException hde = null;
         try {
             appContext.initializeMetadata(false);
             appContext.exportMetadataNodeStub();
         } catch (Exception e) {
             LOGGER.log(Level.SEVERE, "Failed taking over metadata", e);
-            hde = new HyracksDataException(e);
+            hde = HyracksDataException.create(e);
         } finally {
-            TakeoverMetadataNodeResponseMessage reponse = new TakeoverMetadataNodeResponseMessage(
-                    appContext.getTransactionSubsystem().getId());
+            TakeoverMetadataNodeResponseMessage reponse =
+                    new TakeoverMetadataNodeResponseMessage(appContext.getTransactionSubsystem().getId());
             try {
                 broker.sendMessageToCC(reponse);
             } catch (Exception e) {
                 LOGGER.log(Level.SEVERE, "Failed taking over metadata", e);
-                hde = ExceptionUtils.suppressIntoHyracksDataException(hde, e);
+                hde = HyracksDataException.suppress(hde, e);
             }
         }
         if (hde != null) {

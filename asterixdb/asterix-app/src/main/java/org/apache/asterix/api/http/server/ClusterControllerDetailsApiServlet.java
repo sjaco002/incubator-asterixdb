@@ -41,7 +41,7 @@ public class ClusterControllerDetailsApiServlet extends ClusterApiServlet {
     private static final Logger LOGGER = Logger.getLogger(ClusterControllerDetailsApiServlet.class.getName());
     private final ObjectMapper om = new ObjectMapper();
 
-    public ClusterControllerDetailsApiServlet(ConcurrentMap<String, Object> ctx, String[] paths) {
+    public ClusterControllerDetailsApiServlet(ConcurrentMap<String, Object> ctx, String... paths) {
         super(ctx, paths);
     }
 
@@ -52,7 +52,7 @@ public class ClusterControllerDetailsApiServlet extends ClusterApiServlet {
         try {
             ObjectNode json;
             response.setStatus(HttpResponseStatus.OK);
-            if ("".equals(path(request))) {
+            if ("".equals(localPath(request))) {
                 json = (ObjectNode) getClusterStateJSON(request, "../").get("cc");
             } else {
                 json = processNode(request, hcc);
@@ -70,13 +70,13 @@ public class ClusterControllerDetailsApiServlet extends ClusterApiServlet {
     }
 
     private ObjectNode processNode(IServletRequest request, IHyracksClientConnection hcc) throws Exception {
-        String pathInfo = path(request);
-        if (pathInfo.endsWith("/")) {
+        String localPath = localPath(request);
+        if (localPath.endsWith("/")) {
             throw new IllegalArgumentException();
         }
-        String[] parts = pathInfo.substring(1).split("/");
+        String[] parts = localPath.substring(1).split("/");
 
-        if ("".equals(pathInfo)) {
+        if ("".equals(localPath)) {
             return (ObjectNode) getClusterStateJSON(request, "../../").get("cc");
         } else if (parts.length == 1) {
             switch (parts[0]) {

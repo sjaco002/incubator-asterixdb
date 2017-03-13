@@ -21,5 +21,5 @@ package org.apache.hyracks.control.cc.web.util;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
 public interface IJSONOutputFunction {
-    public ObjectNode invoke(String[] arguments) throws Exception;
+    ObjectNode invoke(String host, String servletPath, String[] arguments) throws Exception;
 }

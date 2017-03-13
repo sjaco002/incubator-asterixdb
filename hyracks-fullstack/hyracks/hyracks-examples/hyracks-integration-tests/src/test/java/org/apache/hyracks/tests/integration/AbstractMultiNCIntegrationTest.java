@@ -27,6 +27,7 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
 import org.apache.commons.io.FileUtils;
 import org.apache.hyracks.api.client.HyracksConnection;
 import org.apache.hyracks.api.client.IHyracksClientConnection;
@@ -35,10 +36,13 @@ import org.apache.hyracks.api.comm.VSizeFrame;
 import org.apache.hyracks.api.dataset.IHyracksDataset;
 import org.apache.hyracks.api.dataset.IHyracksDatasetReader;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
+import org.apache.hyracks.api.exceptions.HyracksException;
 import org.apache.hyracks.api.job.JobFlag;
 import org.apache.hyracks.api.job.JobId;
 import org.apache.hyracks.api.job.JobSpecification;
+import org.apache.hyracks.api.job.resource.IJobCapacityController;
 import org.apache.hyracks.client.dataset.HyracksDataset;
+import org.apache.hyracks.control.cc.BaseCCApplication;
 import org.apache.hyracks.control.cc.ClusterControllerService;
 import org.apache.hyracks.control.common.controllers.CCConfig;
 import org.apache.hyracks.control.common.controllers.NCConfig;
@@ -46,7 +50,6 @@ import org.apache.hyracks.control.nc.NodeControllerService;
 import org.apache.hyracks.control.nc.resources.memory.FrameManager;
 import org.apache.hyracks.dataflow.common.comm.io.ResultFrameTupleAccessor;
 import org.apache.hyracks.dataflow.common.comm.util.ByteBufferInputStream;
-import com.fasterxml.jackson.databind.node.ArrayNode;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Rule;
@@ -77,17 +80,18 @@ public abstract class AbstractMultiNCIntegrationTest {
     @BeforeClass
     public static void init() throws Exception {
         CCConfig ccConfig = new CCConfig();
-        ccConfig.clientNetIpAddress = "127.0.0.1";
-        ccConfig.clientNetPort = 39000;
-        ccConfig.clusterNetIpAddress = "127.0.0.1";
-        ccConfig.clusterNetPort = 39001;
-        ccConfig.profileDumpPeriod = 10000;
+        ccConfig.setClientListenAddress("127.0.0.1");
+        ccConfig.setClientListenPort(39000);
+        ccConfig.setClusterListenAddress("127.0.0.1");
+        ccConfig.setClusterListenPort(39001);
+        ccConfig.setProfileDumpPeriod(10000);
         File outDir = new File("target" + File.separator + "ClusterController");
         outDir.mkdirs();
         File ccRoot = File.createTempFile(AbstractMultiNCIntegrationTest.class.getName(), ".data", outDir);
         ccRoot.delete();
         ccRoot.mkdir();
-        ccConfig.ccRoot = ccRoot.getAbsolutePath();
+        ccConfig.setRootDir(ccRoot.getAbsolutePath());
+        ccConfig.setAppClass(DummyApplication.class.getName());
         cc = new ClusterControllerService(ccConfig);
         cc.start();
 
@@ -96,19 +100,18 @@ public abstract class AbstractMultiNCIntegrationTest {
             File ioDev = new File("target" + File.separator + ASTERIX_IDS[i] + File.separator + "ioDevice");
             FileUtils.forceMkdir(ioDev);
             FileUtils.copyDirectory(new File("data" + File.separator + "device0"), ioDev);
-            NCConfig ncConfig = new NCConfig();
-            ncConfig.ccHost = "localhost";
-            ncConfig.ccPort = 39001;
-            ncConfig.clusterNetIPAddress = "127.0.0.1";
-            ncConfig.dataIPAddress = "127.0.0.1";
-            ncConfig.resultIPAddress = "127.0.0.1";
-            ncConfig.nodeId = ASTERIX_IDS[i];
-            ncConfig.ioDevices = ioDev.getAbsolutePath();
+            NCConfig ncConfig = new NCConfig(ASTERIX_IDS[i]);
+            ncConfig.setClusterAddress("localhost");
+            ncConfig.setClusterPort(39001);
+            ncConfig.setClusterListenAddress("127.0.0.1");
+            ncConfig.setDataListenAddress("127.0.0.1");
+            ncConfig.setResultListenAddress("127.0.0.1");
+            ncConfig.setIODevices(new String [] { ioDev.getAbsolutePath() });
             asterixNCs[i] = new NodeControllerService(ncConfig);
             asterixNCs[i].start();
         }
 
-        hcc = new HyracksConnection(ccConfig.clientNetIpAddress, ccConfig.clientNetPort);
+        hcc = new HyracksConnection(ccConfig.getClientListenAddress(), ccConfig.getClientListenPort());
         if (LOGGER.isLoggable(Level.INFO)) {
             LOGGER.info("Starting CC in " + ccRoot.getAbsolutePath());
         }
@@ -120,6 +123,18 @@ public abstract class AbstractMultiNCIntegrationTest {
             nc.stop();
         }
         cc.stop();
+    }
+
+    protected JobId startJob(JobSpecification spec) throws Exception {
+        return hcc.startJob(spec);
+    }
+
+    protected void waitForCompletion(JobId jobId) throws Exception {
+        hcc.waitForCompletion(jobId);
+    }
+
+    protected void cancelJob(JobId jobId) throws Exception {
+        hcc.cancelJob(jobId);
     }
 
     protected void runTest(JobSpecification spec) throws Exception {
@@ -199,6 +214,27 @@ public abstract class AbstractMultiNCIntegrationTest {
         }
         outputFiles.add(tempFile);
         return tempFile;
+    }
+
+    public static class DummyApplication extends BaseCCApplication {
+
+        @Override
+        public IJobCapacityController getJobCapacityController() {
+            return new IJobCapacityController() {
+                private long maxRAM = Runtime.getRuntime().maxMemory();
+
+                @Override
+                public JobSubmissionStatus allocate(JobSpecification job) throws HyracksException {
+                    return maxRAM > job.getRequiredClusterCapacity().getAggregatedMemoryByteSize()
+                            ? JobSubmissionStatus.EXECUTE : JobSubmissionStatus.QUEUE;
+                }
+
+                @Override
+                public void release(JobSpecification job) {
+
+                }
+            };
+        }
     }
 
 }

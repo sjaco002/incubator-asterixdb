@@ -423,7 +423,6 @@ public class TestExecutor {
             String exceptionMsg;
             try {
                 // First try to parse the response for a JSON error response.
-
                 ObjectMapper om = new ObjectMapper();
                 JsonNode result = om.readTree(errorBody);
                 String[] errors = { result.get("error-code").asText(), result.get("summary").asText(),
@@ -457,6 +456,11 @@ public class TestExecutor {
 
     public InputStream executeQueryService(String str, OutputFormat fmt, URI uri,
             List<CompilationUnit.Parameter> params, boolean jsonEncoded) throws Exception {
+        return executeQueryService(str, fmt, uri, params, jsonEncoded, false);
+    }
+
+    protected InputStream executeQueryService(String str, OutputFormat fmt, URI uri,
+            List<CompilationUnit.Parameter> params, boolean jsonEncoded, boolean cancellable) throws Exception {
         setParam(params, "format", fmt.mimeType());
         HttpUriRequest method = jsonEncoded ? constructPostMethodJson(str, uri, "statement", params)
                 : constructPostMethodUrl(str, uri, "statement", params);
@@ -830,7 +834,7 @@ public class TestExecutor {
                     }
                     final URI uri = getEndpoint(Servlets.QUERY_SERVICE);
                     if (DELIVERY_IMMEDIATE.equals(delivery)) {
-                        resultStream = executeQueryService(statement, fmt, uri, params, true);
+                        resultStream = executeQueryService(statement, fmt, uri, params, true, true);
                         resultStream = ResultExtractor.extract(resultStream);
                     } else {
                         String handleVar = getHandleVariable(statement);
@@ -1113,13 +1117,13 @@ public class TestExecutor {
 
     private void deleteNCTxnLogs(String nodeId, CompilationUnit cUnit) throws Exception {
         OutputFormat fmt = OutputFormat.forCompilationUnit(cUnit);
-        String endpoint = "/admin/cluster";
+        String endpoint = "/admin/cluster/node/" + nodeId + "/config";
         InputStream executeJSONGet = executeJSONGet(fmt, new URI("http://" + host + ":" + port + endpoint));
         StringWriter actual = new StringWriter();
         IOUtils.copy(executeJSONGet, actual, StandardCharsets.UTF_8);
         String config = actual.toString();
         ObjectMapper om = new ObjectMapper();
-        String logDir = om.readTree(config).findPath("transaction.log.dirs").get(nodeId).asText();
+        String logDir = om.readTree(config).findPath("txn.log.dir").asText();
         FileUtils.deleteQuietly(new File(logDir));
     }
 

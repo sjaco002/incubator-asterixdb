@@ -39,7 +39,6 @@ import org.apache.hyracks.algebricks.common.exceptions.AlgebricksException;
 import org.apache.hyracks.api.comm.IFrameWriter;
 import org.apache.hyracks.api.context.IHyracksTaskContext;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
-import org.apache.hyracks.control.nc.NodeControllerService;
 import org.apache.hyracks.dataflow.common.comm.io.ArrayTupleBuilder;
 import org.apache.hyracks.dataflow.std.file.ITupleParser;
 import org.apache.hyracks.dataflow.std.file.ITupleParserFactory;
@@ -69,7 +68,7 @@ public class TestTypedAdapterFactory implements IAdapterFactory {
 
     @Override
     public IDataSourceAdapter createAdapter(IHyracksTaskContext ctx, int partition) throws HyracksDataException {
-        final String nodeId = ctx.getJobletContext().getApplicationContext().getNodeId();
+        final String nodeId = ctx.getJobletContext().getServiceContext().getNodeId();
         final ITupleParserFactory tupleParserFactory = new ITupleParserFactory() {
             private static final long serialVersionUID = 1L;
 
@@ -79,12 +78,9 @@ public class TestTypedAdapterFactory implements IAdapterFactory {
                 ITupleForwarder forwarder;
                 ArrayTupleBuilder tb;
                 IPropertiesProvider propertiesProvider =
-                        (IPropertiesProvider) ((NodeControllerService) ctx
-                                .getJobletContext().getApplicationContext().getControllerService())
-                                        .getApplicationContext()
-                                        .getApplicationObject();
-                ClusterPartition nodePartition = propertiesProvider.getMetadataProperties().getNodePartitions()
-                        .get(nodeId)[0];
+                        (IPropertiesProvider) ctx.getJobletContext().getServiceContext().getApplicationContext();
+                ClusterPartition nodePartition =
+                        propertiesProvider.getMetadataProperties().getNodePartitions().get(nodeId)[0];
                 parser = new ADMDataParser(outputType, true);
                 forwarder = DataflowUtils.getTupleForwarder(configuration,
                         FeedUtils.getFeedLogManager(ctx,
@@ -144,5 +140,4 @@ public class TestTypedAdapterFactory implements IAdapterFactory {
     public ARecordType getMetaType() {
         return null;
     }
-
 }

@@ -21,7 +21,6 @@ package org.apache.asterix.common.exceptions;
 import java.io.InputStream;
 import java.util.Map;
 
-import org.apache.asterix.event.schema.cluster.FaultTolerance;
 import org.apache.hyracks.api.util.ErrorMessageUtil;
 
 // Error code:
@@ -84,6 +83,8 @@ public class ErrorCode {
     public static final int COMPILATION_CANT_DROP_ACTIVE_DATASET = 1023;
     public static final int COMPILATION_AQLPLUS_IDENTIFIER_NOT_FOUND = 1024;
     public static final int COMPILATION_AQLPLUS_NO_SUCH_JOIN_TYPE = 1025;
+    public static final int COMPILATION_FUNC_EXPRESSION_CANNOT_UTILIZE_INDEX = 1026;
+    public static final int COMPILATION_DATASET_TYPE_DOES_NOT_HAVE_PRIMARY_INDEX = 1027;
 
     // Feed errors
     public static final int DATAFLOW_ILLEGAL_STATE = 3001;
@@ -164,21 +165,27 @@ public class ErrorCode {
     public static final int UTIL_LOCAL_FILE_SYSTEM_UTILS_PATH_NOT_FOUND = 3077;
     public static final int UTIL_HDFS_UTILS_CANNOT_OBTAIN_HDFS_SCHEDULER = 3078;
 
-    // Loads the map that maps error codes to error message templates.
-    private static Map<Integer, String> errorMessageMap = null;
-
     private ErrorCode() {
     }
 
-    public static String getErrorMessage(int errorCode) {
-        if (errorMessageMap == null) {
+    private static class Holder {
+        private static final Map<Integer, String> errorMessageMap;
+
+        static {
+            // Loads the map that maps error codes to error message templates.
             try (InputStream resourceStream = ErrorCode.class.getClassLoader().getResourceAsStream(RESOURCE_PATH)) {
                 errorMessageMap = ErrorMessageUtil.loadErrorMap(resourceStream);
             } catch (Exception e) {
                 throw new IllegalStateException(e);
             }
         }
-        String msg = errorMessageMap.get(errorCode);
+
+        private Holder() {
+        }
+    }
+
+    public static String getErrorMessage(int errorCode) {
+        String msg = Holder.errorMessageMap.get(errorCode);
         if (msg == null) {
             throw new IllegalStateException("Undefined error code: " + errorCode);
         }

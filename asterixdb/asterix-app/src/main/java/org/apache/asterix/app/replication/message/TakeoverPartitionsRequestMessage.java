@@ -24,13 +24,11 @@ import java.util.logging.Logger;
 
 import org.apache.asterix.common.api.IAppRuntimeContext;
 import org.apache.asterix.common.exceptions.ACIDException;
-import org.apache.asterix.common.exceptions.ExceptionUtils;
 import org.apache.asterix.common.messaging.api.INCMessageBroker;
 import org.apache.asterix.common.replication.INCLifecycleMessage;
 import org.apache.asterix.common.replication.IRemoteRecoveryManager;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.apache.hyracks.api.service.IControllerService;
-import org.apache.hyracks.control.nc.NodeControllerService;
 
 public class TakeoverPartitionsRequestMessage implements INCLifecycleMessage {
 
@@ -75,9 +73,8 @@ public class TakeoverPartitionsRequestMessage implements INCLifecycleMessage {
 
     @Override
     public void handle(IControllerService cs) throws HyracksDataException, InterruptedException {
-        NodeControllerService ncs = (NodeControllerService) cs;
-        IAppRuntimeContext appContext = (IAppRuntimeContext) ncs.getApplicationContext().getApplicationObject();
-        INCMessageBroker broker = (INCMessageBroker) ncs.getApplicationContext().getMessageBroker();
+        IAppRuntimeContext appContext = (IAppRuntimeContext) cs.getApplicationContext();
+        INCMessageBroker broker = (INCMessageBroker) cs.getContext().getMessageBroker();
         //if the NC is shutting down, it should ignore takeover partitions request
         if (!appContext.isShuttingdown()) {
             HyracksDataException hde = null;
@@ -86,7 +83,7 @@ public class TakeoverPartitionsRequestMessage implements INCLifecycleMessage {
                 remoteRecoeryManager.takeoverPartitons(partitions);
             } catch (IOException | ACIDException e) {
                 LOGGER.log(Level.SEVERE, "Failure taking over partitions", e);
-                hde = ExceptionUtils.suppressIntoHyracksDataException(hde, e);
+                hde = HyracksDataException.suppress(hde, e);
             } finally {
                 //send response after takeover is completed
                 TakeoverPartitionsResponseMessage reponse = new TakeoverPartitionsResponseMessage(requestId,
@@ -95,7 +92,7 @@ public class TakeoverPartitionsRequestMessage implements INCLifecycleMessage {
                     broker.sendMessageToCC(reponse);
                 } catch (Exception e) {
                     LOGGER.log(Level.SEVERE, "Failure taking over partitions", e);
-                    hde = ExceptionUtils.suppressIntoHyracksDataException(hde, e);
+                    hde = HyracksDataException.suppress(hde, e);
                 }
             }
             if (hde != null) {

@@ -26,7 +26,7 @@ import org.apache.hyracks.api.job.IActivityClusterGraphGeneratorFactory;
 import org.apache.hyracks.api.job.JobFlag;
 import org.apache.hyracks.api.job.JobId;
 import org.apache.hyracks.control.cc.ClusterControllerService;
-import org.apache.hyracks.control.cc.application.CCApplicationContext;
+import org.apache.hyracks.control.cc.application.CCServiceContext;
 import org.apache.hyracks.control.cc.job.IJobManager;
 import org.apache.hyracks.control.cc.job.JobRun;
 import org.apache.hyracks.control.common.deployment.DeploymentUtils;
@@ -57,22 +57,22 @@ public class JobStartWork extends SynchronizableWork {
     protected void doRun() throws Exception {
         IJobManager jobManager = ccs.getJobManager();
         try {
-            final CCApplicationContext appCtx = ccs.getApplicationContext();
+            final CCServiceContext ccServiceCtx = ccs.getContext();
             JobRun run;
             if (!predestributed) {
                 //Need to create the ActivityClusterGraph
                 IActivityClusterGraphGeneratorFactory acggf = (IActivityClusterGraphGeneratorFactory) DeploymentUtils
-                        .deserialize(acggfBytes, deploymentId, appCtx);
+                        .deserialize(acggfBytes, deploymentId, ccServiceCtx);
                 IActivityClusterGraphGenerator acgg =
-                        acggf.createActivityClusterGraphGenerator(jobId, appCtx, jobFlags);
-                run = new JobRun(ccs, deploymentId, jobId, acggf, acgg, jobFlags, callback);
+                        acggf.createActivityClusterGraphGenerator(jobId, ccServiceCtx, jobFlags);
+                run = new JobRun(ccs, deploymentId, jobId, acggf, acgg, jobFlags);
             } else {
                 //ActivityClusterGraph has already been distributed
-                run = new JobRun(ccs, deploymentId, jobId, callback,
+                run = new JobRun(ccs, deploymentId, jobId,
                         ccs.getPreDistributedJobStore().getDistributedJobDescriptor(jobId));
             }
             jobManager.add(run);
-
+            callback.setValue(jobId);
         } catch (Exception e) {
             callback.setException(e);
         }

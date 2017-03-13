@@ -18,7 +18,6 @@
  */
 package org.apache.hyracks.api.exceptions;
 
-import java.io.File;
 import java.io.InputStream;
 import java.util.Map;
 
@@ -59,25 +58,33 @@ public class ErrorCode {
     public static final int DUPLICATE_DISTRIBUTED_JOB = 22;
     public static final int DISTRIBUTED_JOB_FAILURE = 23;
     public static final int NO_RESULTSET = 24;
+    public static final int JOB_CANCELED = 25;
+    public static final int NODE_FAILED = 26;
 
     // Compilation error codes.
     public static final int RULECOLLECTION_NOT_INSTANCE_OF_LIST = 10001;
 
-    // Loads the map that maps error codes to error message templates.
-    private static Map<Integer, String> errorMessageMap = null;
+    private static class Holder {
+        private static final Map<Integer, String> errorMessageMap;
 
-    private ErrorCode() {
-    }
-
-    public static String getErrorMessage(int errorCode) {
-        if (errorMessageMap == null) {
+        static {
+            // Loads the map that maps error codes to error message templates.
             try (InputStream resourceStream = ErrorCode.class.getClassLoader().getResourceAsStream(RESOURCE_PATH)) {
                 errorMessageMap = ErrorMessageUtil.loadErrorMap(resourceStream);
             } catch (Exception e) {
                 throw new IllegalStateException(e);
             }
         }
-        String msg = errorMessageMap.get(errorCode);
+
+        private Holder() {
+        }
+    }
+
+    private ErrorCode() {
+    }
+
+    public static String getErrorMessage(int errorCode) {
+        String msg = Holder.errorMessageMap.get(errorCode);
         if (msg == null) {
             throw new IllegalStateException("Undefined error code: " + errorCode);
         }

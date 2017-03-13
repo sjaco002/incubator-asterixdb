@@ -27,6 +27,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
@@ -41,21 +42,30 @@ import org.apache.hyracks.api.job.JobStatus;
 import org.apache.hyracks.api.job.resource.IJobCapacityController;
 import org.apache.hyracks.control.cc.ClusterControllerService;
 import org.apache.hyracks.control.cc.NodeControllerState;
-import org.apache.hyracks.control.cc.application.CCApplicationContext;
+import org.apache.hyracks.control.cc.application.CCServiceContext;
 import org.apache.hyracks.control.cc.cluster.INodeManager;
 import org.apache.hyracks.control.cc.cluster.NodeManager;
 import org.apache.hyracks.control.common.base.INodeController;
 import org.apache.hyracks.control.common.controllers.CCConfig;
 import org.apache.hyracks.control.common.logs.LogFile;
 import org.junit.Assert;
+import org.junit.Before;
 import org.junit.Test;
+import org.kohsuke.args4j.CmdLineException;
 import org.mockito.Mockito;
 
 public class JobManagerTest {
 
+    private CCConfig ccConfig;
+
+    @Before
+    public void setup() throws IOException, CmdLineException {
+        ccConfig = new CCConfig();
+        ccConfig.getConfigManager().processConfig();
+    }
+
     @Test
-    public void test() throws HyracksException {
-        CCConfig ccConfig = new CCConfig();
+    public void test() throws IOException, CmdLineException {
         IJobCapacityController jobCapacityController = mock(IJobCapacityController.class);
         IJobManager jobManager = spy(new JobManager(ccConfig, mockClusterControllerService(), jobCapacityController));
 
@@ -114,7 +124,7 @@ public class JobManagerTest {
         }
         Assert.assertTrue(jobManager.getRunningJobs().size() == 4096);
         Assert.assertTrue(jobManager.getPendingJobs().isEmpty());
-        Assert.assertTrue(jobManager.getArchivedJobs().size() == ccConfig.jobHistorySize);
+        Assert.assertTrue(jobManager.getArchivedJobs().size() == ccConfig.getJobHistorySize());
 
         // Completes deferred jobs.
         for (JobRun run : deferredRuns) {
@@ -123,14 +133,13 @@ public class JobManagerTest {
         }
         Assert.assertTrue(jobManager.getRunningJobs().isEmpty());
         Assert.assertTrue(jobManager.getPendingJobs().isEmpty());
-        Assert.assertTrue(jobManager.getArchivedJobs().size() == ccConfig.jobHistorySize);
+        Assert.assertTrue(jobManager.getArchivedJobs().size() == ccConfig.getJobHistorySize());
         verify(jobManager, times(8192)).prepareComplete(any(), any(), any());
         verify(jobManager, times(8192)).finalComplete(any());
     }
 
     @Test
     public void testExceedMax() throws HyracksException {
-        CCConfig ccConfig = new CCConfig();
         IJobCapacityController jobCapacityController = mock(IJobCapacityController.class);
         IJobManager jobManager = spy(new JobManager(ccConfig, mockClusterControllerService(), jobCapacityController));
         boolean rejected = false;
@@ -154,7 +163,6 @@ public class JobManagerTest {
 
     @Test
     public void testAdmitThenReject() throws HyracksException {
-        CCConfig ccConfig = new CCConfig();
         IJobCapacityController jobCapacityController = mock(IJobCapacityController.class);
         IJobManager jobManager = spy(new JobManager(ccConfig, mockClusterControllerService(), jobCapacityController));
 
@@ -185,7 +193,6 @@ public class JobManagerTest {
 
     @Test
     public void testNullJob() throws HyracksException {
-        CCConfig ccConfig = new CCConfig();
         IJobCapacityController jobCapacityController = mock(IJobCapacityController.class);
         IJobManager jobManager = new JobManager(ccConfig, mockClusterControllerService(), jobCapacityController);
         boolean invalidParameter = false;
@@ -197,6 +204,61 @@ public class JobManagerTest {
         Assert.assertTrue(invalidParameter);
         Assert.assertTrue(jobManager.getRunningJobs().isEmpty());
         Assert.assertTrue(jobManager.getPendingJobs().isEmpty());
+    }
+
+    @Test
+    public void testCancel() throws HyracksException {
+        CCConfig ccConfig = new CCConfig();
+        IJobCapacityController jobCapacityController = mock(IJobCapacityController.class);
+        IJobManager jobManager = spy(new JobManager(ccConfig, mockClusterControllerService(), jobCapacityController));
+
+        // Submits runnable jobs.
+        List<JobRun> acceptedRuns = new ArrayList<>();
+        for (int id = 0; id < 4096; ++id) {
+            // Mocks an immediately executable job.
+            JobRun run = mockJobRun(id);
+            JobSpecification job = mock(JobSpecification.class);
+            when(run.getJobSpecification()).thenReturn(job);
+            when(jobCapacityController.allocate(job)).thenReturn(IJobCapacityController.JobSubmissionStatus.EXECUTE);
+
+            // Submits the job.
+            acceptedRuns.add(run);
+            jobManager.add(run);
+            Assert.assertTrue(jobManager.getRunningJobs().size() == id + 1);
+            Assert.assertTrue(jobManager.getPendingJobs().isEmpty());
+        }
+
+        // Submits jobs that will be deferred due to the capacity limitation.
+        List<JobRun> deferredRuns = new ArrayList<>();
+        for (int id = 4096; id < 8192; ++id) {
+            // Mocks a deferred job.
+            JobRun run = mockJobRun(id);
+            JobSpecification job = mock(JobSpecification.class);
+            when(run.getJobSpecification()).thenReturn(job);
+            when(jobCapacityController.allocate(job)).thenReturn(IJobCapacityController.JobSubmissionStatus.QUEUE)
+                    .thenReturn(IJobCapacityController.JobSubmissionStatus.EXECUTE);
+
+            // Submits the job.
+            deferredRuns.add(run);
+            jobManager.add(run);
+            Assert.assertTrue(jobManager.getRunningJobs().size() == 4096);
+            Assert.assertTrue(jobManager.getPendingJobs().size() == id + 1 - 4096);
+        }
+
+        // Cancels deferred jobs.
+        for (JobRun run : deferredRuns) {
+            jobManager.cancel(run.getJobId());
+        }
+
+        // Cancels runnable jobs.
+        for (JobRun run : acceptedRuns) {
+            jobManager.cancel(run.getJobId());
+        }
+
+        Assert.assertTrue(jobManager.getPendingJobs().isEmpty());
+        Assert.assertTrue(jobManager.getArchivedJobs().size() == ccConfig.getJobHistorySize());
+        verify(jobManager, times(0)).prepareComplete(any(), any(), any());
+        verify(jobManager, times(0)).finalComplete(any());
     }
 
     private JobRun mockJobRun(long id) {
@@ -217,12 +279,13 @@ public class JobManagerTest {
 
     private ClusterControllerService mockClusterControllerService() {
         ClusterControllerService ccs = mock(ClusterControllerService.class);
-        CCApplicationContext appCtx = mock(CCApplicationContext.class);
+        CCServiceContext ccServiceCtx = mock(CCServiceContext.class);
         LogFile logFile = mock(LogFile.class);
         INodeManager nodeManager = mockNodeManager();
-        when(ccs.getApplicationContext()).thenReturn(appCtx);
+        when(ccs.getContext()).thenReturn(ccServiceCtx);
         when(ccs.getJobLogFile()).thenReturn(logFile);
         when(ccs.getNodeManager()).thenReturn(nodeManager);
+        when(ccs.getCCConfig()).thenReturn(ccConfig);
         return ccs;
     }
 

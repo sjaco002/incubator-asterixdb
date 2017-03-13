@@ -66,7 +66,7 @@ public class StorageUtil {
         throw new AssertionError("This util class should not be initialized.");
     }
 
-    public static int getSizeInBytes(final int size, final StorageUnit unit) {
+    public static int getIntSizeInBytes(final int size, final StorageUnit unit) {
         double result = unit.toBytes(size);
         if (result > Integer.MAX_VALUE || result < Integer.MIN_VALUE) {
             throw new IllegalArgumentException("The given value:" + result + " is not within the integer range.");
@@ -75,7 +75,7 @@ public class StorageUtil {
         }
     }
 
-    public static long getSizeInBytes(final long size, final StorageUnit unit) {
+    public static long getLongSizeInBytes(final long size, final StorageUnit unit) {
         double result = unit.toBytes(size);
         if (result > Long.MAX_VALUE || result < Long.MIN_VALUE) {
             throw new IllegalArgumentException("The given value:" + result + " is not within the long range.");
@@ -85,8 +85,7 @@ public class StorageUtil {
     }
 
     /**
-     * Helper method to parse a byte unit string to its double value and unit
-     * (e.g., 10,345.8MB becomes Pair<10345.8, StorageUnit.MB>.)
+     * Helper method to parse a byte unit string to its double value in bytes
      *
      * @throws IllegalArgumentException
      */
@@ -161,6 +160,12 @@ public class StorageUtil {
             return bytes + " B";
         }
         final int baseValue = (63 - Long.numberOfLeadingZeros(bytes)) / 10;
-        return String.format("%.2f %sB", (double) bytes / (1L << (baseValue * 10)), " kMGTPE".charAt(baseValue));
+        final char bytePrefix = " kMGTPE" .charAt(baseValue);
+        final long divisor = 1L << (baseValue * 10);
+        if (bytes % divisor == 0) {
+            return String.format("%d %sB", bytes / divisor, bytePrefix);
+        } else {
+            return String.format("%.2f %sB", (double) bytes / divisor, bytePrefix);
+        }
     }
 }

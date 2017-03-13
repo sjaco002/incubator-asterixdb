@@ -194,13 +194,22 @@ public class HttpServer {
         b.group(bossGroup, workerGroup).channel(NioServerSocketChannel.class)
                 .childOption(ChannelOption.WRITE_BUFFER_WATER_MARK,
                         new WriteBufferWaterMark(LOW_WRITE_BUFFER_WATER_MARK, HIGH_WRITE_BUFFER_WATER_MARK))
-                .handler(new LoggingHandler(LogLevel.INFO)).childHandler(new HttpServerInitializer(this));
+                .handler(new LoggingHandler(LogLevel.DEBUG)).childHandler(new HttpServerInitializer(this));
         channel = b.bind(port).sync().channel();
     }
 
     protected void doStop() throws InterruptedException {
         channel.close();
         channel.closeFuture().sync();
+        executor.shutdown();
+        try {
+            executor.awaitTermination(1, TimeUnit.MINUTES);
+            if (!executor.isTerminated()) {
+                LOGGER.log(Level.SEVERE, "Failed to shutdown http server executor");
+            }
+        } catch (Exception e) {
+            LOGGER.log(Level.SEVERE, "Error while shutting down http server executor", e);
+        }
     }
 
     public IServlet getServlet(FullHttpRequest request) {
