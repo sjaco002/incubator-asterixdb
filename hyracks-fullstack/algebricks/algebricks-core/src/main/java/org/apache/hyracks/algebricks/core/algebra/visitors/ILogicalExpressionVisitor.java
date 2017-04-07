@@ -21,6 +21,7 @@ package org.apache.hyracks.algebricks.core.algebra.visitors;
 import org.apache.hyracks.algebricks.common.exceptions.AlgebricksException;
 import org.apache.hyracks.algebricks.core.algebra.expressions.AggregateFunctionCallExpression;
 import org.apache.hyracks.algebricks.core.algebra.expressions.ConstantExpression;
+import org.apache.hyracks.algebricks.core.algebra.expressions.RuntimeContextVariableReferenceExpression;
 import org.apache.hyracks.algebricks.core.algebra.expressions.ScalarFunctionCallExpression;
 import org.apache.hyracks.algebricks.core.algebra.expressions.StatefulFunctionCallExpression;
 import org.apache.hyracks.algebricks.core.algebra.expressions.UnnestingFunctionCallExpression;
@@ -28,6 +29,9 @@ import org.apache.hyracks.algebricks.core.algebra.expressions.VariableReferenceE
 
 public interface ILogicalExpressionVisitor<R, T> {
     public R visitConstantExpression(ConstantExpression expr, T arg) throws AlgebricksException;
+
+    public R visitRuntimeContextVariableExpression(RuntimeContextVariableReferenceExpression expr, T arg)
+            throws AlgebricksException;
 
     public R visitVariableReferenceExpression(VariableReferenceExpression expr, T arg) throws AlgebricksException;
 

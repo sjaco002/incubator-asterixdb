@@ -58,6 +58,7 @@ import org.apache.hyracks.algebricks.core.algebra.expressions.AggregateFunctionC
 import org.apache.hyracks.algebricks.core.algebra.expressions.ConstantExpression;
 import org.apache.hyracks.algebricks.core.algebra.expressions.ExpressionRuntimeProvider;
 import org.apache.hyracks.algebricks.core.algebra.expressions.IVariableTypeEnvironment;
+import org.apache.hyracks.algebricks.core.algebra.expressions.RuntimeContextVariableReferenceExpression;
 import org.apache.hyracks.algebricks.core.algebra.expressions.ScalarFunctionCallExpression;
 import org.apache.hyracks.algebricks.core.algebra.expressions.StatefulFunctionCallExpression;
 import org.apache.hyracks.algebricks.core.algebra.expressions.UnnestingFunctionCallExpression;
@@ -171,6 +172,12 @@ public class ConstantFoldingRule implements IAlgebraicRewriteRule {
         public Pair<Boolean, ILogicalExpression> visitConstantExpression(ConstantExpression expr, Void arg)
                 throws AlgebricksException {
             return new Pair<>(false, expr);
+        }
+
+        @Override
+        public Pair<Boolean, ILogicalExpression> visitRuntimeContextVariableExpression(
+                RuntimeContextVariableReferenceExpression expr, Void arg) throws AlgebricksException {
+            return new Pair<Boolean, ILogicalExpression>(false, expr);
         }
 
         @Override

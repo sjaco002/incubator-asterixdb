@@ -42,6 +42,7 @@ import org.apache.asterix.lang.common.expression.OperatorExpr;
 import org.apache.asterix.lang.common.expression.OrderedListTypeDefinition;
 import org.apache.asterix.lang.common.expression.QuantifiedExpression;
 import org.apache.asterix.lang.common.expression.RecordConstructor;
+import org.apache.asterix.lang.common.expression.RuntimeContextVarExpr;
 import org.apache.asterix.lang.common.expression.TypeReferenceExpression;
 import org.apache.asterix.lang.common.expression.UnaryExpr;
 import org.apache.asterix.lang.common.expression.VariableExpr;
@@ -120,6 +121,12 @@ public class GatherFunctionCallsVisitor extends AbstractQueryExpressionVisitor<V
 
     @Override
     public Void visit(LiteralExpr l, Void arg) throws CompilationException {
+        // do nothing
+        return null;
+    }
+
+    @Override
+    public Void visit(RuntimeContextVarExpr rcv, Void arg) throws CompilationException {
         // do nothing
         return null;
     }

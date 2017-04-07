@@ -62,6 +62,7 @@ import org.apache.asterix.lang.common.expression.OperatorExpr;
 import org.apache.asterix.lang.common.expression.QuantifiedExpression;
 import org.apache.asterix.lang.common.expression.QuantifiedExpression.Quantifier;
 import org.apache.asterix.lang.common.expression.RecordConstructor;
+import org.apache.asterix.lang.common.expression.RuntimeContextVarExpr;
 import org.apache.asterix.lang.common.expression.UnaryExpr;
 import org.apache.asterix.lang.common.expression.VariableExpr;
 import org.apache.asterix.lang.common.literal.StringLiteral;
@@ -123,6 +124,7 @@ import org.apache.hyracks.algebricks.core.algebra.expressions.BroadcastExpressio
 import org.apache.hyracks.algebricks.core.algebra.expressions.BroadcastExpressionAnnotation.BroadcastSide;
 import org.apache.hyracks.algebricks.core.algebra.expressions.ConstantExpression;
 import org.apache.hyracks.algebricks.core.algebra.expressions.IExpressionAnnotation;
+import org.apache.hyracks.algebricks.core.algebra.expressions.RuntimeContextVariableReferenceExpression;
 import org.apache.hyracks.algebricks.core.algebra.expressions.ScalarFunctionCallExpression;
 import org.apache.hyracks.algebricks.core.algebra.expressions.UnnestingFunctionCallExpression;
 import org.apache.hyracks.algebricks.core.algebra.expressions.VariableReferenceExpression;
@@ -1031,6 +1033,18 @@ class LangExpressionToPlanTranslator
         LogicalVariable var = context.newVar();
         AssignOperator a = new AssignOperator(var, new MutableObject<>(
                 new ConstantExpression(new AsterixConstantValue(ConstantHelper.objectFromLiteral(l.getValue())))));
+        if (tupSource != null) {
+            a.getInputs().add(tupSource);
+        }
+        return new Pair<>(a, var);
+    }
+
+    @Override
+    public Pair<ILogicalOperator, LogicalVariable> visit(RuntimeContextVarExpr rcv, Mutable<ILogicalOperator> tupSource)
+            throws CompilationException {
+        LogicalVariable var = context.newVar();
+        AssignOperator a = new AssignOperator(var, new MutableObject<>(
+                new RuntimeContextVariableReferenceExpression(new AsterixConstantValue(new AString(rcv.getName())))));
         if (tupSource != null) {
             a.getInputs().add(tupSource);
         }

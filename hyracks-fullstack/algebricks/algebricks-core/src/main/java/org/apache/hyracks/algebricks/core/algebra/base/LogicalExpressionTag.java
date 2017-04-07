@@ -19,5 +19,8 @@
 package org.apache.hyracks.algebricks.core.algebra.base;
 
 public enum LogicalExpressionTag {
-    FUNCTION_CALL, VARIABLE, CONSTANT
+    FUNCTION_CALL,
+    VARIABLE,
+    CONSTANT,
+    RUNTIME_CONTEXT_VAR
 }

@@ -21,7 +21,6 @@ package org.apache.hyracks.algebricks.rewriter.rules;
 import java.util.List;
 
 import org.apache.commons.lang3.mutable.Mutable;
-
 import org.apache.hyracks.algebricks.common.exceptions.AlgebricksException;
 import org.apache.hyracks.algebricks.common.utils.Pair;
 import org.apache.hyracks.algebricks.core.algebra.base.ILogicalExpression;
@@ -32,6 +31,7 @@ import org.apache.hyracks.algebricks.core.algebra.base.LogicalOperatorTag;
 import org.apache.hyracks.algebricks.core.algebra.base.LogicalVariable;
 import org.apache.hyracks.algebricks.core.algebra.expressions.AbstractFunctionCallExpression;
 import org.apache.hyracks.algebricks.core.algebra.expressions.ConstantExpression;
+import org.apache.hyracks.algebricks.core.algebra.expressions.RuntimeContextVariableReferenceExpression;
 import org.apache.hyracks.algebricks.core.algebra.expressions.VariableReferenceExpression;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.AbstractLogicalOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.AggregateOperator;
@@ -105,6 +105,12 @@ public class InlineAssignIntoAggregateRule implements IAlgebraicRewriteRule {
 
         @Override
         public Pair<Boolean, ILogicalExpression> visitConstantExpression(ConstantExpression expr, Void arg) {
+            return new Pair<Boolean, ILogicalExpression>(false, expr);
+        }
+
+        @Override
+        public Pair<Boolean, ILogicalExpression> visitRuntimeContextVariableExpression(
+                RuntimeContextVariableReferenceExpression expr, Void arg) {
             return new Pair<Boolean, ILogicalExpression>(false, expr);
         }
 
