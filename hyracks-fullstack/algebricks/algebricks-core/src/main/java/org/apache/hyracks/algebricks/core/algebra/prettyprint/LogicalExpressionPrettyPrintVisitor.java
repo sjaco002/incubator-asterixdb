@@ -21,6 +21,7 @@ package org.apache.hyracks.algebricks.core.algebra.prettyprint;
 import org.apache.hyracks.algebricks.common.exceptions.AlgebricksException;
 import org.apache.hyracks.algebricks.core.algebra.expressions.AggregateFunctionCallExpression;
 import org.apache.hyracks.algebricks.core.algebra.expressions.ConstantExpression;
+import org.apache.hyracks.algebricks.core.algebra.expressions.RuntimeContextVariableReferenceExpression;
 import org.apache.hyracks.algebricks.core.algebra.expressions.ScalarFunctionCallExpression;
 import org.apache.hyracks.algebricks.core.algebra.expressions.StatefulFunctionCallExpression;
 import org.apache.hyracks.algebricks.core.algebra.expressions.UnnestingFunctionCallExpression;
@@ -34,6 +35,12 @@ public class LogicalExpressionPrettyPrintVisitor implements ILogicalExpressionVi
     public String visitConstantExpression(ConstantExpression expr, Integer indent)
             throws AlgebricksException {
         return expr.toString();
+    }
+
+    @Override
+    public String visitRuntimeContextVariableExpression(RuntimeContextVariableReferenceExpression expr, Integer indent)
+            throws AlgebricksException {
+        return expr.getValue().toString();
     }
 
     @Override

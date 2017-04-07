@@ -32,6 +32,7 @@ import org.apache.hyracks.algebricks.core.algebra.expressions.AbstractFunctionCa
 import org.apache.hyracks.algebricks.core.algebra.expressions.AggregateFunctionCallExpression;
 import org.apache.hyracks.algebricks.core.algebra.expressions.ConstantExpression;
 import org.apache.hyracks.algebricks.core.algebra.expressions.IExpressionAnnotation;
+import org.apache.hyracks.algebricks.core.algebra.expressions.RuntimeContextVariableReferenceExpression;
 import org.apache.hyracks.algebricks.core.algebra.expressions.ScalarFunctionCallExpression;
 import org.apache.hyracks.algebricks.core.algebra.expressions.StatefulFunctionCallExpression;
 import org.apache.hyracks.algebricks.core.algebra.expressions.UnnestingFunctionCallExpression;
@@ -109,6 +110,12 @@ public class LogicalExpressionDeepCopyWithNewVariablesVisitor
     @Override
     public ILogicalExpression visitConstantExpression(ConstantExpression expr, Void arg) throws AlgebricksException {
         return new ConstantExpression(expr.getValue());
+    }
+
+    @Override
+    public ILogicalExpression visitRuntimeContextVariableExpression(RuntimeContextVariableReferenceExpression expr,
+            Void arg) throws AlgebricksException {
+        return new RuntimeContextVariableReferenceExpression(expr.getValue());
     }
 
     @Override

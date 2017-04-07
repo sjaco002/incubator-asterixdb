@@ -36,6 +36,7 @@ import org.apache.asterix.lang.common.expression.OrderedListTypeDefinition;
 import org.apache.asterix.lang.common.expression.QuantifiedExpression;
 import org.apache.asterix.lang.common.expression.RecordConstructor;
 import org.apache.asterix.lang.common.expression.RecordTypeDefinition;
+import org.apache.asterix.lang.common.expression.RuntimeContextVarExpr;
 import org.apache.asterix.lang.common.expression.TypeReferenceExpression;
 import org.apache.asterix.lang.common.expression.UnaryExpr;
 import org.apache.asterix.lang.common.expression.UnorderedListTypeDefinition;
@@ -104,6 +105,8 @@ public interface ILangVisitor<R, T> {
     R visit(UnorderedListTypeDefinition ulte, T arg) throws CompilationException;
 
     R visit(LiteralExpr l, T arg) throws CompilationException;
+
+    R visit(RuntimeContextVarExpr rcv, T arg) throws CompilationException;
 
     R visit(VariableExpr v, T arg) throws CompilationException;
 
