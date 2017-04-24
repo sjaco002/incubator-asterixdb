@@ -59,8 +59,6 @@ public class LSMHarness implements ILSMHarness {
     protected final AtomicBoolean fullMergeIsRequested;
     protected final boolean replicationEnabled;
     protected List<ILSMDiskComponent> componentsToBeReplicated;
-    private long readCount = 0;
-    private long readLogInterval = 50;
 
     public LSMHarness(ILSMIndex lsmIndex, ILSMMergePolicy mergePolicy, ILSMOperationTracker opTracker,
             boolean replicationEnabled) {
@@ -430,21 +428,11 @@ public class LSMHarness implements ILSMHarness {
             throws HyracksDataException, IndexException {
         LSMOperationType opType = LSMOperationType.SEARCH;
         ctx.setSearchPredicate(pred);
-        //ZonedDateTime startTime = ZonedDateTime.now();
+        long start = System.nanoTime();
         getAndEnterComponents(ctx, opType, false);
         try {
             ctx.getSearchOperationCallback().before(pred.getLowKey());
-            readCount++;
-            lsmIndex.search(ctx, cursor, pred);
-            //Duration readTime = Duration.between(startTime, ZonedDateTime.now());
-            if (readCount % readLogInterval == 0) {
-                if (lsmIndex.toString().contains("Tweets1")) {
-                    if (LOGGER.isLoggable(Level.SEVERE)) {
-                        // LOGGER.severe("Merge Policy Experiment Read: " + readCount + " " + new Date() + " ");
-                        // + readTime.toNanos());
-                    }
-                }
-            }
+            lsmIndex.search(ctx, cursor, pred, start);
         } catch (HyracksDataException | IndexException e) {
             exitComponents(ctx, opType, null, true);
             throw e;

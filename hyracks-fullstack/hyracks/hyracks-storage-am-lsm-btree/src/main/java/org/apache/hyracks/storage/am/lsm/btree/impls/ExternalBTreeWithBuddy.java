@@ -52,9 +52,9 @@ import org.apache.hyracks.storage.am.common.api.TreeIndexException;
 import org.apache.hyracks.storage.am.common.impls.NoOpOperationCallback;
 import org.apache.hyracks.storage.am.common.ophelpers.IndexOperation;
 import org.apache.hyracks.storage.am.common.ophelpers.MultiComparator;
+import org.apache.hyracks.storage.am.lsm.common.api.ILSMComponent;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMDiskComponent;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMDiskComponentFactory;
-import org.apache.hyracks.storage.am.lsm.common.api.ILSMComponent;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMHarness;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMIOOperation;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMIOOperationCallback;
@@ -326,7 +326,7 @@ public class ExternalBTreeWithBuddy extends AbstractLSMIndex implements ITreeInd
     }
 
     @Override
-    public void search(ILSMIndexOperationContext ictx, IIndexCursor cursor, ISearchPredicate pred)
+    public void search(ILSMIndexOperationContext ictx, IIndexCursor cursor, ISearchPredicate pred, long start)
             throws HyracksDataException, IndexException {
         ExternalBTreeWithBuddyOpContext ctx = (ExternalBTreeWithBuddyOpContext) ictx;
         List<ILSMComponent> operationalComponents = ictx.getComponentHolder();
@@ -399,7 +399,7 @@ public class ExternalBTreeWithBuddy extends AbstractLSMIndex implements ITreeInd
         ISearchPredicate btreeSearchPred = new RangePredicate(null, null, true, true, null, null);
         ILSMIndexOperationContext opCtx = ((LSMBTreeWithBuddySortedCursor) cursor).getOpCtx();
         opCtx.getComponentHolder().addAll(mergeOp.getMergingComponents());
-        search(opCtx, cursor, btreeSearchPred);
+        search(opCtx, cursor, btreeSearchPred, 0);
 
         LSMBTreeWithBuddyDiskComponent mergedComponent =
                 createDiskComponent(componentFactory, mergeOp.getBTreeMergeTarget(),
@@ -414,7 +414,7 @@ public class ExternalBTreeWithBuddy extends AbstractLSMIndex implements ITreeInd
             // Keep the deleted tuples since the oldest disk component is not
             // included in the merge operation
             LSMBuddyBTreeMergeCursor buddyBtreeCursor = new LSMBuddyBTreeMergeCursor(opCtx);
-            search(opCtx, buddyBtreeCursor, btreeSearchPred);
+            search(opCtx, buddyBtreeCursor, btreeSearchPred, 0);
 
             BTree buddyBtree = mergedComponent.getBuddyBTree();
             IIndexBulkLoader buddyBtreeBulkLoader = buddyBtree.createBulkLoader(1.0f, true, 0L, false);

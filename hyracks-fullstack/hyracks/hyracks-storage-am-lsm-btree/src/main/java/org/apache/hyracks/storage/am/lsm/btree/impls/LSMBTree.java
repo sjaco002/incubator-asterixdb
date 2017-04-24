@@ -94,7 +94,9 @@ public class LSMBTree extends AbstractLSMIndex implements ITreeIndex {
     private long writeCount = 0;
     private long experimentDuplCheckTime = 0;
     private long writeLogInterval = 50000;
+    private long readLogInterval = 5;
     private long totalDiskComponents = 0;
+    private long readCount = 0;
 
     // For creating BTree's used in flush and merge.
     protected final LSMBTreeDiskComponentFactory componentFactory;
@@ -447,17 +449,27 @@ public class LSMBTree extends AbstractLSMIndex implements ITreeIndex {
     }
 
     @Override
-    public void search(ILSMIndexOperationContext ictx, IIndexCursor cursor, ISearchPredicate pred)
+    public void search(ILSMIndexOperationContext ictx, IIndexCursor cursor, ISearchPredicate pred, long start)
             throws HyracksDataException, IndexException {
-        if (toString().contains("Tweets1") && LOGGER.isLoggable(Level.SEVERE)) {
-            LOGGER.severe(
-                    "Merge Policy Experiment Read: on stack size " + diskComponents.size() + " " + new Date() + " ");
-        }
         LSMBTreeOpContext ctx = (LSMBTreeOpContext) ictx;
         List<ILSMComponent> operationalComponents = ctx.getComponentHolder();
         ctx.searchInitialState.reset(pred, operationalComponents);
         cursor.open(ctx.searchInitialState, pred);
+
+        long end = System.nanoTime();
+        long microseconds = (end - start) / 1000;
+        if (toString().contains("Tweets1")) {
+            readCount++;
+            if (readCount % readLogInterval == 0) {
+                if (LOGGER.isLoggable(Level.SEVERE)) {
+                    LOGGER.severe("Merge Policy Experiment Read micro: " + microseconds + " " + new Date());
+                    LOGGER.severe("Merge Policy Experiment Read: on stack size " + diskComponents.size() + " "
+                            + new Date() + " ");
+                }
+            }
+        }
     }
+
 
     @Override
     public void scheduleFlush(ILSMIndexOperationContext ctx, ILSMIOOperationCallback callback)

@@ -29,8 +29,8 @@ import org.apache.hyracks.storage.am.common.api.IIndexCursor;
 import org.apache.hyracks.storage.am.common.api.ISearchPredicate;
 import org.apache.hyracks.storage.am.common.api.IndexException;
 import org.apache.hyracks.storage.am.common.ophelpers.IndexOperation;
-import org.apache.hyracks.storage.am.lsm.common.api.ILSMDiskComponent;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMComponent;
+import org.apache.hyracks.storage.am.lsm.common.api.ILSMDiskComponent;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMIOOperation;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMIOOperationCallback;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMIndex;
@@ -185,7 +185,7 @@ public class ExternalIndexHarness extends LSMHarness {
         LSMOperationType opType = LSMOperationType.SEARCH;
         getAndEnterComponents(ctx, opType, false);
         try {
-            lsmIndex.search(ctx, cursor, pred);
+            lsmIndex.search(ctx, cursor, pred, 0);
         } catch (HyracksDataException | IndexException e) {
             exitComponents(ctx, opType, null, true);
             throw e;

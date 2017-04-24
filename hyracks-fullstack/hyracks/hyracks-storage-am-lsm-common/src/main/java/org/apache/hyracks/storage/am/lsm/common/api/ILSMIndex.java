@@ -64,7 +64,7 @@ public interface ILSMIndex extends IIndex {
 
     void modify(IIndexOperationContext ictx, ITupleReference tuple) throws HyracksDataException, IndexException;
 
-    void search(ILSMIndexOperationContext ictx, IIndexCursor cursor, ISearchPredicate pred)
+    void search(ILSMIndexOperationContext ictx, IIndexCursor cursor, ISearchPredicate pred, long start)
             throws HyracksDataException, IndexException;
 
     void scheduleFlush(ILSMIndexOperationContext ctx, ILSMIOOperationCallback callback) throws HyracksDataException;
