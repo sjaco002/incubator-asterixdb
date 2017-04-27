@@ -43,6 +43,7 @@ import org.apache.asterix.lang.common.expression.LiteralExpr;
 import org.apache.asterix.lang.common.expression.OperatorExpr;
 import org.apache.asterix.lang.common.expression.QuantifiedExpression;
 import org.apache.asterix.lang.common.expression.RecordConstructor;
+import org.apache.asterix.lang.common.expression.RuntimeContextVarExpr;
 import org.apache.asterix.lang.common.expression.UnaryExpr;
 import org.apache.asterix.lang.common.expression.VariableExpr;
 import org.apache.asterix.lang.common.statement.FunctionDecl;
@@ -334,6 +335,11 @@ public class DeepCopyVisitor extends AbstractSqlppQueryExpressionVisitor<ILangEx
     @Override
     public LiteralExpr visit(LiteralExpr l, Void arg) throws CompilationException {
         return l;
+    }
+
+    @Override
+    public ILangExpression visit(RuntimeContextVarExpr rcv, Void arg) throws CompilationException {
+        return rcv;
     }
 
     @Override

@@ -33,6 +33,7 @@ import org.apache.asterix.lang.common.expression.LiteralExpr;
 import org.apache.asterix.lang.common.expression.OperatorExpr;
 import org.apache.asterix.lang.common.expression.QuantifiedExpression;
 import org.apache.asterix.lang.common.expression.RecordConstructor;
+import org.apache.asterix.lang.common.expression.RuntimeContextVarExpr;
 import org.apache.asterix.lang.common.expression.UnaryExpr;
 import org.apache.asterix.lang.common.expression.VariableExpr;
 import org.apache.asterix.lang.common.statement.FunctionDecl;
@@ -52,6 +53,11 @@ public abstract class AbstractAstVisitor<R, T> extends AbstractQueryExpressionVi
 
     @Override
     public R visit(LiteralExpr l, T arg) throws CompilationException {
+        return null;
+    }
+
+    @Override
+    public R visit(RuntimeContextVarExpr rcv, T arg) throws CompilationException {
         return null;
     }
 
