@@ -750,7 +750,15 @@ class LangExpressionToPlanTranslator
             LogicalVariable prev = context.getVar(((VariableExpr) lc.getBindingExpr()).getVar().getId());
             returnedOp = new AssignOperator(v, new MutableObject<>(new VariableReferenceExpression(prev)));
             returnedOp.getInputs().add(tupSource);
-        } else {
+        } else if (lc.getBindingExpr().getKind() == Kind.CONTEXT_VAR_EXPRESSION) {
+            v = context.newVar(lc.getVarExpr());
+            String name = ((RuntimeContextVarExpr) lc.getBindingExpr()).getName();
+            returnedOp = new AssignOperator(v, new MutableObject<>(
+                    new RuntimeContextVariableReferenceExpression(new AsterixConstantValue(new AString(name)))));
+            returnedOp.getInputs().add(tupSource);
+        }
+
+        else {
             v = context.newVar(lc.getVarExpr());
             Pair<ILogicalExpression, Mutable<ILogicalOperator>> eo =
                     langExprToAlgExpression(lc.getBindingExpr(), tupSource);
