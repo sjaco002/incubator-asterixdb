@@ -40,7 +40,7 @@ public class LogicalExpressionPrettyPrintVisitor implements ILogicalExpressionVi
     @Override
     public String visitRuntimeContextVariableExpression(RuntimeContextVariableReferenceExpression expr, Integer indent)
             throws AlgebricksException {
-        return expr.getValue().toString();
+        return "Context Variable: " + expr.getValue().toString();
     }
 
     @Override
