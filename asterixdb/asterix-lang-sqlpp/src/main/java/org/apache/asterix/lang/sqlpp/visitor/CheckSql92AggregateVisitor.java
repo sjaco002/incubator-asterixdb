@@ -39,6 +39,7 @@ import org.apache.asterix.lang.common.expression.LiteralExpr;
 import org.apache.asterix.lang.common.expression.OperatorExpr;
 import org.apache.asterix.lang.common.expression.QuantifiedExpression;
 import org.apache.asterix.lang.common.expression.RecordConstructor;
+import org.apache.asterix.lang.common.expression.RuntimeContextVarExpr;
 import org.apache.asterix.lang.common.expression.UnaryExpr;
 import org.apache.asterix.lang.common.expression.VariableExpr;
 import org.apache.asterix.lang.common.statement.FunctionDecl;
@@ -78,6 +79,11 @@ public class CheckSql92AggregateVisitor extends AbstractSqlppQueryExpressionVisi
 
     @Override
     public Boolean visit(LiteralExpr l, ILangExpression parentSelectBlock) throws CompilationException {
+        return false;
+    }
+
+    @Override
+    public Boolean visit(RuntimeContextVarExpr rcv, ILangExpression parentSelectBlock) throws CompilationException {
         return false;
     }
 

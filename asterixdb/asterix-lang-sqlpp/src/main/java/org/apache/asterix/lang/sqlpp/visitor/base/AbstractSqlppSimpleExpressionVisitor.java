@@ -40,6 +40,7 @@ import org.apache.asterix.lang.common.expression.LiteralExpr;
 import org.apache.asterix.lang.common.expression.OperatorExpr;
 import org.apache.asterix.lang.common.expression.QuantifiedExpression;
 import org.apache.asterix.lang.common.expression.RecordConstructor;
+import org.apache.asterix.lang.common.expression.RuntimeContextVarExpr;
 import org.apache.asterix.lang.common.expression.UnaryExpr;
 import org.apache.asterix.lang.common.expression.VariableExpr;
 import org.apache.asterix.lang.common.statement.FunctionDecl;
@@ -264,6 +265,11 @@ public class AbstractSqlppSimpleExpressionVisitor
     @Override
     public Expression visit(LiteralExpr l, ILangExpression arg) throws CompilationException {
         return l;
+    }
+
+    @Override
+    public Expression visit(RuntimeContextVarExpr rcv, ILangExpression arg) throws CompilationException {
+        return rcv;
     }
 
     @Override
