@@ -23,6 +23,7 @@ import static org.mockito.Matchers.any;
 import static org.mockito.Mockito.verify;
 
 import java.io.File;
+import java.util.HashMap;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -126,7 +127,7 @@ public class PredistributedJobsTest {
         Assert.assertTrue(cc.getPreDistributedJobStore().getDistributedJobDescriptor(jobId2) != null);
 
         //run the first job
-        hcc.startJob(jobId1);
+        hcc.startJob(jobId1, new HashMap<>());
         hcc.waitForCompletion(jobId1);
 
         //destroy the first job
@@ -142,7 +143,7 @@ public class PredistributedJobsTest {
         cc.getPreDistributedJobStore().checkForExistingDistributedJobDescriptor(jobId1);
 
         //run the second job
-        hcc.startJob(jobId2);
+        hcc.startJob(jobId2, new HashMap<>());
         hcc.waitForCompletion(jobId2);
 
         //wait ten seconds to ensure the result sweeper does not break the job
@@ -150,7 +151,7 @@ public class PredistributedJobsTest {
         Thread.sleep(10000);
 
         //run the second job again
-        hcc.startJob(jobId2);
+        hcc.startJob(jobId2, new HashMap<>());
         hcc.waitForCompletion(jobId2);
 
         //destroy the second job

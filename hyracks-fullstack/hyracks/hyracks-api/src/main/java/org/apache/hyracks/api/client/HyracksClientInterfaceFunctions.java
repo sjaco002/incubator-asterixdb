@@ -22,6 +22,7 @@ import java.io.Serializable;
 import java.net.URL;
 import java.util.EnumSet;
 import java.util.List;
+import java.util.Map;
 
 import org.apache.hyracks.api.dataset.DatasetDirectoryRecord;
 import org.apache.hyracks.api.dataset.ResultSetId;
@@ -168,29 +169,36 @@ public class HyracksClientInterfaceFunctions {
         private final EnumSet<JobFlag> jobFlags;
         private final DeploymentId deploymentId;
         private final JobId jobId;
+        private final Map<String, byte[]> contextRuntTimeVarMap;
 
-        public StartJobFunction(DeploymentId deploymentId, byte[] acggfBytes, EnumSet<JobFlag> jobFlags, JobId jobId) {
+        public StartJobFunction(DeploymentId deploymentId, byte[] acggfBytes, EnumSet<JobFlag> jobFlags, JobId jobId,
+                Map<String, byte[]> contextRuntTimeVarMap) {
             this.acggfBytes = acggfBytes;
             this.jobFlags = jobFlags;
             this.deploymentId = deploymentId;
             this.jobId = jobId;
+            this.contextRuntTimeVarMap = contextRuntTimeVarMap;
         }
 
-        public StartJobFunction(JobId jobId) {
-            this(null, null, null, jobId);
+        public StartJobFunction(JobId jobId, Map<String, byte[]> contextRuntTimeVarMap) {
+            this(null, null, null, jobId, contextRuntTimeVarMap);
         }
 
         public StartJobFunction(byte[] acggfBytes, EnumSet<JobFlag> jobFlags) {
-            this(null, acggfBytes, jobFlags, null);
+            this(null, acggfBytes, jobFlags, null, null);
         }
 
         public StartJobFunction(DeploymentId deploymentId, byte[] acggfBytes, EnumSet<JobFlag> jobFlags) {
-            this(deploymentId, acggfBytes, jobFlags, null);
+            this(deploymentId, acggfBytes, jobFlags, null, null);
         }
 
         @Override
         public FunctionId getFunctionId() {
             return FunctionId.START_JOB;
+        }
+
+        public Map<String, byte[]> getContextRuntTimeVarMap() {
+            return contextRuntTimeVarMap;
         }
 
         public JobId getJobId() {

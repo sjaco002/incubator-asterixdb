@@ -19,6 +19,7 @@
 package org.apache.hyracks.control.cc.work;
 
 import java.util.EnumSet;
+import java.util.Map;
 
 import org.apache.hyracks.api.deployment.DeploymentId;
 import org.apache.hyracks.api.job.IActivityClusterGraphGenerator;
@@ -41,9 +42,11 @@ public class JobStartWork extends SynchronizableWork {
     private final JobId jobId;
     private final IResultCallback<JobId> callback;
     private final boolean predestributed;
+    private final Map<String, byte[]> contextRuntimeVarMap;
 
     public JobStartWork(ClusterControllerService ccs, DeploymentId deploymentId, byte[] acggfBytes,
-            EnumSet<JobFlag> jobFlags, JobId jobId, IResultCallback<JobId> callback, boolean predestributed) {
+            EnumSet<JobFlag> jobFlags, JobId jobId, Map<String, byte[]> contextRuntimeVarMap,
+            IResultCallback<JobId> callback, boolean predestributed) {
         this.deploymentId = deploymentId;
         this.jobId = jobId;
         this.ccs = ccs;
@@ -51,6 +54,7 @@ public class JobStartWork extends SynchronizableWork {
         this.jobFlags = jobFlags;
         this.callback = callback;
         this.predestributed = predestributed;
+        this.contextRuntimeVarMap = contextRuntimeVarMap;
     }
 
     @Override
@@ -69,7 +73,7 @@ public class JobStartWork extends SynchronizableWork {
             } else {
                 //ActivityClusterGraph has already been distributed
                 run = new JobRun(ccs, deploymentId, jobId,
-                        ccs.getPreDistributedJobStore().getDistributedJobDescriptor(jobId));
+                        ccs.getPreDistributedJobStore().getDistributedJobDescriptor(jobId), contextRuntimeVarMap);
             }
             jobManager.add(run);
             callback.setValue(jobId);

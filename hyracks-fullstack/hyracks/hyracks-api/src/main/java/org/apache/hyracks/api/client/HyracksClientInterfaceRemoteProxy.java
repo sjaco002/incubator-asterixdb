@@ -76,9 +76,9 @@ public class HyracksClientInterfaceRemoteProxy implements IHyracksClientInterfac
     }
 
     @Override
-    public JobId startJob(JobId jobId) throws Exception {
+    public JobId startJob(JobId jobId, Map<String, byte[]> contextRuntTimeVarMap) throws Exception {
         HyracksClientInterfaceFunctions.StartJobFunction sjf =
-                new HyracksClientInterfaceFunctions.StartJobFunction(jobId);
+                new HyracksClientInterfaceFunctions.StartJobFunction(jobId, contextRuntTimeVarMap);
         return (JobId) rpci.call(ipcHandle, sjf);
     }
 

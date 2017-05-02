@@ -20,6 +20,7 @@ package org.apache.hyracks.api.client;
 
 import java.util.EnumSet;
 import java.util.List;
+import java.util.Map;
 
 import org.apache.hyracks.api.comm.NetworkAddress;
 import org.apache.hyracks.api.deployment.DeploymentId;
@@ -110,9 +111,11 @@ public interface IHyracksClientConnection extends IClusterInfoCollector {
      *
      * @param jobId
      *            The id of the predistributed job
+     * @param contextRuntTimeVarMap
+     *            The serialized runtime context variables
      * @throws Exception
      */
-    public JobId startJob(JobId jobId) throws Exception;
+    public JobId startJob(JobId jobId, Map<String, byte[]> contextRuntTimeVarMap) throws Exception;
 
     /**
      * Start the specified Job.

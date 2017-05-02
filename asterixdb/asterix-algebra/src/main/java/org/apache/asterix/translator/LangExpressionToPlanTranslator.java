@@ -753,8 +753,8 @@ class LangExpressionToPlanTranslator
         } else if (lc.getBindingExpr().getKind() == Kind.CONTEXT_VAR_EXPRESSION) {
             v = context.newVar(lc.getVarExpr());
             String name = ((RuntimeContextVarExpr) lc.getBindingExpr()).getName();
-            returnedOp = new AssignOperator(v, new MutableObject<>(
-                    new RuntimeContextVariableReferenceExpression(new AsterixConstantValue(new AString(name)))));
+            returnedOp =
+                    new AssignOperator(v, new MutableObject<>(new RuntimeContextVariableReferenceExpression(name)));
             returnedOp.getInputs().add(tupSource);
         }
 
@@ -1051,8 +1051,8 @@ class LangExpressionToPlanTranslator
     public Pair<ILogicalOperator, LogicalVariable> visit(RuntimeContextVarExpr rcv, Mutable<ILogicalOperator> tupSource)
             throws CompilationException {
         LogicalVariable var = context.newVar();
-        AssignOperator a = new AssignOperator(var, new MutableObject<>(
-                new RuntimeContextVariableReferenceExpression(new AsterixConstantValue(new AString(rcv.getName())))));
+        AssignOperator a = new AssignOperator(var,
+                new MutableObject<>(new RuntimeContextVariableReferenceExpression(rcv.getName())));
         if (tupSource != null) {
             a.getInputs().add(tupSource);
         }

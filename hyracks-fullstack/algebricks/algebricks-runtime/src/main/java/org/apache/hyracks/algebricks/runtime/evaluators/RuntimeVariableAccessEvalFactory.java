@@ -29,15 +29,15 @@ public class RuntimeVariableAccessEvalFactory implements IScalarEvaluatorFactory
 
     private static final long serialVersionUID = 1L;
 
-    private final IAlgebricksConstantValue name;
+    private final String name;
 
-    public RuntimeVariableAccessEvalFactory(IAlgebricksConstantValue name) {
+    public RuntimeVariableAccessEvalFactory(String name) {
         this.name = name;
     }
 
     @Override
     public String toString() {
-        return "ContextVarAccess(" + fieldIndex + ")";
+        return "ContextVarAccess(" + name + ")";
     }
 
     @Override
@@ -46,10 +46,8 @@ public class RuntimeVariableAccessEvalFactory implements IScalarEvaluatorFactory
 
             @Override
             public void evaluate(IFrameTupleReference tuple, IPointable result) throws HyracksDataException {
-                byte[] buffer = tuple.getFieldData(fieldIndex);
-                int start = tuple.getFieldStart(fieldIndex);
-                int length = tuple.getFieldLength(fieldIndex);
-                result.set(buffer, start, length);
+                byte[] buffer = ctx.getRuntimeContextVariable(name);
+                result.set(buffer, 0, buffer.length - 1);
             }
         };
     }

@@ -35,7 +35,6 @@ import org.apache.hyracks.api.io.FileReference;
 import org.apache.hyracks.api.io.IIOManager;
 import org.apache.hyracks.api.job.profiling.counters.ICounterContext;
 import org.apache.hyracks.api.resources.IDeallocatable;
-import org.apache.hyracks.control.nc.io.IOManager;
 import org.apache.hyracks.control.nc.io.WorkspaceFileFactory;
 
 public class TestTaskContext implements IHyracksTaskContext {
@@ -155,5 +154,10 @@ public class TestTaskContext implements IHyracksTaskContext {
     @Override
     public Object getSharedObject() {
         return sharedObject;
+    }
+
+    @Override
+    public byte[] getRuntimeContextVariable(String name) {
+        return null;
     }
 }

@@ -29,18 +29,18 @@ import org.apache.hyracks.algebricks.core.algebra.base.LogicalVariable;
 import org.apache.hyracks.algebricks.core.algebra.visitors.ILogicalExpressionVisitor;
 
 public class RuntimeContextVariableReferenceExpression extends AbstractLogicalExpression {
-    private IAlgebricksConstantValue value;
+    private String name;
 
-    public RuntimeContextVariableReferenceExpression(IAlgebricksConstantValue value) {
-        this.value = value;
+    public RuntimeContextVariableReferenceExpression(String name) {
+        this.name = name;
     }
 
-    public IAlgebricksConstantValue getValue() {
-        return value;
+    public String getValue() {
+        return name;
     }
 
-    public void setValue(IAlgebricksConstantValue value) {
-        this.value = value;
+    public void setValue(String name) {
+        this.name = name;
     }
 
     @Override
@@ -50,7 +50,7 @@ public class RuntimeContextVariableReferenceExpression extends AbstractLogicalEx
 
     @Override
     public String toString() {
-        return "Runtime Context Variable {" + value.toString() + "}";
+        return "Runtime Context Variable {" + name + "}";
     }
 
     @Override
@@ -68,13 +68,13 @@ public class RuntimeContextVariableReferenceExpression extends AbstractLogicalEx
         if (!(obj instanceof RuntimeContextVariableReferenceExpression)) {
             return false;
         } else {
-            return value.equals(((RuntimeContextVariableReferenceExpression) obj).getValue());
+            return name.equals(((RuntimeContextVariableReferenceExpression) obj).getValue());
         }
     }
 
     @Override
     public int hashCode() {
-        return value.hashCode();
+        return name.hashCode();
     }
 
     @Override
@@ -84,7 +84,7 @@ public class RuntimeContextVariableReferenceExpression extends AbstractLogicalEx
 
     @Override
     public AbstractLogicalExpression cloneExpression() {
-        RuntimeContextVariableReferenceExpression c = new RuntimeContextVariableReferenceExpression(value);
+        RuntimeContextVariableReferenceExpression c = new RuntimeContextVariableReferenceExpression(name);
         return c;
     }
 
