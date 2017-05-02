@@ -155,4 +155,9 @@ public class TestTaskContext implements IHyracksTaskContext {
     public Object getSharedObject() {
         return sharedObject;
     }
+
+    @Override
+    public byte[] getRuntimeContextVariable(String name) {
+        return null;
+    }
 }

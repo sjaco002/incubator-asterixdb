@@ -116,7 +116,7 @@ class ClientInterfaceIPCI implements IIPCI {
                     predistributed = true;
                 }
                 ccs.getWorkQueue().schedule(new JobStartWork(ccs, sjf.getDeploymentId(), acggfBytes, sjf.getJobFlags(),
-                        jobId, new IPCResponder<JobId>(handle, mid), predistributed));
+                        jobId, sjf.getContextRuntTimeVarMap(), new IPCResponder<JobId>(handle, mid), predistributed));
                 break;
             case GET_DATASET_DIRECTORY_SERIVICE_INFO:
                 ccs.getWorkQueue().schedule(new GetDatasetDirectoryServiceInfoWork(ccs,

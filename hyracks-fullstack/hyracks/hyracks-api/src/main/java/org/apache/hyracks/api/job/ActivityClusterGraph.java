@@ -24,13 +24,14 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ArrayNode;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.apache.hyracks.api.dataflow.ActivityId;
 import org.apache.hyracks.api.dataflow.ConnectorDescriptorId;
 import org.apache.hyracks.api.dataflow.IConnectorDescriptor;
 import org.apache.hyracks.api.dataflow.connectors.IConnectorPolicyAssignmentPolicy;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 
 public class ActivityClusterGraph implements Serializable {
     private static final long serialVersionUID = 1L;
@@ -42,6 +43,8 @@ public class ActivityClusterGraph implements Serializable {
     private final Map<ActivityId, ActivityCluster> activityMap;
 
     private final Map<ConnectorDescriptorId, ActivityCluster> connectorMap;
+
+    private final Map<String, byte[]> runtimeContextVarMap;
 
     private int frameSize;
 
@@ -62,6 +65,7 @@ public class ActivityClusterGraph implements Serializable {
         activityClusterMap = new HashMap<ActivityClusterId, ActivityCluster>();
         activityMap = new HashMap<ActivityId, ActivityCluster>();
         connectorMap = new HashMap<ConnectorDescriptorId, ActivityCluster>();
+        runtimeContextVarMap = new HashMap<String, byte[]>();
         frameSize = 32768;
         reportTaskDetails = true;
     }
@@ -72,6 +76,10 @@ public class ActivityClusterGraph implements Serializable {
 
     public Map<ConnectorDescriptorId, ActivityCluster> getConnectorMap() {
         return connectorMap;
+    }
+
+    public Map<String, byte[]> getRuntimeContextVarMap() {
+        return runtimeContextVarMap;
     }
 
     public Map<ActivityClusterId, ActivityCluster> getActivityClusterMap() {

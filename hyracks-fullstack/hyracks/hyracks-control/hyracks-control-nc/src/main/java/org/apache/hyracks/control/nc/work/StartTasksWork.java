@@ -24,6 +24,7 @@ import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Set;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -86,9 +87,12 @@ public class StartTasksWork extends AbstractWork {
 
     private final Set<JobFlag> flags;
 
+    private final Map<String, byte[]> contextRuntimeVarMap;
+
     public StartTasksWork(NodeControllerService ncs, DeploymentId deploymentId, JobId jobId, byte[] acgBytes,
             List<TaskAttemptDescriptor> taskDescriptors,
-            Map<ConnectorDescriptorId, IConnectorPolicy> connectorPoliciesMap, Set<JobFlag> flags) {
+            Map<ConnectorDescriptorId, IConnectorPolicy> connectorPoliciesMap, Set<JobFlag> flags,
+            Map<String, byte[]> contextRuntimeVarMap) {
         this.ncs = ncs;
         this.deploymentId = deploymentId;
         this.jobId = jobId;
@@ -96,6 +100,7 @@ public class StartTasksWork extends AbstractWork {
         this.taskDescriptors = taskDescriptors;
         this.connectorPoliciesMap = connectorPoliciesMap;
         this.flags = flags;
+        this.contextRuntimeVarMap = contextRuntimeVarMap;
     }
 
     @Override
@@ -193,6 +198,9 @@ public class StartTasksWork extends AbstractWork {
                     throw HyracksException.create(ErrorCode.ERROR_FINDING_DISTRIBUTED_JOB, jobId);
                 }
                 acg = (ActivityClusterGraph) DeploymentUtils.deserialize(acgBytes, deploymentId, appCtx);
+            }
+            for (Entry<String, byte[]> entry : contextRuntimeVarMap.entrySet()) {
+                acg.getRuntimeContextVarMap().put(entry.getKey(), entry.getValue());
             }
             ji = new Joblet(ncs, deploymentId, jobId, appCtx, acg);
             jobletMap.put(jobId, ji);

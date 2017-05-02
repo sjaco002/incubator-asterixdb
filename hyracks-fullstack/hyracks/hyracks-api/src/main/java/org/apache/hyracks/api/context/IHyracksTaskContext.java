@@ -48,4 +48,6 @@ public interface IHyracksTaskContext
     void setSharedObject(Object object);
 
     Object getSharedObject();
+
+    public byte[] getRuntimeContextVariable(String name);
 }

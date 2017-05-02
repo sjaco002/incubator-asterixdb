@@ -120,8 +120,8 @@ public final class HyracksConnection implements IHyracksClientConnection {
     }
 
     @Override
-    public JobId startJob(JobId jobId) throws Exception {
-        return hci.startJob(jobId);
+    public JobId startJob(JobId jobId, Map<String, byte[]> contextRuntTimeVarMap) throws Exception {
+        return hci.startJob(jobId, contextRuntTimeVarMap);
     }
 
     public JobId startJob(IActivityClusterGraphGeneratorFactory acggf, EnumSet<JobFlag> jobFlags) throws Exception {

@@ -1043,8 +1043,8 @@ class LangExpressionToPlanTranslator
     public Pair<ILogicalOperator, LogicalVariable> visit(RuntimeContextVarExpr rcv, Mutable<ILogicalOperator> tupSource)
             throws CompilationException {
         LogicalVariable var = context.newVar();
-        AssignOperator a = new AssignOperator(var, new MutableObject<>(
-                new RuntimeContextVariableReferenceExpression(new AsterixConstantValue(new AString(rcv.getName())))));
+        AssignOperator a = new AssignOperator(var,
+                new MutableObject<>(new RuntimeContextVariableReferenceExpression(rcv.getName())));
         if (tupSource != null) {
             a.getInputs().add(tupSource);
         }
