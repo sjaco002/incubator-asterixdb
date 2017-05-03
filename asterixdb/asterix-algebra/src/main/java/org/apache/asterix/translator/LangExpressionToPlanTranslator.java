@@ -1500,7 +1500,8 @@ class LangExpressionToPlanTranslator
     protected boolean expressionNeedsNoNesting(Expression expr) {
         Kind k = expr.getKind();
         boolean noNesting = k == Kind.LITERAL_EXPRESSION || k == Kind.LIST_CONSTRUCTOR_EXPRESSION
-                || k == Kind.RECORD_CONSTRUCTOR_EXPRESSION || k == Kind.VARIABLE_EXPRESSION;
+                || k == Kind.RECORD_CONSTRUCTOR_EXPRESSION || k == Kind.VARIABLE_EXPRESSION
+                || k == Kind.CONTEXT_VAR_EXPRESSION;
         noNesting = noNesting || k == Kind.CALL_EXPRESSION || k == Kind.OP_EXPRESSION
                 || k == Kind.FIELD_ACCESSOR_EXPRESSION;
         noNesting = noNesting || k == Kind.INDEX_ACCESSOR_EXPRESSION || k == Kind.UNARY_EXPRESSION
