@@ -844,7 +844,7 @@ public class CCNCFunctions {
             for (int i = 0; i < flagSize; i++) {
                 flags.add(JobFlag.values()[(dis.readInt())]);
             }
-            
+
             // read runTimeVars
             int runTimeVarsSize = dis.readInt();
             Map<String, byte[]> contextRuntTimeVarMap = new HashMap<>();
@@ -858,9 +858,9 @@ public class CCNCFunctions {
                 }
                 contextRuntTimeVarMap.put(key, bytes);
             }
-            
 
-            return new StartTasksFunction(deploymentId, jobId, planBytes, taskDescriptors, connectorPolicies, flags, contextRuntTimeVarMap);
+            return new StartTasksFunction(deploymentId, jobId, planBytes, taskDescriptors, connectorPolicies, flags,
+                    contextRuntTimeVarMap);
         }
 
         public static void serialize(OutputStream out, Object object) throws Exception {
