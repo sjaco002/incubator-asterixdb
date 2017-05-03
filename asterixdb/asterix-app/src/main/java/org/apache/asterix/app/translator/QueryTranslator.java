@@ -759,7 +759,7 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
 
     }
 
-    protected void handleCreateIndexStatement(MetadataProvider metadataProvider, Statement stmt,
+    public void handleCreateIndexStatement(MetadataProvider metadataProvider, Statement stmt,
             IHyracksClientConnection hcc) throws Exception {
         ProgressState progress = ProgressState.NO_PROGRESS;
         CreateIndexStatement stmtCreateIndex = (CreateIndexStatement) stmt;
