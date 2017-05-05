@@ -42,6 +42,24 @@ public class GetRuntimeContextVariableDescriptor extends AbstractScalarFunctionD
             return new GetRuntimeContextVariableDescriptor();
         }
     };
+    /*
+    @Override
+    public IScalarEvaluatorFactory createEvaluatorFactory(IScalarEvaluatorFactory[] args) {
+        return new IScalarEvaluatorFactory() {
+            private static final long serialVersionUID = 1L;
+    
+            @Override
+            public IScalarEvaluator createScalarEvaluator(IHyracksTaskContext ctx) throws HyracksDataException {
+                return new AbstractUnaryStringStringEval(ctx, args[0], StringInitCapDescriptor.this.getIdentifier()) {
+                    @Override
+                    protected void process(UTF8StringPointable inputString, IPointable resultPointable)
+                            throws IOException {
+                        inputString.initCap(resultBuilder, resultArray);
+                    }
+                };
+            }
+        };
+    }*/
 
     @Override
     public IScalarEvaluatorFactory createEvaluatorFactory(final IScalarEvaluatorFactory[] args) {
