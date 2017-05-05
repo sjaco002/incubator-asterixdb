@@ -157,7 +157,7 @@ public class TestTaskContext implements IHyracksTaskContext {
     }
 
     @Override
-    public byte[] getRuntimeContextVariable(String name) {
+    public byte[] getRuntimeContextVariable(byte[] name) {
         return null;
     }
 }

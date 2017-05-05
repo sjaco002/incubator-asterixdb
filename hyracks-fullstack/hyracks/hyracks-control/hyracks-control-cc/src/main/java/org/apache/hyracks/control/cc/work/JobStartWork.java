@@ -42,10 +42,10 @@ public class JobStartWork extends SynchronizableWork {
     private final JobId jobId;
     private final IResultCallback<JobId> callback;
     private final boolean predestributed;
-    private final Map<String, byte[]> contextRuntimeVarMap;
+    private final Map<byte[], byte[]> contextRuntimeVarMap;
 
     public JobStartWork(ClusterControllerService ccs, DeploymentId deploymentId, byte[] acggfBytes,
-            EnumSet<JobFlag> jobFlags, JobId jobId, Map<String, byte[]> contextRuntimeVarMap,
+            EnumSet<JobFlag> jobFlags, JobId jobId, Map<byte[], byte[]> contextRuntimeVarMap,
             IResultCallback<JobId> callback, boolean predestributed) {
         this.deploymentId = deploymentId;
         this.jobId = jobId;

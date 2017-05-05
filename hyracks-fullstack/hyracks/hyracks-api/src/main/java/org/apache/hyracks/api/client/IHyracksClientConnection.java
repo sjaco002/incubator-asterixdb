@@ -115,7 +115,7 @@ public interface IHyracksClientConnection extends IClusterInfoCollector {
      *            The serialized runtime context variables
      * @throws Exception
      */
-    public JobId startJob(JobId jobId, Map<String, byte[]> contextRuntTimeVarMap) throws Exception;
+    public JobId startJob(JobId jobId, Map<byte[], byte[]> contextRuntTimeVarMap) throws Exception;
 
     /**
      * Start the specified Job.
