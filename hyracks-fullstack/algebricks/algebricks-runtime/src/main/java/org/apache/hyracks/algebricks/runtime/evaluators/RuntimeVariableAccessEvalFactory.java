@@ -23,6 +23,7 @@ import org.apache.hyracks.algebricks.runtime.base.IScalarEvaluatorFactory;
 import org.apache.hyracks.api.context.IHyracksTaskContext;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.apache.hyracks.data.std.api.IPointable;
+import org.apache.hyracks.data.std.util.ArrayBackedValueStorage;
 import org.apache.hyracks.dataflow.common.data.accessors.IFrameTupleReference;
 
 public class RuntimeVariableAccessEvalFactory implements IScalarEvaluatorFactory {
@@ -46,7 +47,10 @@ public class RuntimeVariableAccessEvalFactory implements IScalarEvaluatorFactory
 
             @Override
             public void evaluate(IFrameTupleReference tuple, IPointable result) throws HyracksDataException {
-                byte[] buffer = ctx.getRuntimeContextVariable(name);
+
+                ArrayBackedValueStorage abvs2 = new ArrayBackedValueStorage();
+
+                byte[] buffer = abvs2.getByteArray();
                 result.set(buffer, 0, buffer.length - 1);
             }
         };

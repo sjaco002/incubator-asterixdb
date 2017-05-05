@@ -753,12 +753,12 @@ public class CCNCFunctions {
         private final List<TaskAttemptDescriptor> taskDescriptors;
         private final Map<ConnectorDescriptorId, IConnectorPolicy> connectorPolicies;
         private final Set<JobFlag> flags;
-        private final Map<String, byte[]> contextRuntTimeVarMap;
+        private final Map<byte[], byte[]> contextRuntTimeVarMap;
 
         public StartTasksFunction(DeploymentId deploymentId, JobId jobId, byte[] planBytes,
                 List<TaskAttemptDescriptor> taskDescriptors,
                 Map<ConnectorDescriptorId, IConnectorPolicy> connectorPolicies, Set<JobFlag> flags,
-                Map<String, byte[]> contextRuntTimeVarMap) {
+                Map<byte[], byte[]> contextRuntTimeVarMap) {
             this.deploymentId = deploymentId;
             this.jobId = jobId;
             this.planBytes = planBytes;
@@ -781,7 +781,7 @@ public class CCNCFunctions {
             return jobId;
         }
 
-        public Map<String, byte[]> getContextRuntTimeVarMap() {
+        public Map<byte[], byte[]> getContextRuntTimeVarMap() {
             return contextRuntTimeVarMap;
         }
 
@@ -847,16 +847,21 @@ public class CCNCFunctions {
 
             // read runTimeVars
             int runTimeVarsSize = dis.readInt();
-            Map<String, byte[]> contextRuntTimeVarMap = new HashMap<>();
+            Map<byte[], byte[]> contextRuntTimeVarMap = new HashMap<>();
             for (int i = 0; i < runTimeVarsSize; i++) {
-                String key = dis.readUTF();
-                int l = dis.readInt();
-                byte[] bytes = null;
-                if (l >= 0) {
-                    bytes = new byte[l];
-                    dis.read(bytes, 0, l);
+                int nameLength = dis.readInt();
+                byte[] nameBytes = null;
+                if (nameLength >= 0) {
+                    nameBytes = new byte[nameLength];
+                    dis.read(nameBytes, 0, nameLength);
                 }
-                contextRuntTimeVarMap.put(key, bytes);
+                int valueLength = dis.readInt();
+                byte[] valueBytes = null;
+                if (valueLength >= 0) {
+                    valueBytes = new byte[valueLength];
+                    dis.read(valueBytes, 0, valueLength);
+                }
+                contextRuntTimeVarMap.put(nameBytes, valueBytes);
             }
 
             return new StartTasksFunction(deploymentId, jobId, planBytes, taskDescriptors, connectorPolicies, flags,
@@ -901,8 +906,9 @@ public class CCNCFunctions {
 
             //write runtime context variables
             dos.writeInt(fn.contextRuntTimeVarMap.size());
-            for (Entry<String, byte[]> entry : fn.contextRuntTimeVarMap.entrySet()) {
-                dos.writeUTF(entry.getKey());
+            for (Entry<byte[], byte[]> entry : fn.contextRuntTimeVarMap.entrySet()) {
+                dos.writeInt(entry.getKey().length);
+                dos.write(entry.getKey(), 0, entry.getKey().length);
                 dos.writeInt(entry.getValue().length);
                 dos.write(entry.getValue(), 0, entry.getValue().length);
             }

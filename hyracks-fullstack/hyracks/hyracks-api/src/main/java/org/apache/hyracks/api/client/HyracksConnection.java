@@ -120,7 +120,7 @@ public final class HyracksConnection implements IHyracksClientConnection {
     }
 
     @Override
-    public JobId startJob(JobId jobId, Map<String, byte[]> contextRuntTimeVarMap) throws Exception {
+    public JobId startJob(JobId jobId, Map<byte[], byte[]> contextRuntTimeVarMap) throws Exception {
         return hci.startJob(jobId, contextRuntTimeVarMap);
     }
 

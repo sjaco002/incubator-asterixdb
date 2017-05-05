@@ -118,11 +118,11 @@ public class JobRun implements IJobStatusConditionVariable {
 
     //Run a Pre-distributed job by passing the JobId
     public JobRun(ClusterControllerService ccs, DeploymentId deploymentId, JobId jobId,
-            PreDistributedJobDescriptor distributedJobDescriptor, Map<String, byte[]> contextRuntimeVarMap)
+            PreDistributedJobDescriptor distributedJobDescriptor, Map<byte[], byte[]> contextRuntimeVarMap)
             throws HyracksException {
         this(deploymentId, jobId, EnumSet.noneOf(JobFlag.class),
                 distributedJobDescriptor.getJobSpecification(), distributedJobDescriptor.getActivityClusterGraph());
-        for (Entry<String, byte[]> entry : contextRuntimeVarMap.entrySet()) {
+        for (Entry<byte[], byte[]> entry : contextRuntimeVarMap.entrySet()) {
             acg.getRuntimeContextVarMap().put(entry.getKey(), entry.getValue());
         }
         Set<Constraint> constaints = distributedJobDescriptor.getActivityClusterGraphConstraints();
