@@ -31,7 +31,6 @@ import org.apache.hyracks.algebricks.core.algebra.base.LogicalOperatorTag;
 import org.apache.hyracks.algebricks.core.algebra.base.LogicalVariable;
 import org.apache.hyracks.algebricks.core.algebra.expressions.AbstractFunctionCallExpression;
 import org.apache.hyracks.algebricks.core.algebra.expressions.ConstantExpression;
-import org.apache.hyracks.algebricks.core.algebra.expressions.RuntimeContextVariableReferenceExpression;
 import org.apache.hyracks.algebricks.core.algebra.expressions.VariableReferenceExpression;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.AbstractLogicalOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.AggregateOperator;
@@ -105,12 +104,6 @@ public class InlineAssignIntoAggregateRule implements IAlgebraicRewriteRule {
 
         @Override
         public Pair<Boolean, ILogicalExpression> visitConstantExpression(ConstantExpression expr, Void arg) {
-            return new Pair<Boolean, ILogicalExpression>(false, expr);
-        }
-
-        @Override
-        public Pair<Boolean, ILogicalExpression> visitRuntimeContextVariableExpression(
-                RuntimeContextVariableReferenceExpression expr, Void arg) {
             return new Pair<Boolean, ILogicalExpression>(false, expr);
         }
 

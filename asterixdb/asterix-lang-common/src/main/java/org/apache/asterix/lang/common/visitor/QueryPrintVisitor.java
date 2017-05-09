@@ -47,7 +47,6 @@ import org.apache.asterix.lang.common.expression.QuantifiedExpression;
 import org.apache.asterix.lang.common.expression.RecordConstructor;
 import org.apache.asterix.lang.common.expression.RecordTypeDefinition;
 import org.apache.asterix.lang.common.expression.RecordTypeDefinition.RecordKind;
-import org.apache.asterix.lang.common.expression.RuntimeContextVarExpr;
 import org.apache.asterix.lang.common.expression.TypeExpression;
 import org.apache.asterix.lang.common.expression.TypeReferenceExpression;
 import org.apache.asterix.lang.common.expression.UnaryExpr;
@@ -106,12 +105,6 @@ public class QueryPrintVisitor extends AbstractQueryExpressionVisitor<Void, Inte
             out.println(skip(step) + "LiteralExpr [" + l.getValue().getLiteralType() + "] ["
                     + l.getValue().getStringValue() + "]");
         }
-        return null;
-    }
-
-    @Override
-    public Void visit(RuntimeContextVarExpr rcv, Integer step) throws CompilationException {
-        out.println(skip(step) + "RuntimeContextVarExpr [" + rcv.getName() + "]");
         return null;
     }
 

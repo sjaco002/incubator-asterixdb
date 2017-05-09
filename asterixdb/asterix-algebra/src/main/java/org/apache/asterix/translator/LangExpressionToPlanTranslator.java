@@ -62,7 +62,6 @@ import org.apache.asterix.lang.common.expression.OperatorExpr;
 import org.apache.asterix.lang.common.expression.QuantifiedExpression;
 import org.apache.asterix.lang.common.expression.QuantifiedExpression.Quantifier;
 import org.apache.asterix.lang.common.expression.RecordConstructor;
-import org.apache.asterix.lang.common.expression.RuntimeContextVarExpr;
 import org.apache.asterix.lang.common.expression.UnaryExpr;
 import org.apache.asterix.lang.common.expression.VariableExpr;
 import org.apache.asterix.lang.common.literal.StringLiteral;
@@ -124,7 +123,6 @@ import org.apache.hyracks.algebricks.core.algebra.expressions.BroadcastExpressio
 import org.apache.hyracks.algebricks.core.algebra.expressions.BroadcastExpressionAnnotation.BroadcastSide;
 import org.apache.hyracks.algebricks.core.algebra.expressions.ConstantExpression;
 import org.apache.hyracks.algebricks.core.algebra.expressions.IExpressionAnnotation;
-import org.apache.hyracks.algebricks.core.algebra.expressions.RuntimeContextVariableReferenceExpression;
 import org.apache.hyracks.algebricks.core.algebra.expressions.ScalarFunctionCallExpression;
 import org.apache.hyracks.algebricks.core.algebra.expressions.UnnestingFunctionCallExpression;
 import org.apache.hyracks.algebricks.core.algebra.expressions.VariableReferenceExpression;
@@ -1040,18 +1038,6 @@ class LangExpressionToPlanTranslator
     }
 
     @Override
-    public Pair<ILogicalOperator, LogicalVariable> visit(RuntimeContextVarExpr rcv, Mutable<ILogicalOperator> tupSource)
-            throws CompilationException {
-        LogicalVariable var = context.newVar();
-        AssignOperator a = new AssignOperator(var,
-                new MutableObject<>(new RuntimeContextVariableReferenceExpression(rcv.getName())));
-        if (tupSource != null) {
-            a.getInputs().add(tupSource);
-        }
-        return new Pair<>(a, var);
-    }
-
-    @Override
     public Pair<ILogicalOperator, LogicalVariable> visit(OperatorExpr op, Mutable<ILogicalOperator> tupSource)
             throws CompilationException {
         List<OperatorType> ops = op.getOpList();
@@ -1492,8 +1478,7 @@ class LangExpressionToPlanTranslator
     protected boolean expressionNeedsNoNesting(Expression expr) {
         Kind k = expr.getKind();
         boolean noNesting = k == Kind.LITERAL_EXPRESSION || k == Kind.LIST_CONSTRUCTOR_EXPRESSION
-                || k == Kind.RECORD_CONSTRUCTOR_EXPRESSION || k == Kind.VARIABLE_EXPRESSION
-                || k == Kind.CONTEXT_VAR_EXPRESSION;
+                || k == Kind.RECORD_CONSTRUCTOR_EXPRESSION || k == Kind.VARIABLE_EXPRESSION;
         noNesting = noNesting || k == Kind.CALL_EXPRESSION || k == Kind.OP_EXPRESSION
                 || k == Kind.FIELD_ACCESSOR_EXPRESSION;
         noNesting = noNesting || k == Kind.INDEX_ACCESSOR_EXPRESSION || k == Kind.UNARY_EXPRESSION

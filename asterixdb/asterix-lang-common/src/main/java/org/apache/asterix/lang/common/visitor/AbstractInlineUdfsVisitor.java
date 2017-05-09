@@ -45,7 +45,6 @@ import org.apache.asterix.lang.common.expression.LiteralExpr;
 import org.apache.asterix.lang.common.expression.OperatorExpr;
 import org.apache.asterix.lang.common.expression.QuantifiedExpression;
 import org.apache.asterix.lang.common.expression.RecordConstructor;
-import org.apache.asterix.lang.common.expression.RuntimeContextVarExpr;
 import org.apache.asterix.lang.common.expression.UnaryExpr;
 import org.apache.asterix.lang.common.expression.VariableExpr;
 import org.apache.asterix.lang.common.rewrites.LangRewritingContext;
@@ -244,11 +243,6 @@ public abstract class AbstractInlineUdfsVisitor extends AbstractQueryExpressionV
 
     @Override
     public Boolean visit(LiteralExpr l, List<FunctionDecl> arg) throws CompilationException {
-        return false;
-    }
-
-    @Override
-    public Boolean visit(RuntimeContextVarExpr rcv, List<FunctionDecl> arg) throws CompilationException {
         return false;
     }
 

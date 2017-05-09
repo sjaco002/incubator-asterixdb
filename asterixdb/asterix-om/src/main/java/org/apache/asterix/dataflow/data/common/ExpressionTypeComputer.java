@@ -58,8 +58,6 @@ public class ExpressionTypeComputer implements IExpressionTypeComputer {
                     throw new AlgebricksException("Could not resolve type for " + expr.toString() + ","
                             + "please check whether the used variable has been defined!", e);
                 }
-            case RUNTIME_CONTEXT_VAR:
-                return BuiltinType.ANY;
             default:
                 throw new IllegalStateException();
         }

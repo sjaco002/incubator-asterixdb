@@ -167,8 +167,7 @@ public class LoadRecordFieldsRule implements IAlgebraicRewriteRule {
                 }
             }
             case CONSTANT:
-            case VARIABLE:
-            case RUNTIME_CONTEXT_VAR: {
+            case VARIABLE: {
                 return false;
             }
             default: {

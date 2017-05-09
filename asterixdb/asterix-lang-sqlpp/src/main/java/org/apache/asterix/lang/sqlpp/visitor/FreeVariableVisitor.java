@@ -41,7 +41,6 @@ import org.apache.asterix.lang.common.expression.LiteralExpr;
 import org.apache.asterix.lang.common.expression.OperatorExpr;
 import org.apache.asterix.lang.common.expression.QuantifiedExpression;
 import org.apache.asterix.lang.common.expression.RecordConstructor;
-import org.apache.asterix.lang.common.expression.RuntimeContextVarExpr;
 import org.apache.asterix.lang.common.expression.UnaryExpr;
 import org.apache.asterix.lang.common.expression.VariableExpr;
 import org.apache.asterix.lang.common.statement.FunctionDecl;
@@ -338,11 +337,6 @@ public class FreeVariableVisitor extends AbstractSqlppQueryExpressionVisitor<Voi
 
     @Override
     public Void visit(LiteralExpr l, Collection<VariableExpr> freeVars) throws CompilationException {
-        return null;
-    }
-
-    @Override
-    public Void visit(RuntimeContextVarExpr rcv, Collection<VariableExpr> freeVars) throws CompilationException {
         return null;
     }
 
