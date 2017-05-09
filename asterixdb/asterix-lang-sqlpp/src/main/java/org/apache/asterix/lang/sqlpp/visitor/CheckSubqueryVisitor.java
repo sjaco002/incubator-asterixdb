@@ -313,5 +313,4 @@ public class CheckSubqueryVisitor extends AbstractSqlppQueryExpressionVisitor<Bo
         }
         return langExpr.accept(this, arg);
     }
-
 }
