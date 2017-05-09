@@ -21,7 +21,6 @@ package org.apache.asterix.app.nc;
 import java.util.concurrent.Callable;
 import java.util.logging.Logger;
 
-import org.apache.asterix.common.config.IPropertiesProvider;
 import org.apache.asterix.common.config.ReplicationProperties;
 import org.apache.asterix.common.config.TransactionProperties;
 import org.apache.asterix.common.exceptions.ACIDException;
@@ -36,10 +35,11 @@ import org.apache.asterix.common.transactions.IRecoveryManager;
 import org.apache.asterix.common.transactions.ITransactionManager;
 import org.apache.asterix.common.transactions.ITransactionSubsystem;
 import org.apache.asterix.common.utils.StorageConstants;
-import org.apache.asterix.common.utils.TransactionUtil;
 import org.apache.asterix.transaction.management.service.locking.ConcurrentLockManager;
+import org.apache.asterix.transaction.management.service.logging.LogBufferFactory;
 import org.apache.asterix.transaction.management.service.logging.LogManager;
 import org.apache.asterix.transaction.management.service.logging.LogManagerWithReplication;
+import org.apache.asterix.transaction.management.service.logging.ReplicatingLogBufferFactory;
 import org.apache.asterix.transaction.management.service.recovery.CheckpointManagerFactory;
 import org.apache.asterix.transaction.management.service.transaction.TransactionManager;
 import org.apache.hyracks.api.application.INCServiceContext;
@@ -70,8 +70,8 @@ public class TransactionSubsystem implements ITransactionSubsystem {
         this.txnProperties = txnProperties;
         this.transactionManager = new TransactionManager(this);
         this.lockManager = new ConcurrentLockManager(txnProperties.getLockManagerShrinkTimer());
-        ReplicationProperties repProperties = ((IPropertiesProvider) asterixAppRuntimeContextProvider
-                .getAppContext()).getReplicationProperties();
+        ReplicationProperties repProperties =
+                asterixAppRuntimeContextProvider.getAppContext().getReplicationProperties();
         IReplicationStrategy replicationStrategy = repProperties.getReplicationStrategy();
         final boolean replicationEnabled = repProperties.isParticipant(id);
 
@@ -85,13 +85,14 @@ public class TransactionSubsystem implements ITransactionSubsystem {
         }
 
         if (replicationEnabled) {
-            this.logManager = new LogManagerWithReplication(this, replicationStrategy);
+            this.logManager =
+                    new LogManagerWithReplication(this, ReplicatingLogBufferFactory.INSTANCE, replicationStrategy);
         } else {
-            this.logManager = new LogManager(this);
+            this.logManager = new LogManager(this, LogBufferFactory.INSTANCE);
         }
         this.recoveryManager = new RecoveryManager(this, serviceCtx);
 
-        if (TransactionUtil.PROFILE_MODE) {
+        if (this.txnProperties.isCommitProfilerEnabled()) {
             ecp = new EntityCommitProfiler(this, this.txnProperties.getCommitProfilerReportInterval());
             getAsterixAppRuntimeContextProvider().getThreadExecutor().submit(ecp);
         }
@@ -185,8 +186,8 @@ public class TransactionSubsystem implements ITransactionSubsystem {
             long currentTimeStamp = System.currentTimeMillis();
             long currentEntityCommitCount = txnSubsystem.profilerEntityCommitLogCount;
 
-            LOGGER.severe("EntityCommitProfiler ReportRound[" + reportRound + "], AbsoluteTimeStamp["
-                    + currentTimeStamp + "], ActualRelativeTimeStamp[" + (currentTimeStamp - startTimeStamp)
+            LOGGER.severe("EntityCommitProfiler ReportRound[" + reportRound + "], AbsoluteTimeStamp[" + currentTimeStamp
+                    + "], ActualRelativeTimeStamp[" + (currentTimeStamp - startTimeStamp)
                     + "], ExpectedRelativeTimeStamp[" + (reportIntervalInSeconds * reportRound) + "], IIPS["
                     + ((currentEntityCommitCount - lastEntityCommitCount) / reportIntervalInSeconds) + "], IPS["
                     + (currentEntityCommitCount / (reportRound * reportIntervalInSeconds)) + "]");

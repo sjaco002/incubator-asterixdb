@@ -20,7 +20,7 @@ package org.apache.asterix.runtime.job.listener;
 
 import java.util.List;
 
-import org.apache.asterix.common.api.IAppRuntimeContext;
+import org.apache.asterix.common.api.INcApplicationContext;
 import org.apache.asterix.common.exceptions.ACIDException;
 import org.apache.asterix.common.transactions.DatasetId;
 import org.apache.asterix.common.transactions.ITransactionContext;
@@ -54,12 +54,12 @@ public class MultiTransactionJobletEventListenerFactory implements IJobletEventL
             public void jobletFinish(JobStatus jobStatus) {
                 try {
                     ITransactionManager txnManager =
-                            ((IAppRuntimeContext) jobletContext.getServiceContext().getApplicationContext())
+                            ((INcApplicationContext) jobletContext.getServiceContext().getApplicationContext())
                                     .getTransactionSubsystem().getTransactionManager();
                     for (JobId jobId : jobIds) {
                         ITransactionContext txnContext = txnManager.getTransactionContext(jobId, false);
                         txnContext.setWriteTxn(transactionalWrite);
-                        txnManager.completedTransaction(txnContext, new DatasetId(-1), -1,
+                        txnManager.completedTransaction(txnContext, DatasetId.NULL, -1,
                                 !(jobStatus == JobStatus.FAILURE));
                     }
                 } catch (ACIDException e) {
@@ -71,7 +71,7 @@ public class MultiTransactionJobletEventListenerFactory implements IJobletEventL
             public void jobletStart() {
                 try {
                     for (JobId jobId : jobIds) {
-                        ((IAppRuntimeContext) jobletContext.getServiceContext().getApplicationContext())
+                        ((INcApplicationContext) jobletContext.getServiceContext().getApplicationContext())
                                 .getTransactionSubsystem().getTransactionManager().getTransactionContext(jobId, true);
                     }
                 } catch (ACIDException e) {

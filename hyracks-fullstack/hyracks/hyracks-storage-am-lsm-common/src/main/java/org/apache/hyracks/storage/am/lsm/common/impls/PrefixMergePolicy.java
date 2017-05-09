@@ -27,7 +27,6 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import org.apache.hyracks.api.exceptions.HyracksDataException;
-import org.apache.hyracks.storage.am.common.api.IndexException;
 import org.apache.hyracks.storage.am.common.impls.NoOpOperationCallback;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMComponent;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMComponent.ComponentState;
@@ -47,7 +46,7 @@ public class PrefixMergePolicy implements ILSMMergePolicy {
 
     @Override
     public void diskComponentAdded(final ILSMIndex index, boolean fullMergeIsRequested, boolean isMergeOp)
-            throws HyracksDataException, IndexException {
+            throws HyracksDataException {
 
         if (!isMergeOp) {
             numFlushes++;
@@ -83,7 +82,7 @@ public class PrefixMergePolicy implements ILSMMergePolicy {
     }
 
     @Override
-    public boolean isMergeLagging(ILSMIndex index) throws HyracksDataException, IndexException {
+    public boolean isMergeLagging(ILSMIndex index) throws HyracksDataException {
 
         /**
          * [for flow-control purpose]
@@ -238,7 +237,7 @@ public class PrefixMergePolicy implements ILSMMergePolicy {
      * @throws HyracksDataException
      * @throws IndexException
      */
-    private boolean scheduleMerge(final ILSMIndex index) throws HyracksDataException, IndexException {
+    private boolean scheduleMerge(final ILSMIndex index) throws HyracksDataException {
         // 1.  Look at the candidate components for merging in oldest-first order.  If one exists, identify the prefix of the sequence of
         // all such components for which the sum of their sizes exceeds MaxMrgCompSz.  Schedule a merge of those components into a new component.
         // 2.  If a merge from 1 doesn't happen, see if the set of candidate components for merging exceeds MaxTolCompCnt.  If so, schedule

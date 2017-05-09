@@ -27,7 +27,6 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import org.apache.hyracks.api.exceptions.HyracksDataException;
-import org.apache.hyracks.storage.am.common.api.IndexException;
 import org.apache.hyracks.storage.am.common.impls.NoOpOperationCallback;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMComponent;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMComponent.ComponentState;
@@ -48,7 +47,7 @@ public class KSlotMergePolicy implements ILSMMergePolicy {
 
     @Override
     public void diskComponentAdded(final ILSMIndex index, boolean fullMergeIsRequested, boolean isMergeOp)
-            throws HyracksDataException, IndexException {
+            throws HyracksDataException {
 
         if (isMergeOp) {
             return;
@@ -74,7 +73,7 @@ public class KSlotMergePolicy implements ILSMMergePolicy {
 
     }
 
-    private boolean scheduleMerge(final ILSMIndex index) throws HyracksDataException, IndexException {
+    private boolean scheduleMerge(final ILSMIndex index) throws HyracksDataException {
         List<ILSMDiskComponent> immutableComponents = new ArrayList<ILSMDiskComponent>(index.getImmutableComponents());
         Collections.reverse(immutableComponents);
         int mergedIndex = -1;
@@ -152,7 +151,7 @@ public class KSlotMergePolicy implements ILSMMergePolicy {
     }
 
     private boolean scheduleLaggedMerge(final ILSMIndex index, int mergedIndex)
-            throws HyracksDataException, IndexException {
+ throws HyracksDataException {
         long mergeSize = 0;
         List<ILSMDiskComponent> immutableComponents = new ArrayList<>(index.getImmutableComponents());
         Collections.reverse(immutableComponents);
@@ -244,7 +243,7 @@ public class KSlotMergePolicy implements ILSMMergePolicy {
     }
 
     @Override
-    public boolean isMergeLagging(ILSMIndex index) throws HyracksDataException, IndexException {
+    public boolean isMergeLagging(ILSMIndex index) throws HyracksDataException {
         List<ILSMDiskComponent> immutableComponents = index.getImmutableComponents();
         /*int mergedIndex = needMerge(index);
         if (mergedIndex==-1){

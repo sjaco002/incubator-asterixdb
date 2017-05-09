@@ -23,6 +23,7 @@ import java.util.List;
 
 import org.apache.hyracks.api.dataflow.value.IBinaryComparatorFactory;
 import org.apache.hyracks.api.dataflow.value.ILinearizeComparatorFactory;
+import org.apache.hyracks.api.exceptions.ErrorCode;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.apache.hyracks.api.io.FileReference;
 import org.apache.hyracks.api.io.IIOManager;
@@ -36,8 +37,6 @@ import org.apache.hyracks.storage.am.common.api.ISearchOperationCallback;
 import org.apache.hyracks.storage.am.common.api.ISearchPredicate;
 import org.apache.hyracks.storage.am.common.api.ITreeIndex;
 import org.apache.hyracks.storage.am.common.api.ITreeIndexFrameFactory;
-import org.apache.hyracks.storage.am.common.api.IndexException;
-import org.apache.hyracks.storage.am.common.exceptions.TreeIndexDuplicateKeyException;
 import org.apache.hyracks.storage.am.common.impls.AbstractSearchPredicate;
 import org.apache.hyracks.storage.am.common.impls.NoOpOperationCallback;
 import org.apache.hyracks.storage.am.common.ophelpers.IndexOperation;
@@ -184,8 +183,7 @@ public abstract class AbstractLSMRTree extends AbstractLSMIndex implements ITree
 
         if (flushOnExit) {
             BlockingIOOperationCallbackWrapper cb = new BlockingIOOperationCallbackWrapper(ioOpCallback);
-            ILSMIndexAccessor accessor =
-                    createAccessor(NoOpOperationCallback.INSTANCE, NoOpOperationCallback.INSTANCE);
+            ILSMIndexAccessor accessor = createAccessor(NoOpOperationCallback.INSTANCE, NoOpOperationCallback.INSTANCE);
             accessor.scheduleFlush(cb);
             try {
                 cb.waitForIO();
@@ -234,7 +232,7 @@ public abstract class AbstractLSMRTree extends AbstractLSMIndex implements ITree
                         if (c.getLSMComponentFilter().satisfy(
                                 ((AbstractSearchPredicate) ctx.getSearchPredicate()).getMinFilterTuple(),
                                 ((AbstractSearchPredicate) ctx.getSearchPredicate()).getMaxFilterTuple(),
-                                ((LSMRTreeOpContext) ctx).filterCmp)) {
+                                ((LSMRTreeOpContext) ctx).getFilterCmp())) {
                             operationalComponents.add(c);
                         }
                     }
@@ -258,9 +256,9 @@ public abstract class AbstractLSMRTree extends AbstractLSMIndex implements ITree
 
     @Override
     public void search(ILSMIndexOperationContext ictx, IIndexCursor cursor, ISearchPredicate pred, long start)
-            throws HyracksDataException, IndexException {
+            throws HyracksDataException {
         LSMRTreeOpContext ctx = (LSMRTreeOpContext) ictx;
-        cursor.open(ctx.searchInitialState, pred);
+        cursor.open(ctx.getSearchInitialState(), pred);
     }
 
     protected LSMComponentFileReferences getMergeTargetFileName(List<ILSMComponent> mergingDiskComponents)
@@ -277,7 +275,7 @@ public abstract class AbstractLSMRTree extends AbstractLSMIndex implements ITree
 
     protected LSMRTreeDiskComponent createDiskComponent(ILSMDiskComponentFactory factory, FileReference insertFileRef,
             FileReference deleteFileRef, FileReference bloomFilterFileRef, boolean createComponent)
-            throws HyracksDataException, IndexException {
+            throws HyracksDataException {
         // Create new tree instance.
         LSMRTreeDiskComponent component = (LSMRTreeDiskComponent) factory
                 .createComponent(new LSMComponentFileReferences(insertFileRef, deleteFileRef, bloomFilterFileRef));
@@ -343,17 +341,16 @@ public abstract class AbstractLSMRTree extends AbstractLSMIndex implements ITree
     }
 
     @Override
-    public void modify(IIndexOperationContext ictx, ITupleReference tuple)
-            throws HyracksDataException, IndexException {
+    public void modify(IIndexOperationContext ictx, ITupleReference tuple) throws HyracksDataException {
         LSMRTreeOpContext ctx = (LSMRTreeOpContext) ictx;
         if (ctx.getOperation() == IndexOperation.PHYSICALDELETE) {
             throw new UnsupportedOperationException("Physical delete not supported in the LSM-RTree");
         }
 
         ITupleReference indexTuple;
-        if (ctx.indexTuple != null) {
-            ctx.indexTuple.reset(tuple);
-            indexTuple = ctx.indexTuple;
+        if (ctx.getIndexTuple() != null) {
+            ctx.getIndexTuple().reset(tuple);
+            indexTuple = ctx.getIndexTuple();
         } else {
             indexTuple = tuple;
         }
@@ -361,22 +358,25 @@ public abstract class AbstractLSMRTree extends AbstractLSMIndex implements ITree
         ctx.getModificationCallback().before(indexTuple);
         ctx.getModificationCallback().found(null, indexTuple);
         if (ctx.getOperation() == IndexOperation.INSERT) {
-            ctx.currentMutableRTreeAccessor.insert(indexTuple);
+            ctx.getCurrentMutableRTreeAccessor().insert(indexTuple);
         } else {
             // First remove all entries in the in-memory rtree (if any).
-            ctx.currentMutableRTreeAccessor.delete(indexTuple);
+            ctx.getCurrentMutableRTreeAccessor().delete(indexTuple);
             // Insert key into the deleted-keys BTree.
             try {
-                ctx.currentMutableBTreeAccessor.insert(indexTuple);
-            } catch (TreeIndexDuplicateKeyException e) {
-                // Do nothing, because one delete tuple is enough to indicate
-                // that all the corresponding insert tuples are deleted
+                ctx.getCurrentMutableBTreeAccessor().insert(indexTuple);
+            } catch (HyracksDataException e) {
+                if (e.getErrorCode() != ErrorCode.DUPLICATE_KEY) {
+                    // Do nothing, because one delete tuple is enough to indicate
+                    // that all the corresponding insert tuples are deleted
+                    throw e;
+                }
             }
         }
-        if (ctx.filterTuple != null) {
-            ctx.filterTuple.reset(tuple);
-            memoryComponents.get(currentMutableComponentId.get()).getLSMComponentFilter().update(ctx.filterTuple,
-                    ctx.filterCmp);
+        if (ctx.getFilterTuple() != null) {
+            ctx.getFilterTuple().reset(tuple);
+            memoryComponents.get(currentMutableComponentId.get()).getLSMComponentFilter().update(ctx.getFilterTuple(),
+                    ctx.getFilterCmp());
         }
     }
 

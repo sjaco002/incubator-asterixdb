@@ -22,7 +22,7 @@ import java.io.DataOutput;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 
-import org.apache.asterix.common.api.IAppRuntimeContext;
+import org.apache.asterix.common.api.INcApplicationContext;
 import org.apache.asterix.common.dataflow.LSMIndexUtil;
 import org.apache.asterix.common.exceptions.ACIDException;
 import org.apache.asterix.common.exceptions.AsterixException;
@@ -31,6 +31,8 @@ import org.apache.asterix.common.transactions.PrimaryIndexLogMarkerCallback;
 import org.apache.asterix.om.pointables.nonvisitor.ARecordPointable;
 import org.apache.asterix.om.types.ARecordType;
 import org.apache.asterix.om.types.ATypeTag;
+import org.apache.asterix.transaction.management.opcallbacks.AbstractIndexModificationOperationCallback;
+import org.apache.asterix.transaction.management.opcallbacks.AbstractIndexModificationOperationCallback.Operation;
 import org.apache.asterix.transaction.management.opcallbacks.LockThenSearchOperationCallback;
 import org.apache.hyracks.api.comm.VSizeFrame;
 import org.apache.hyracks.api.context.IHyracksTaskContext;
@@ -49,9 +51,7 @@ import org.apache.hyracks.dataflow.common.utils.TaskUtil;
 import org.apache.hyracks.storage.am.btree.impls.RangePredicate;
 import org.apache.hyracks.storage.am.btree.util.BTreeUtils;
 import org.apache.hyracks.storage.am.common.api.IIndexCursor;
-import org.apache.hyracks.storage.am.common.api.IModificationOperationCallback.Operation;
 import org.apache.hyracks.storage.am.common.api.ITreeIndex;
-import org.apache.hyracks.storage.am.common.api.IndexException;
 import org.apache.hyracks.storage.am.common.dataflow.IIndexOperatorDescriptor;
 import org.apache.hyracks.storage.am.common.ophelpers.IndexOperation;
 import org.apache.hyracks.storage.am.common.ophelpers.MultiComparator;
@@ -88,6 +88,7 @@ public class LSMPrimaryUpsertOperatorNodePushable extends LSMIndexInsertUpdateDe
     private LockThenSearchOperationCallback searchCallback;
     private IFrameOperationCallback frameOpCallback;
     private final IFrameOperationCallbackFactory frameOpCallbackFactory;
+    private AbstractIndexModificationOperationCallback abstractModCallback;
 
     public LSMPrimaryUpsertOperatorNodePushable(IIndexOperatorDescriptor opDesc, IHyracksTaskContext ctx, int partition,
             int[] fieldPermutation, IRecordDescriptorProvider recordDescProvider, int numOfPrimaryKeys,
@@ -149,13 +150,15 @@ public class LSMPrimaryUpsertOperatorNodePushable extends LSMIndexInsertUpdateDe
             appender = new FrameTupleAppender(new VSizeFrame(ctx), true);
             modCallback = opDesc.getModificationOpCallbackFactory()
                     .createModificationOperationCallback(indexHelper.getResource(), ctx, this);
+            abstractModCallback = (AbstractIndexModificationOperationCallback) modCallback;
             searchCallback = (LockThenSearchOperationCallback) opDesc.getSearchOpCallbackFactory()
                     .createSearchOperationCallback(indexHelper.getResource().getId(), ctx, this);
-            indexAccessor = index.createAccessor(modCallback, searchCallback);
+            indexAccessor = index.createAccessor(abstractModCallback, searchCallback);
+
             cursor = indexAccessor.createSearchCursor(false);
             frameTuple = new FrameTupleReference();
-            IAppRuntimeContext appCtx =
-                    (IAppRuntimeContext) ctx.getJobletContext().getServiceContext().getApplicationContext();
+            INcApplicationContext appCtx =
+                    (INcApplicationContext) ctx.getJobletContext().getServiceContext().getApplicationContext();
             LSMIndexUtil.checkAndSetFirstLSN((AbstractLSMIndex) index,
                     appCtx.getTransactionSubsystem().getLogManager());
             frameOpCallback =
@@ -172,12 +175,12 @@ public class LSMPrimaryUpsertOperatorNodePushable extends LSMIndexInsertUpdateDe
     }
 
     private void writeOutput(int tupleIndex, boolean recordWasInserted, boolean recordWasDeleted) throws IOException {
-        frameTuple.reset(accessor, tupleIndex);
-        for (int i = 0; i < frameTuple.getFieldCount(); i++) {
-            dos.write(frameTuple.getFieldData(i), frameTuple.getFieldStart(i), frameTuple.getFieldLength(i));
-            tb.addFieldEndOffset();
-        }
         if (recordWasInserted || recordWasDeleted) {
+            frameTuple.reset(accessor, tupleIndex);
+            for (int i = 0; i < frameTuple.getFieldCount(); i++) {
+                dos.write(frameTuple.getFieldData(i), frameTuple.getFieldStart(i), frameTuple.getFieldLength(i));
+                tb.addFieldEndOffset();
+            }
             FrameUtils.appendToWriter(writer, appender, tb.getFieldEndOffsets(), tb.getByteArray(), 0, tb.getSize());
         } else {
             try {
@@ -233,12 +236,15 @@ public class LSMPrimaryUpsertOperatorNodePushable extends LSMIndexInsertUpdateDe
                                 prevTuple.getFieldLength(filterFieldIndex));
                         tb.addFieldEndOffset();
                     }
-                    modCallback.setOp(Operation.DELETE);
-                    if (firstModification) {
-                        lsmAccessor.delete(prevTuple);
-                        firstModification = false;
-                    } else {
-                        lsmAccessor.forceDelete(prevTuple);
+                    if (isNull(tuple, numOfPrimaryKeys)) {
+                        // Only delete if it is a delete and not upsert
+                        abstractModCallback.setOp(Operation.DELETE);
+                        if (firstModification) {
+                            lsmAccessor.delete(prevTuple);
+                            firstModification = false;
+                        } else {
+                            lsmAccessor.forceDelete(prevTuple);
+                        }
                     }
                 } else {
                     prevTuple = null;
@@ -253,12 +259,12 @@ public class LSMPrimaryUpsertOperatorNodePushable extends LSMIndexInsertUpdateDe
                     cursor.reset();
                 }
                 if (!isNull(tuple, numOfPrimaryKeys)) {
-                    modCallback.setOp(Operation.INSERT);
+                    abstractModCallback.setOp(Operation.UPSERT);
                     if (firstModification) {
-                        lsmAccessor.insert(tuple);
+                        lsmAccessor.upsert(tuple);
                         firstModification = false;
                     } else {
-                        lsmAccessor.forceInsert(tuple);
+                        lsmAccessor.forceUpsert(tuple);
                     }
                     recordWasInserted = true;
                 }
@@ -268,8 +274,8 @@ public class LSMPrimaryUpsertOperatorNodePushable extends LSMIndexInsertUpdateDe
             // callback here before calling nextFrame on the next operator
             frameOpCallback.frameCompleted(!firstModification);
             appender.write(writer, true);
-        } catch (IndexException | IOException | AsterixException e) {
-            throw new HyracksDataException(e);
+        } catch (Exception e) {
+            throw HyracksDataException.create(e);
         }
     }
 

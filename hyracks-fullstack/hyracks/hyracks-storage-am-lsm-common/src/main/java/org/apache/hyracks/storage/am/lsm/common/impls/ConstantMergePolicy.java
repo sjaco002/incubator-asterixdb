@@ -25,7 +25,6 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import org.apache.hyracks.api.exceptions.HyracksDataException;
-import org.apache.hyracks.storage.am.common.api.IndexException;
 import org.apache.hyracks.storage.am.common.impls.NoOpOperationCallback;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMComponent;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMComponent.ComponentState;
@@ -43,9 +42,7 @@ public class ConstantMergePolicy implements ILSMMergePolicy {
 
     @Override
     public void diskComponentAdded(final ILSMIndex index, boolean fullMergeIsRequested, boolean isMergeOp)
-            throws HyracksDataException, IndexException {
-
-
+            throws HyracksDataException {
         if (!isMergeOp) {
             numFlushes++;
         }
@@ -81,7 +78,7 @@ public class ConstantMergePolicy implements ILSMMergePolicy {
     }
 
     @Override
-    public boolean isMergeLagging(ILSMIndex index) throws HyracksDataException, IndexException {
+    public boolean isMergeLagging(ILSMIndex index) throws HyracksDataException {
         // see PrefixMergePolicy.isMergeLagging() for the rationale behind this code.
 
         /**

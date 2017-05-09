@@ -18,7 +18,7 @@
  */
 package org.apache.hyracks.storage.am.lsm.invertedindex.inmemory;
 
-import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 import org.apache.hyracks.api.dataflow.value.IBinaryComparatorFactory;
@@ -32,7 +32,6 @@ import org.apache.hyracks.storage.am.common.api.IIndexOperationContext;
 import org.apache.hyracks.storage.am.common.api.IModificationOperationCallback;
 import org.apache.hyracks.storage.am.common.api.IPageManager;
 import org.apache.hyracks.storage.am.common.api.ISearchOperationCallback;
-import org.apache.hyracks.storage.am.common.api.IndexException;
 import org.apache.hyracks.storage.am.common.ophelpers.IndexOperation;
 import org.apache.hyracks.storage.am.lsm.invertedindex.api.IInvertedIndexSearcher;
 import org.apache.hyracks.storage.am.lsm.invertedindex.api.IInvertedListCursor;
@@ -59,11 +58,11 @@ public class PartitionedInMemoryInvertedIndex extends InMemoryInvertedIndex impl
 
     @Override
     public void insert(ITupleReference tuple, BTreeAccessor btreeAccessor, IIndexOperationContext ictx)
-            throws HyracksDataException, IndexException {
+            throws HyracksDataException {
         super.insert(tuple, btreeAccessor, ictx);
         PartitionedInMemoryInvertedIndexOpContext ctx = (PartitionedInMemoryInvertedIndexOpContext) ictx;
         PartitionedInvertedIndexTokenizingTupleIterator tupleIter =
-                (PartitionedInvertedIndexTokenizingTupleIterator) ctx.tupleIter;
+                (PartitionedInvertedIndexTokenizingTupleIterator) ctx.getTupleIter();
         updatePartitionIndexes(tupleIter.getNumTokens());
     }
 
@@ -98,7 +97,7 @@ public class PartitionedInMemoryInvertedIndex extends InMemoryInvertedIndex impl
     @Override
     public boolean openInvertedListPartitionCursors(IInvertedIndexSearcher searcher, IIndexOperationContext ictx,
             short numTokensLowerBound, short numTokensUpperBound, InvertedListPartitions invListPartitions,
-            ArrayList<IInvertedListCursor> cursorsOrderedByTokens) throws HyracksDataException, IndexException {
+            List<IInvertedListCursor> cursorsOrderedByTokens) throws HyracksDataException {
         short minPartitionIndex;
         short maxPartitionIndex;
         partitionIndexLock.readLock().lock();
@@ -124,8 +123,8 @@ public class PartitionedInMemoryInvertedIndex extends InMemoryInvertedIndex impl
         ctx.setOperation(IndexOperation.SEARCH);
         // We can pick either of the full low or high search key, since they should be identical here.
         ITupleReference searchKey = partSearcher.getFullLowSearchKey();
-        ctx.btreePred.setLowKey(searchKey, true);
-        ctx.btreePred.setHighKey(searchKey, true);
+        ctx.getBtreePred().setLowKey(searchKey, true);
+        ctx.getBtreePred().setHighKey(searchKey, true);
         // Go through all possibly partitions and see if the token matches.
         // TODO: This procedure could be made more efficient by determining the next partition to search
         // using the last existing partition and re-searching the BTree with an open interval as low key.
@@ -133,7 +132,8 @@ public class PartitionedInMemoryInvertedIndex extends InMemoryInvertedIndex impl
             partSearcher.setNumTokensBoundsInSearchKeys(i, i);
             InMemoryInvertedListCursor inMemListCursor =
                     (InMemoryInvertedListCursor) partSearcher.getCachedInvertedListCursor();
-            inMemListCursor.prepare(ctx.btreeAccessor, ctx.btreePred, ctx.tokenFieldsCmp, ctx.btreeCmp);
+            inMemListCursor.prepare(ctx.getBtreeAccessor(), ctx.getBtreePred(), ctx.getTokenFieldsCmp(),
+                    ctx.getBtreeCmp());
             inMemListCursor.reset(searchKey);
             invListPartitions.addInvertedListCursor(inMemListCursor, i);
         }

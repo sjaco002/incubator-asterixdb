@@ -25,7 +25,13 @@
     <test-case FilePath="async-deferred">
       <compilation-unit name="async-failed">
         <output-dir compare="Text">async-failed</output-dir>
-        <expected-error>Error in processing tuple 0</expected-error>
+        <expected-error>Injected failure in asterix:inject-failure</expected-error>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="async-deferred">
+      <compilation-unit name="async-compilation-failed">
+        <output-dir compare="Text">async-compilation-failed</output-dir>
+        <expected-error>Cannot find dataset gargel</expected-error>
       </compilation-unit>
     </test-case>
     <test-case FilePath="async-deferred">
@@ -36,6 +42,11 @@
     <test-case FilePath="async-deferred">
       <compilation-unit name="async">
         <output-dir compare="Text">async</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="async-deferred">
+      <compilation-unit name="async-repeated">
+        <output-dir compare="Text">async-repeated</output-dir>
       </compilation-unit>
     </test-case>
     <test-case FilePath="async-deferred">
@@ -117,6 +128,12 @@
     </test-case>
     <test-case FilePath="explain">
       <compilation-unit name="explain_caps">
+        <output-dir compare="Text">explain_simple</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="explain">
+      <compilation-unit name="explain_pretty">
+        <parameter name="pretty" value="true" />
         <output-dir compare="Text">explain_simple</output-dir>
       </compilation-unit>
     </test-case>
@@ -1708,7 +1725,7 @@
     <test-case FilePath="dml">
       <compilation-unit name="insert-duplicated-keys">
         <output-dir compare="Text">insert-duplicated-keys</output-dir>
-        <expected-error>Failed to insert key since key already exists</expected-error>
+        <expected-error>Inserting duplicate keys into the primary storage</expected-error>
       </compilation-unit>
     </test-case>
     <test-case FilePath="dml">
@@ -2719,6 +2736,26 @@
         <output-dir compare="Text">core-02</output-dir>
       </compilation-unit>
     </test-case>
+    <test-case FilePath="group-by">
+      <compilation-unit name="policy">
+        <output-dir compare="Text">policy</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="group-by">
+      <compilation-unit name="policy-02">
+        <output-dir compare="Text">policy-02</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="group-by">
+      <compilation-unit name="policy-03">
+        <output-dir compare="Text">policy-03</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="group-by">
+      <compilation-unit name="policy-04">
+        <output-dir compare="Text">policy-04</output-dir>
+      </compilation-unit>
+    </test-case>
   </test-group>
   <test-group name="index-join">
     <test-case FilePath="index-join">
@@ -3268,6 +3305,18 @@
     <test-case FilePath="misc">
       <compilation-unit name="query-ASTERIXDB-1671-2">
         <output-dir compare="Text">query-ASTERIXDB-1671</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="misc">
+      <compilation-unit name="unsupported_parameter">
+        <output-dir compare="Text">none</output-dir>
+        <expected-error>Query parameter compiler.joinmem is not supported</expected-error>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="misc">
+      <compilation-unit name="unsupported_parameter_value">
+        <output-dir compare="Text">none</output-dir>
+        <expected-error>The given string: 4LS is not a byte unit string (e.g., 320KB or 1024)</expected-error>
       </compilation-unit>
     </test-case>
     <test-case FilePath="misc">
@@ -4145,6 +4194,11 @@
     <test-case FilePath="null-missing">
       <compilation-unit name="query-ASTERIXDB-1689">
         <output-dir compare="Text">query-ASTERIXDB-1689</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="null-missing">
+      <compilation-unit name="print-ASTERIXDB-1885">
+        <output-dir compare="Text">print-ASTERIXDB-1885</output-dir>
       </compilation-unit>
     </test-case>
   </test-group>
@@ -6853,6 +6907,12 @@
       </compilation-unit>
     </test-case>
     <test-case FilePath="tpch-sql-sugar">
+      <compilation-unit name="q17_large_gby_variant_parameter">
+        <output-dir compare="Text">none</output-dir>
+        <expected-error>Invalid query parameter compiler.groupmemory -- value has to be greater than or equal to</expected-error>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="tpch-sql-sugar">
       <compilation-unit name="q18_large_volume_customer">
         <output-dir compare="Text">q18_large_volume_customer</output-dir>
       </compilation-unit>
@@ -6875,6 +6935,12 @@
     <test-case FilePath="tpch-sql-sugar">
       <compilation-unit name="q01_pricing_summary_report_parallelism">
         <output-dir compare="Text">q01_pricing_summary_report_nt</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="tpch-sql-sugar">
+      <compilation-unit name="q01_pricing_summary_report_parameter">
+        <output-dir compare="Text">none</output-dir>
+        <expected-error>Invalid query parameter compiler.sortmemory -- value has to be greater than or equal to</expected-error>
       </compilation-unit>
     </test-case>
     <test-case FilePath="tpch-sql-sugar">
@@ -6930,6 +6996,12 @@
     <test-case FilePath="tpch-sql-sugar">
       <compilation-unit name="q09_product_type_profit_nt">
         <output-dir compare="Text">q09_product_type_profit_nt</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="tpch-sql-sugar">
+      <compilation-unit name="q09_product_type_profit_parameter">
+        <output-dir compare="Text">none</output-dir>
+        <expected-error>Invalid query parameter compiler.joinmemory -- value has to be greater than or equal to</expected-error>
       </compilation-unit>
     </test-case>
     <test-case FilePath="tpch-sql-sugar">
@@ -7744,7 +7816,7 @@
     <test-case FilePath="load">
       <compilation-unit name="duplicate-key-error">
         <output-dir compare="Text">none</output-dir>
-        <expected-error>Input stream given to BTree bulk load has duplicates</expected-error>
+        <expected-error>Loading duplicate keys into the primary storage</expected-error>
       </compilation-unit>
     </test-case>
     <test-case FilePath="load">

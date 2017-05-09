@@ -18,8 +18,11 @@
  */
 package org.apache.asterix.active;
 
+import java.util.logging.Level;
+import java.util.logging.Logger;
+
 import org.apache.asterix.active.message.ActivePartitionMessage;
-import org.apache.asterix.common.api.IAppRuntimeContext;
+import org.apache.asterix.common.api.INcApplicationContext;
 import org.apache.hyracks.api.comm.IFrameWriter;
 import org.apache.hyracks.api.context.IHyracksTaskContext;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
@@ -28,6 +31,7 @@ import org.apache.hyracks.dataflow.std.base.AbstractUnaryOutputSourceOperatorNod
 public abstract class ActiveSourceOperatorNodePushable extends AbstractUnaryOutputSourceOperatorNodePushable
         implements IActiveRuntime {
 
+    private final Logger LOGGER = Logger.getLogger(ActiveSourceOperatorNodePushable.class.getName());
     protected final IHyracksTaskContext ctx;
     protected final ActiveManager activeManager;
     /** A unique identifier for the runtime **/
@@ -36,7 +40,7 @@ public abstract class ActiveSourceOperatorNodePushable extends AbstractUnaryOutp
 
     public ActiveSourceOperatorNodePushable(IHyracksTaskContext ctx, ActiveRuntimeId runtimeId) {
         this.ctx = ctx;
-        activeManager = (ActiveManager) ((IAppRuntimeContext) ctx.getJobletContext().getServiceContext()
+        activeManager = (ActiveManager) ((INcApplicationContext) ctx.getJobletContext().getServiceContext()
                 .getApplicationContext()).getActiveManager();
         this.runtimeId = runtimeId;
     }
@@ -79,6 +83,7 @@ public abstract class ActiveSourceOperatorNodePushable extends AbstractUnaryOutp
 
     @Override
     public final void initialize() throws HyracksDataException {
+        LOGGER.log(Level.INFO, "initialize() called on ActiveSourceOperatorNodePushable");
         activeManager.registerRuntime(this);
         try {
             // notify cc that runtime has been registered
@@ -86,15 +91,18 @@ public abstract class ActiveSourceOperatorNodePushable extends AbstractUnaryOutp
                     ActivePartitionMessage.ACTIVE_RUNTIME_REGISTERED), null);
             start();
         } catch (InterruptedException e) {
+            LOGGER.log(Level.INFO, "initialize() interrupted on ActiveSourceOperatorNodePushable", e);
             Thread.currentThread().interrupt();
             throw new HyracksDataException(e);
         } catch (Exception e) {
+            LOGGER.log(Level.INFO, "initialize() failed on ActiveSourceOperatorNodePushable", e);
             throw new HyracksDataException(e);
         } finally {
             synchronized (this) {
                 done = true;
                 notifyAll();
             }
+            LOGGER.log(Level.INFO, "initialize() returning on ActiveSourceOperatorNodePushable");
         }
     }
 
@@ -105,10 +113,12 @@ public abstract class ActiveSourceOperatorNodePushable extends AbstractUnaryOutp
             ctx.sendApplicationMessageToCC(new ActivePartitionMessage(runtimeId, ctx.getJobletContext().getJobId(),
                     ActivePartitionMessage.ACTIVE_RUNTIME_DEREGISTERED), null);
         } catch (Exception e) {
+            LOGGER.log(Level.INFO, "deinitialize() failed on ActiveSourceOperatorNodePushable", e);
             throw new HyracksDataException(e);
+        } finally {
+            LOGGER.log(Level.INFO, "deinitialize() returning on ActiveSourceOperatorNodePushable");
         }
     }
-
 
     @Override
     public final IFrameWriter getInputFrameWriter(int index) {

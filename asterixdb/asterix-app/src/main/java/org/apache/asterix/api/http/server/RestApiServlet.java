@@ -29,10 +29,10 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import org.apache.asterix.app.result.ResultReader;
-import org.apache.asterix.app.result.ResultUtil;
 import org.apache.asterix.app.translator.QueryTranslator;
 import org.apache.asterix.common.config.GlobalConfig;
 import org.apache.asterix.common.context.IStorageComponentProvider;
+import org.apache.asterix.common.dataflow.ICcApplicationContext;
 import org.apache.asterix.common.exceptions.AsterixException;
 import org.apache.asterix.compiler.provider.ILangCompilationProvider;
 import org.apache.asterix.lang.aql.parser.TokenMgrError;
@@ -45,7 +45,6 @@ import org.apache.asterix.translator.IStatementExecutor.ResultDelivery;
 import org.apache.asterix.translator.IStatementExecutorFactory;
 import org.apache.asterix.translator.SessionConfig;
 import org.apache.asterix.translator.SessionConfig.OutputFormat;
-import org.apache.hyracks.algebricks.core.algebra.prettyprint.AlgebricksAppendable;
 import org.apache.hyracks.api.client.IHyracksClientConnection;
 import org.apache.hyracks.api.dataset.IHyracksDataset;
 import org.apache.hyracks.client.dataset.HyracksDataset;
@@ -63,15 +62,17 @@ import io.netty.handler.codec.http.HttpResponseStatus;
 
 public abstract class RestApiServlet extends AbstractServlet {
     private static final Logger LOGGER = Logger.getLogger(RestApiServlet.class.getName());
+    private final ICcApplicationContext appCtx;
     private final ILangCompilationProvider compilationProvider;
     private final IParserFactory parserFactory;
     private final IStatementExecutorFactory statementExecutorFactory;
     private final IStorageComponentProvider componentProvider;
 
-    public RestApiServlet(ConcurrentMap<String, Object> ctx, String[] paths,
+    public RestApiServlet(ConcurrentMap<String, Object> ctx, String[] paths, ICcApplicationContext appCtx,
             ILangCompilationProvider compilationProvider, IStatementExecutorFactory statementExecutorFactory,
             IStorageComponentProvider componentProvider) {
         super(ctx, paths);
+        this.appCtx = appCtx;
         this.compilationProvider = compilationProvider;
         this.parserFactory = compilationProvider.getParserFactory();
         this.statementExecutorFactory = statementExecutorFactory;
@@ -113,11 +114,9 @@ public abstract class RestApiServlet extends AbstractServlet {
             format = OutputFormat.LOSSLESS_JSON;
         }
 
-        SessionConfig.ResultDecorator handlePrefix =
-                (AlgebricksAppendable app) -> app.append("{ \"").append("handle").append("\": ");
-        SessionConfig.ResultDecorator handlePostfix = (AlgebricksAppendable app) -> app.append(" }");
-        SessionConfig sessionConfig =
-                new SessionConfig(response.writer(), format, null, null, handlePrefix, handlePostfix);
+        SessionConfig.ResultAppender appendHandle = (app, handle) -> app.append("{ \"").append("handle")
+                .append("\":" + " \"").append(handle).append("\" }");
+        SessionConfig sessionConfig = new SessionConfig(response.writer(), format, null, null, appendHandle, null);
 
         // If it's JSON or ADM, check for the "wrapper-array" flag. Default is
         // "true" for JSON and "false" for ADM. (Not applicable for CSV.)
@@ -192,7 +191,8 @@ public abstract class RestApiServlet extends AbstractServlet {
                 synchronized (ctx) {
                     hds = (IHyracksDataset) ctx.get(HYRACKS_DATASET_ATTR);
                     if (hds == null) {
-                        hds = new HyracksDataset(hcc, ResultReader.FRAME_SIZE, ResultReader.NUM_READERS);
+                        hds = new HyracksDataset(hcc, appCtx.getCompilerProperties().getFrameSize(),
+                                ResultReader.NUM_READERS);
                         ctx.put(HYRACKS_DATASET_ATTR, hds);
                     }
                 }
@@ -201,7 +201,7 @@ public abstract class RestApiServlet extends AbstractServlet {
             List<Statement> aqlStatements = parser.parse();
             validate(aqlStatements);
             MetadataManager.INSTANCE.init();
-            IStatementExecutor translator = statementExecutorFactory.create(aqlStatements, sessionConfig,
+            IStatementExecutor translator = statementExecutorFactory.create(appCtx, aqlStatements, sessionConfig,
                     compilationProvider, componentProvider);
             translator.compileAndExecute(hcc, hds, resultDelivery, new IStatementExecutor.Stats());
         } catch (AsterixException | TokenMgrError | org.apache.asterix.aqlplus.parser.TokenMgrError pe) {

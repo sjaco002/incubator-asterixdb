@@ -26,10 +26,10 @@ import org.apache.hyracks.storage.am.btree.impls.BTree;
 import org.apache.hyracks.storage.am.btree.impls.BTreeRangeSearchCursor;
 import org.apache.hyracks.storage.am.btree.impls.RangePredicate;
 import org.apache.hyracks.storage.am.common.api.ICursorInitialState;
+import org.apache.hyracks.storage.am.common.api.ISearchOperationCallback;
 import org.apache.hyracks.storage.am.common.api.ISearchPredicate;
 import org.apache.hyracks.storage.am.common.api.ITreeIndexAccessor;
 import org.apache.hyracks.storage.am.common.api.ITreeIndexCursor;
-import org.apache.hyracks.storage.am.common.api.IndexException;
 import org.apache.hyracks.storage.am.common.impls.NoOpOperationCallback;
 import org.apache.hyracks.storage.am.common.ophelpers.MultiComparator;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMComponent;
@@ -57,6 +57,7 @@ public class LSMRTreeWithAntiMatterTuplesSearchCursor extends LSMIndexSearchCurs
     private SearchPredicate rtreeSearchPredicate;
     private int numMutableComponents;
     private boolean open;
+    protected ISearchOperationCallback searchCallback;
 
     public LSMRTreeWithAntiMatterTuplesSearchCursor(ILSMIndexOperationContext opCtx) {
         this(opCtx, false);
@@ -68,8 +69,7 @@ public class LSMRTreeWithAntiMatterTuplesSearchCursor extends LSMIndexSearchCurs
     }
 
     @Override
-    public void open(ICursorInitialState initialState, ISearchPredicate searchPred) throws HyracksDataException,
-            IndexException {
+    public void open(ICursorInitialState initialState, ISearchPredicate searchPred) throws HyracksDataException {
         LSMRTreeCursorInitialState lsmInitialState = (LSMRTreeCursorInitialState) initialState;
         cmp = lsmInitialState.getHilbertCmp();
         btreeCmp = lsmInitialState.getBTreeCmp();
@@ -77,6 +77,7 @@ public class LSMRTreeWithAntiMatterTuplesSearchCursor extends LSMIndexSearchCurs
         comparatorFields = lsmInitialState.getComparatorFields();
         operationalComponents = lsmInitialState.getOperationalComponents();
         rtreeSearchPredicate = (SearchPredicate) searchPred;
+        searchCallback = lsmInitialState.getSearchOperationCallback();
 
         includeMutableComponent = false;
         numMutableComponents = 0;
@@ -99,16 +100,16 @@ public class LSMRTreeWithAntiMatterTuplesSearchCursor extends LSMIndexSearchCurs
         btreeAccessors = new ITreeIndexAccessor[numMutableComponents];
         for (int i = 0; i < numMutableComponents; i++) {
             ILSMComponent component = operationalComponents.get(i);
-            RTree rtree = (RTree) ((LSMRTreeMemoryComponent) component).getRTree();
-            BTree btree = (BTree) ((LSMRTreeMemoryComponent) component).getBTree();
-            mutableRTreeCursors[i] = new RTreeSearchCursor((IRTreeInteriorFrame) lsmInitialState
-                    .getRTreeInteriorFrameFactory().createFrame(), (IRTreeLeafFrame) lsmInitialState
-                    .getRTreeLeafFrameFactory().createFrame());
-            btreeCursors[i] = new BTreeRangeSearchCursor((IBTreeLeafFrame) lsmInitialState.getBTreeLeafFrameFactory()
-                    .createFrame(), false);
+            RTree rtree = ((LSMRTreeMemoryComponent) component).getRTree();
+            BTree btree = ((LSMRTreeMemoryComponent) component).getBTree();
+            mutableRTreeCursors[i] = new RTreeSearchCursor(
+                    (IRTreeInteriorFrame) lsmInitialState.getRTreeInteriorFrameFactory().createFrame(),
+                    (IRTreeLeafFrame) lsmInitialState.getRTreeLeafFrameFactory().createFrame());
+            btreeCursors[i] = new BTreeRangeSearchCursor(
+                    (IBTreeLeafFrame) lsmInitialState.getBTreeLeafFrameFactory().createFrame(), false);
             btreeAccessors[i] = btree.createAccessor(NoOpOperationCallback.INSTANCE, NoOpOperationCallback.INSTANCE);
-            mutableRTreeAccessors[i] = rtree.createAccessor(NoOpOperationCallback.INSTANCE,
-                    NoOpOperationCallback.INSTANCE);
+            mutableRTreeAccessors[i] =
+                    rtree.createAccessor(NoOpOperationCallback.INSTANCE, NoOpOperationCallback.INSTANCE);
         }
 
         rangeCursors = new RTreeSearchCursor[numImmutableComponents];
@@ -116,12 +117,12 @@ public class LSMRTreeWithAntiMatterTuplesSearchCursor extends LSMIndexSearchCurs
         int j = 0;
         for (int i = numMutableComponents; i < operationalComponents.size(); i++) {
             ILSMComponent component = operationalComponents.get(i);
-            rangeCursors[j] = new RTreeSearchCursor((IRTreeInteriorFrame) lsmInitialState
-                    .getRTreeInteriorFrameFactory().createFrame(), (IRTreeLeafFrame) lsmInitialState
-                    .getRTreeLeafFrameFactory().createFrame());
-            RTree rtree = (RTree) ((LSMRTreeDiskComponent) component).getRTree();
-            immutableRTreeAccessors[j] = rtree.createAccessor(NoOpOperationCallback.INSTANCE,
-                    NoOpOperationCallback.INSTANCE);
+            rangeCursors[j] = new RTreeSearchCursor(
+                    (IRTreeInteriorFrame) lsmInitialState.getRTreeInteriorFrameFactory().createFrame(),
+                    (IRTreeLeafFrame) lsmInitialState.getRTreeLeafFrameFactory().createFrame());
+            RTree rtree = ((LSMRTreeDiskComponent) component).getRTree();
+            immutableRTreeAccessors[j] =
+                    rtree.createAccessor(NoOpOperationCallback.INSTANCE, NoOpOperationCallback.INSTANCE);
             immutableRTreeAccessors[j].search(rangeCursors[j], searchPred);
             j++;
         }
@@ -131,7 +132,7 @@ public class LSMRTreeWithAntiMatterTuplesSearchCursor extends LSMIndexSearchCurs
         open = true;
     }
 
-    private void searchNextCursor() throws HyracksDataException, IndexException {
+    private void searchNextCursor() throws HyracksDataException {
         if (currentCursor < numMutableComponents) {
             mutableRTreeCursors[currentCursor].reset();
             mutableRTreeAccessors[currentCursor].search(mutableRTreeCursors[currentCursor], rtreeSearchPredicate);
@@ -139,7 +140,7 @@ public class LSMRTreeWithAntiMatterTuplesSearchCursor extends LSMIndexSearchCurs
     }
 
     @Override
-    public boolean hasNext() throws HyracksDataException, IndexException {
+    public boolean hasNext() throws HyracksDataException {
         if (includeMutableComponent) {
             if (foundNext) {
                 return true;
@@ -149,7 +150,13 @@ public class LSMRTreeWithAntiMatterTuplesSearchCursor extends LSMIndexSearchCurs
                 while (mutableRTreeCursors[currentCursor].hasNext()) {
                     mutableRTreeCursors[currentCursor].next();
                     ITupleReference currentTuple = mutableRTreeCursors[currentCursor].getTuple();
+                    // TODO: at this time, we only add proceed() part.
+                    // reconcile() and complete() can be added later after considering the semantics.
+
+                    // Call proceed() to do necessary operations before returning this tuple.
+                    searchCallback.proceed(currentTuple);
                     if (searchMemBTrees(currentTuple, currentCursor)) {
+                        // anti-matter tuple is NOT found
                         foundNext = true;
                         frameTuple = currentTuple;
                         return true;
@@ -162,14 +169,33 @@ public class LSMRTreeWithAntiMatterTuplesSearchCursor extends LSMIndexSearchCurs
             while (super.hasNext()) {
                 super.next();
                 ITupleReference diskRTreeTuple = super.getTuple();
+                // TODO: at this time, we only add proceed().
+                // reconcile() and complete() can be added later after considering the semantics.
+
+                // Call proceed() to do necessary operations before returning this tuple.
+                searchCallback.proceed(diskRTreeTuple);
                 if (searchMemBTrees(diskRTreeTuple, numMutableComponents)) {
+                    // anti-matter tuple is NOT found
                     foundNext = true;
                     frameTuple = diskRTreeTuple;
                     return true;
                 }
             }
         } else {
-            return super.hasNext();
+            if (super.hasNext()) {
+                super.next();
+                ITupleReference diskRTreeTuple = super.getTuple();
+
+                // TODO: at this time, we only add proceed() part.
+                // reconcile() and complete() can be added later after considering the semantics.
+
+                // Call proceed() to do necessary operations before returning this tuple.
+                // Since in-memory components don't exist, we can skip searching in-memory B-Trees.
+                searchCallback.proceed(diskRTreeTuple);
+                foundNext = true;
+                frameTuple = diskRTreeTuple;
+                return true;
+            }
         }
 
         return false;
@@ -177,26 +203,16 @@ public class LSMRTreeWithAntiMatterTuplesSearchCursor extends LSMIndexSearchCurs
 
     @Override
     public void next() throws HyracksDataException {
-        if (includeMutableComponent) {
-            foundNext = false;
-        } else {
-            super.next();
-        }
-
+        foundNext = false;
     }
 
     @Override
     public ITupleReference getTuple() {
-        if (includeMutableComponent) {
-            return frameTuple;
-        } else {
-            return super.getTuple();
-        }
-
+        return frameTuple;
     }
 
     @Override
-    public void reset() throws HyracksDataException, IndexException {
+    public void reset() throws HyracksDataException {
         if (!open) {
             return;
         }
@@ -233,8 +249,7 @@ public class LSMRTreeWithAntiMatterTuplesSearchCursor extends LSMIndexSearchCurs
         return cmp.selectiveFieldCompare(tupleA, tupleB, comparatorFields);
     }
 
-    private boolean searchMemBTrees(ITupleReference tuple, int lastBTreeToSearch) throws HyracksDataException,
-            IndexException {
+    private boolean searchMemBTrees(ITupleReference tuple, int lastBTreeToSearch) throws HyracksDataException {
         for (int i = 0; i < lastBTreeToSearch; i++) {
             btreeCursors[i].reset();
             btreeRangePredicate.setHighKey(tuple, true);

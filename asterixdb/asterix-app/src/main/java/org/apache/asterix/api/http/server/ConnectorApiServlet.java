@@ -28,6 +28,7 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+import org.apache.asterix.common.dataflow.ICcApplicationContext;
 import org.apache.asterix.file.StorageComponentProvider;
 import org.apache.asterix.metadata.MetadataManager;
 import org.apache.asterix.metadata.MetadataTransactionContext;
@@ -48,7 +49,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
-import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpResponseStatus;
 
 /**
@@ -59,9 +59,11 @@ import io.netty.handler.codec.http.HttpResponseStatus;
  */
 public class ConnectorApiServlet extends AbstractServlet {
     private static final Logger LOGGER = Logger.getLogger(ConnectorApiServlet.class.getName());
+    private ICcApplicationContext appCtx;
 
-    public ConnectorApiServlet(ConcurrentMap<String, Object> ctx, String[] paths) {
+    public ConnectorApiServlet(ConcurrentMap<String, Object> ctx, String[] paths, ICcApplicationContext appCtx) {
         super(ctx, paths);
+        this.appCtx = appCtx;
     }
 
     @Override
@@ -91,44 +93,46 @@ public class ConnectorApiServlet extends AbstractServlet {
             // Metadata transaction begins.
             MetadataManager.INSTANCE.init();
             MetadataTransactionContext mdTxnCtx = MetadataManager.INSTANCE.beginTransaction();
-
             // Retrieves file splits of the dataset.
-            MetadataProvider metadataProvider = new MetadataProvider(null, new StorageComponentProvider());
-            metadataProvider.setMetadataTxnContext(mdTxnCtx);
-            Dataset dataset = metadataProvider.findDataset(dataverseName, datasetName);
-            if (dataset == null) {
-                jsonResponse.put("error",
-                        "Dataset " + datasetName + " does not exist in " + "dataverse " + dataverseName);
+            MetadataProvider metadataProvider = new MetadataProvider(appCtx, null, new StorageComponentProvider());
+            try {
+                metadataProvider.setMetadataTxnContext(mdTxnCtx);
+                Dataset dataset = metadataProvider.findDataset(dataverseName, datasetName);
+                if (dataset == null) {
+                    jsonResponse.put("error",
+                            "Dataset " + datasetName + " does not exist in " + "dataverse " + dataverseName);
+                    out.write(jsonResponse.toString());
+                    out.flush();
+                    return;
+                }
+                boolean temp = dataset.getDatasetDetails().isTemp();
+                FileSplit[] fileSplits =
+                        metadataProvider.splitsForDataset(mdTxnCtx, dataverseName, datasetName, datasetName, temp);
+                ARecordType recordType = (ARecordType) metadataProvider.findType(dataset.getItemTypeDataverseName(),
+                        dataset.getItemTypeName());
+                List<List<String>> primaryKeys = DatasetUtil.getPartitioningKeys(dataset);
+                StringBuilder pkStrBuf = new StringBuilder();
+                for (List<String> keys : primaryKeys) {
+                    for (String key : keys) {
+                        pkStrBuf.append(key).append(",");
+                    }
+                }
+                pkStrBuf.delete(pkStrBuf.length() - 1, pkStrBuf.length());
+                // Constructs the returned json object.
+                formResponseObject(jsonResponse, fileSplits, recordType, pkStrBuf.toString(), temp,
+                        hcc.getNodeControllerInfos());
+
+                // Flush the cached contents of the dataset to file system.
+                FlushDatasetUtil.flushDataset(hcc, metadataProvider, dataverseName, datasetName, datasetName);
+
+                // Metadata transaction commits.
+                MetadataManager.INSTANCE.commitTransaction(mdTxnCtx);
+                // Writes file splits.
                 out.write(jsonResponse.toString());
                 out.flush();
-                return;
+            } finally {
+                metadataProvider.getLocks().unlock();
             }
-            boolean temp = dataset.getDatasetDetails().isTemp();
-            FileSplit[] fileSplits =
-                    metadataProvider.splitsForDataset(mdTxnCtx, dataverseName, datasetName, datasetName, temp);
-            ARecordType recordType = (ARecordType) metadataProvider.findType(dataset.getItemTypeDataverseName(),
-                    dataset.getItemTypeName());
-            List<List<String>> primaryKeys = DatasetUtil.getPartitioningKeys(dataset);
-            StringBuilder pkStrBuf = new StringBuilder();
-            for (List<String> keys : primaryKeys) {
-                for (String key : keys) {
-                    pkStrBuf.append(key).append(",");
-                }
-            }
-            pkStrBuf.delete(pkStrBuf.length() - 1, pkStrBuf.length());
-
-            // Constructs the returned json object.
-            formResponseObject(jsonResponse, fileSplits, recordType, pkStrBuf.toString(), temp,
-                    hcc.getNodeControllerInfos());
-
-            // Flush the cached contents of the dataset to file system.
-            FlushDatasetUtil.flushDataset(hcc, metadataProvider, dataverseName, datasetName, datasetName);
-
-            // Metadata transaction commits.
-            MetadataManager.INSTANCE.commitTransaction(mdTxnCtx);
-            // Writes file splits.
-            out.write(jsonResponse.toString());
-            out.flush();
         } catch (Exception e) {
             LOGGER.log(Level.WARNING, "Failure handling a request", e);
             out.println(e.getMessage());

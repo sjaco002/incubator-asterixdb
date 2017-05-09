@@ -26,7 +26,7 @@ import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-import org.apache.asterix.common.api.IAppRuntimeContext;
+import org.apache.asterix.common.api.INcApplicationContext;
 import org.apache.asterix.common.api.IDatasetLifecycleManager;
 import org.apache.asterix.common.cluster.ClusterPartition;
 import org.apache.asterix.common.config.ClusterProperties;
@@ -115,7 +115,7 @@ import org.apache.hyracks.storage.common.file.LocalResource;
 public class MetadataBootstrap {
     public static final boolean IS_DEBUG_MODE = false;
     private static final Logger LOGGER = Logger.getLogger(MetadataBootstrap.class.getName());
-    private static IAppRuntimeContext appContext;
+    private static INcApplicationContext appContext;
     private static IBufferCache bufferCache;
     private static IFileMapProvider fileMapProvider;
     private static IDatasetLifecycleManager dataLifecycleManager;
@@ -151,7 +151,7 @@ public class MetadataBootstrap {
     public static void startUniverse(INCServiceContext ncServiceContext, boolean isNewUniverse)
             throws RemoteException, ACIDException, MetadataException {
         MetadataBootstrap.setNewUniverse(isNewUniverse);
-        appContext = (IAppRuntimeContext) ncServiceContext.getApplicationContext();
+        appContext = (INcApplicationContext) ncServiceContext.getApplicationContext();
 
         MetadataProperties metadataProperties = appContext.getMetadataProperties();
         metadataNodeName = metadataProperties.getMetadataNodeName();
@@ -378,7 +378,7 @@ public class MetadataBootstrap {
                     ioOpCallbackFactory.createIoOpCallback(), index.isPrimaryIndex(), null, null, null, null, true,
                     appContext.getStorageComponentProvider().getMetadataPageManagerFactory());
             lsmBtree.create();
-            resourceID = index.getResourceID();
+            resourceID = index.getResourceId();
             Resource localResourceMetadata = new LSMBTreeLocalResourceMetadata(typeTraits, comparatorFactories,
                     bloomFilterKeyFields, index.isPrimaryIndex(), index.getDatasetId().getId(),
                     metadataPartition.getPartitionId(), appContext.getMetadataMergePolicyFactory(),
@@ -399,7 +399,7 @@ public class MetadataBootstrap {
                         + " to intialize as a new instance. (WARNING: all data will be lost.)");
             }
             resourceID = resource.getId();
-            if (index.getResourceID() != resource.getId()) {
+            if (index.getResourceId() != resource.getId()) {
                 throw new HyracksDataException("Resource Id doesn't match expected metadata index resource id");
             }
             lsmBtree = (LSMBTree) dataLifecycleManager.get(file.getRelativePath());
@@ -416,7 +416,7 @@ public class MetadataBootstrap {
                 dataLifecycleManager.register(file.getRelativePath(), lsmBtree);
             }
         }
-        index.setResourceID(resourceID);
+        index.setResourceId(resourceID);
         index.setFile(file);
     }
 

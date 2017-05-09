@@ -120,7 +120,7 @@ public class NodeControllerService implements IControllerService {
 
     private final Map<JobId, Joblet> jobletMap;
 
-    private final Map<JobId, ActivityClusterGraph> activityClusterGraphMap;
+    private final Map<JobId, ActivityClusterGraph> preDistributedJobActivityClusterGraphMap;
 
     private ExecutorService executor;
 
@@ -180,7 +180,7 @@ public class NodeControllerService implements IControllerService {
         lccm = new LifeCycleComponentManager();
         workQueue = new WorkQueue(id, Thread.NORM_PRIORITY); // Reserves MAX_PRIORITY of the heartbeat thread.
         jobletMap = new Hashtable<>();
-        activityClusterGraphMap = new Hashtable<>();
+        preDistributedJobActivityClusterGraphMap = new Hashtable<>();
         timer = new Timer(true);
         serverCtx = new ServerContext(ServerContext.ServerType.NODE_CONTROLLER,
                 new File(new File(NodeControllerService.class.getName()), id));
@@ -256,6 +256,11 @@ public class NodeControllerService implements IControllerService {
     @Override
     public void start() throws Exception {
         LOGGER.log(Level.INFO, "Starting NodeControllerService");
+        if (LOGGER.isLoggable(Level.INFO)) {
+            LOGGER.info("Setting uncaught exception handler " + getLifeCycleComponentManager());
+        }
+        Thread.currentThread().setUncaughtExceptionHandler(getLifeCycleComponentManager());
+        Runtime.getRuntime().addShutdownHook(new NCShutdownHook(this));
         ipc = new IPCSystem(new InetSocketAddress(ncConfig.getClusterListenAddress(), ncConfig.getClusterListenPort()),
                 new NodeControllerIPCI(this), new CCNCFunctions.SerializerDeserializer());
         ipc.start();
@@ -336,6 +341,7 @@ public class NodeControllerService implements IControllerService {
     public synchronized void stop() throws Exception {
         if (!shuttedDown) {
             LOGGER.log(Level.INFO, "Stopping NodeControllerService");
+            application.preStop();
             executor.shutdownNow();
             if (!executor.awaitTermination(10, TimeUnit.SECONDS)) {
                 LOGGER.log(Level.SEVERE, "Some jobs failed to exit, continuing with abnormal shutdown");
@@ -372,27 +378,27 @@ public class NodeControllerService implements IControllerService {
     }
 
     public void storeActivityClusterGraph(JobId jobId, ActivityClusterGraph acg) throws HyracksException {
-        if (activityClusterGraphMap.get(jobId) != null) {
+        if (preDistributedJobActivityClusterGraphMap.get(jobId) != null) {
             throw HyracksException.create(ErrorCode.DUPLICATE_DISTRIBUTED_JOB, jobId);
         }
-        activityClusterGraphMap.put(jobId, acg);
+        preDistributedJobActivityClusterGraphMap.put(jobId, acg);
     }
 
     public void removeActivityClusterGraph(JobId jobId) throws HyracksException {
-        if (activityClusterGraphMap.get(jobId) == null) {
+        if (preDistributedJobActivityClusterGraphMap.get(jobId) == null) {
             throw HyracksException.create(ErrorCode.ERROR_FINDING_DISTRIBUTED_JOB, jobId);
         }
-        activityClusterGraphMap.remove(jobId);
+        preDistributedJobActivityClusterGraphMap.remove(jobId);
     }
 
     public void checkForDuplicateDistributedJob(JobId jobId) throws HyracksException {
-        if (activityClusterGraphMap.get(jobId) != null) {
+        if (preDistributedJobActivityClusterGraphMap.get(jobId) != null) {
             throw HyracksException.create(ErrorCode.DUPLICATE_DISTRIBUTED_JOB, jobId);
         }
     }
 
     public ActivityClusterGraph getActivityClusterGraph(JobId jobId) throws HyracksException {
-        return activityClusterGraphMap.get(jobId);
+        return preDistributedJobActivityClusterGraphMap.get(jobId);
     }
 
     public NetworkManager getNetworkManager() {
@@ -415,7 +421,8 @@ public class NodeControllerService implements IControllerService {
         return nodeParameters;
     }
 
-    public ExecutorService getExecutorService() {
+    @Override
+    public ExecutorService getExecutor() {
         return executor;
     }
 

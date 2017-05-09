@@ -34,7 +34,6 @@ import java.util.Set;
 import java.util.Timer;
 import java.util.TimerTask;
 import java.util.TreeMap;
-import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.logging.Level;
@@ -156,7 +155,7 @@ public class ClusterControllerService implements IControllerService {
         ccContext = new ClusterControllerContext(topology);
         sweeper = new DeadNodeSweeper();
         datasetDirectoryService = new DatasetDirectoryService(ccConfig.getResultTTL(),
-                ccConfig.getResultSweepThreshold());
+                ccConfig.getResultSweepThreshold(), preDistributedJobStore);
 
         deploymentRunMap = new HashMap<>();
         stateDumpRunMap = new HashMap<>();
@@ -289,6 +288,7 @@ public class ClusterControllerService implements IControllerService {
     }
 
     private void stopApplication() throws Exception {
+
         application.stop();
     }
 
@@ -324,12 +324,9 @@ public class ClusterControllerService implements IControllerService {
         return workQueue;
     }
 
-    public ExecutorService getExecutorService() {
+    @Override
+    public ExecutorService getExecutor() {
         return executor;
-    }
-
-    public Executor getExecutor() {
-        return getExecutorService();
     }
 
     public CCConfig getConfig() {

@@ -22,11 +22,10 @@ package org.apache.hyracks.storage.am.lsm.common.api;
 import java.util.Map;
 
 import org.apache.hyracks.api.exceptions.HyracksDataException;
-import org.apache.hyracks.storage.am.common.api.IndexException;
 
 public interface ILSMMergePolicy {
-    public void diskComponentAdded(ILSMIndex index, boolean fullMergeIsRequested, boolean isMergeOp)
-            throws HyracksDataException, IndexException;
+    void diskComponentAdded(ILSMIndex index, boolean fullMergeIsRequested, boolean isMergeOp)
+            throws HyracksDataException;
 
     void configure(Map<String, String> properties);
 
@@ -55,7 +54,7 @@ public interface ILSMMergePolicy {
      * @throws HyracksDataException
      * @throws IndexException
      */
-    public boolean isMergeLagging(ILSMIndex index) throws HyracksDataException, IndexException;
+    public boolean isMergeLagging(ILSMIndex index) throws HyracksDataException;
     public long getNumberOfFlushes();
     public long getNumberOfMerges();
     public double getMergeCost();

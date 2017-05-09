@@ -19,11 +19,12 @@
 package org.apache.asterix.common.cluster;
 
 import org.apache.asterix.common.api.IClusterEventsSubscriber;
+import org.apache.asterix.common.dataflow.ICcApplicationContext;
 
 public interface IGlobalRecoveryManager extends IClusterEventsSubscriber {
 
     /**
      * Starts the global recovery process if the cluster state changed to ACTIVE.
      */
-    public void startGlobalRecovery();
+    public void startGlobalRecovery(ICcApplicationContext appCtx);
 }

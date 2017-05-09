@@ -85,6 +85,16 @@ public class ErrorCode {
     public static final int COMPILATION_AQLPLUS_NO_SUCH_JOIN_TYPE = 1025;
     public static final int COMPILATION_FUNC_EXPRESSION_CANNOT_UTILIZE_INDEX = 1026;
     public static final int COMPILATION_DATASET_TYPE_DOES_NOT_HAVE_PRIMARY_INDEX = 1027;
+    public static final int COMPILATION_UNSUPPORTED_QUERY_PARAMETER = 1028;
+    public static final int NO_METADATA_FOR_DATASET = 1029;
+    public static final int SUBTREE_HAS_NO_DATA_SOURCE = 1030;
+    public static final int SUBTREE_HAS_NO_ADDTIONAL_DATA_SOURCE = 1031;
+    public static final int NO_INDEX_FIELD_NAME_FOR_GIVEN_FUNC_EXPR = 1032;
+    public static final int NO_SUPPORTED_TYPE = 1033;
+    public static final int NO_TOKENIZER_FOR_TYPE = 1034;
+    public static final int INCOMPATIBLE_SEARCH_MODIFIER = 1035;
+    public static final int UNKNOWN_SEARCH_MODIFIER = 1036;
+    public static final int COMPILATION_BAD_QUERY_PARAMETER_VALUE = 1037;
 
     // Feed errors
     public static final int DATAFLOW_ILLEGAL_STATE = 3001;
@@ -93,9 +103,9 @@ public class ErrorCode {
     public static final int OPERATORS_FEED_INTAKE_OPERATOR_DESCRIPTOR_CLASSLOADER_NOT_CONFIGURED = 3004;
     public static final int PARSER_DELIMITED_NONOPTIONAL_NULL = 3005;
     public static final int PARSER_DELIMITED_ILLEGAL_FIELD = 3006;
-    public static final int FEED_MANAGEMENT_ACTIVE_LIFE_CYCLE_EVENT_SUBSCRIBER_ACTIVE_JOB_FAILURE = 3007;
+    public static final int ADAPTER_TWITTER_TWITTER4J_LIB_NOT_FOUND = 3007;
     public static final int OPERATORS_FEED_INTAKE_OPERATOR_NODE_PUSHABLE_FAIL_AT_INGESTION = 3008;
-    public static final int OPERATORS_FEED_MSG_OPERATOR_NODE_PUSHABLE_INVALID_SUBSCRIBABLE_RUNTIME = 3009;
+    public static final int FEED_CREATE_FEED_DATATYPE_ERROR = 3009;
     public static final int PARSER_HIVE_NON_PRIMITIVE_LIST_NOT_SUPPORT = 3010;
     public static final int PARSER_HIVE_FIELD_TYPE = 3011;
     public static final int PARSER_HIVE_GET_COLUMNS = 3012;
@@ -106,8 +116,8 @@ public class ErrorCode {
     public static final int PARSER_HIVE_NULL_VALUE_IN_LIST = 3017;
     public static final int INPUT_RECORD_RECORD_WITH_METADATA_AND_PK_NULL_IN_NON_OPTIONAL = 3018;
     public static final int INPUT_RECORD_RECORD_WITH_METADATA_AND_PK_CANNT_GET_PKEY = 3019;
-    public static final int FEED_MANAGEMENT_FEED_EVENT_LISTENER_FEED_JOINT_REGISTERED = 3020;
-    public static final int FEED_MANAGEMENT_FEED_EVENT_REGISTER_INTAKE_JOB_FAIL = 3021;
+    public static final int FEED_CHANGE_FEED_CONNECTIVITY_ON_ALIVE_FEED = 3020;
+    public static final int RECORD_READER_MALFORMED_INPUT_STREAM = 3021;
     public static final int PROVIDER_DATAFLOW_CONTROLLER_UNKNOWN_DATA_SOURCE = 3022;
     public static final int PROVIDER_DATASOURCE_FACTORY_UNKNOWN_INPUT_STREAM_FACTORY = 3023;
     public static final int UTIL_EXTERNAL_DATA_UTILS_FAIL_CREATE_STREAM_FACTORY = 3024;
@@ -164,6 +174,10 @@ public class ErrorCode {
     public static final int UTIL_FILE_SYSTEM_WATCHER_NO_FILES_FOUND = 3076;
     public static final int UTIL_LOCAL_FILE_SYSTEM_UTILS_PATH_NOT_FOUND = 3077;
     public static final int UTIL_HDFS_UTILS_CANNOT_OBTAIN_HDFS_SCHEDULER = 3078;
+    public static final int ACTIVE_MANAGER_SHUTDOWN = 3079;
+    public static final int FEED_METADATA_UTIL_UNEXPECTED_FEED_DATATYPE = 3080;
+    public static final int FEED_METADATA_SOCKET_ADAPTOR_SOCKET_NOT_PROPERLY_CONFIGURED = 3081;
+    public static final int FEED_METADATA_SOCKET_ADAPTOR_SOCKET_INVALID_HOST_NC = 3082;
 
     private ErrorCode() {
     }

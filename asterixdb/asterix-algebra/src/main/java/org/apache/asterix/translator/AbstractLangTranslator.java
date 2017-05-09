@@ -20,10 +20,12 @@ package org.apache.asterix.translator;
 
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import org.apache.asterix.common.api.IClusterManagementWork.ClusterState;
+import org.apache.asterix.common.dataflow.ICcApplicationContext;
 import org.apache.asterix.common.exceptions.AsterixException;
 import org.apache.asterix.lang.common.base.Statement;
 import org.apache.asterix.lang.common.statement.DatasetDecl;
@@ -35,9 +37,9 @@ import org.apache.asterix.lang.common.statement.NodeGroupDropStatement;
 import org.apache.asterix.metadata.dataset.hints.DatasetHints;
 import org.apache.asterix.metadata.entities.Dataverse;
 import org.apache.asterix.metadata.utils.MetadataConstants;
-import org.apache.asterix.runtime.utils.AppContextInfo;
 import org.apache.asterix.runtime.utils.ClusterStateManager;
 import org.apache.hyracks.algebricks.common.utils.Pair;
+import org.apache.hyracks.api.exceptions.HyracksDataException;
 
 /**
  * Base class for language translators. Contains the common validation logic for language
@@ -47,22 +49,21 @@ public abstract class AbstractLangTranslator {
 
     private static final Logger LOGGER = Logger.getLogger(AbstractLangTranslator.class.getName());
 
-    public void validateOperation(Dataverse defaultDataverse, Statement stmt) throws AsterixException {
+    public void validateOperation(ICcApplicationContext appCtx, Dataverse defaultDataverse, Statement stmt)
+            throws AsterixException {
 
         if (!(ClusterStateManager.INSTANCE.getState().equals(ClusterState.ACTIVE)
                 && ClusterStateManager.INSTANCE.isGlobalRecoveryCompleted())) {
-            int maxWaitCycles = AppContextInfo.INSTANCE.getExternalProperties().getMaxWaitClusterActive();
-            int waitCycleCount = 0;
+            int maxWaitCycles = appCtx.getExternalProperties().getMaxWaitClusterActive();
             try {
-                while (!ClusterStateManager.INSTANCE.getState().equals(ClusterState.ACTIVE)
-                        && waitCycleCount < maxWaitCycles) {
-                    Thread.sleep(1000);
-                    waitCycleCount++;
-                }
+                ClusterStateManager.INSTANCE.waitForState(ClusterState.ACTIVE, maxWaitCycles, TimeUnit.SECONDS);
+            } catch (HyracksDataException e) {
+                throw new AsterixException(e);
             } catch (InterruptedException e) {
                 if (LOGGER.isLoggable(Level.WARNING)) {
                     LOGGER.warning("Thread interrupted while waiting for cluster to be " + ClusterState.ACTIVE);
                 }
+                Thread.currentThread().interrupt();
             }
             if (!ClusterStateManager.INSTANCE.getState().equals(ClusterState.ACTIVE)) {
                 throw new AsterixException("Cluster is in " + ClusterState.UNUSABLE + " state."
@@ -80,7 +81,7 @@ public abstract class AbstractLangTranslator {
         }
 
         if (!ClusterStateManager.INSTANCE.isGlobalRecoveryCompleted()) {
-            int maxWaitCycles = AppContextInfo.INSTANCE.getExternalProperties().getMaxWaitClusterActive();
+            int maxWaitCycles = appCtx.getExternalProperties().getMaxWaitClusterActive();
             int waitCycleCount = 0;
             try {
                 while (!ClusterStateManager.INSTANCE.isGlobalRecoveryCompleted() && waitCycleCount < maxWaitCycles) {
@@ -91,6 +92,7 @@ public abstract class AbstractLangTranslator {
                 if (LOGGER.isLoggable(Level.WARNING)) {
                     LOGGER.warning("Thread interrupted while waiting for cluster to complete global recovery ");
                 }
+                Thread.currentThread().interrupt();
             }
             if (!ClusterStateManager.INSTANCE.isGlobalRecoveryCompleted()) {
                 throw new AsterixException("Cluster Global recovery is not yet complete and the system is in "
@@ -161,7 +163,7 @@ public abstract class AbstractLangTranslator {
                     Pair<Boolean, String> validationResult = null;
                     StringBuffer errorMsgBuffer = new StringBuffer();
                     for (Entry<String, String> hint : hints.entrySet()) {
-                        validationResult = DatasetHints.validate(hint.getKey(), hint.getValue());
+                        validationResult = DatasetHints.validate(appCtx, hint.getKey(), hint.getValue());
                         if (!validationResult.first) {
                             errorMsgBuffer.append("Dataset: " + datasetStmt.getName().getValue()
                                     + " error in processing hint: " + hint.getKey() + " " + validationResult.second);

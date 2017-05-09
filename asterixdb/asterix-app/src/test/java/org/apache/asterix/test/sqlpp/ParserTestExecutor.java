@@ -51,6 +51,7 @@ import org.apache.asterix.test.common.ComparisonException;
 import org.apache.asterix.test.common.TestExecutor;
 import org.apache.asterix.testframework.context.TestCaseContext;
 import org.apache.asterix.testframework.context.TestFileContext;
+import org.apache.asterix.testframework.xml.ComparisonEnum;
 import org.apache.asterix.testframework.xml.TestCase.CompilationUnit;
 import org.apache.asterix.testframework.xml.TestGroup;
 import org.junit.Assert;
@@ -91,9 +92,9 @@ public class ParserTestExecutor extends TestExecutor {
                             "[TEST]: " + testCaseCtx.getTestCase().getFilePath() + "/" + cUnit.getName() + " PASSED ");
                     queryCount++;
                 } catch (Exception e) {
-                    System.err.println("testFile " + testFile.toString() + " raised an exception:");
-                    e.printStackTrace();
+                    System.err.println("testFile " + testFile.toString() + " raised an exception: " + e);
                     if (cUnit.getExpectedError().isEmpty()) {
+                        e.printStackTrace();
                         System.err.println("...Unexpected!");
                         if (failedGroup != null) {
                             failedGroup.getTestCase().add(testCaseCtx.getTestCase());
@@ -148,7 +149,8 @@ public class ParserTestExecutor extends TestExecutor {
             }
             writer.close();
             // Compares the actual result and the expected result.
-            runScriptAndCompareWithResult(queryFile, new PrintWriter(System.err), expectedFile, actualResultFile);
+            runScriptAndCompareWithResult(queryFile, new PrintWriter(System.err), expectedFile, actualResultFile,
+                    ComparisonEnum.TEXT);
         } catch (Exception e) {
             GlobalConfig.ASTERIX_LOGGER.warning("Failed while testing file " + queryFile);
             throw e;

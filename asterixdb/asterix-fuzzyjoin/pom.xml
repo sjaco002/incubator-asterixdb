@@ -21,7 +21,7 @@
   <parent>
     <artifactId>apache-asterixdb</artifactId>
     <groupId>org.apache.asterix</groupId>
-    <version>0.9.1-SNAPSHOT</version>
+    <version>0.9.2-SNAPSHOT</version>
   </parent>
   <groupId>org.apache.asterix</groupId>
   <artifactId>asterix-fuzzyjoin</artifactId>
@@ -63,6 +63,23 @@
             <include>**/LICENSE*</include>
             <include>**/DEPENDENCIES*</include>
           </includes>
+        </configuration>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.rat</groupId>
+        <artifactId>apache-rat-plugin</artifactId>
+        <executions>
+          <execution>
+            <phase>validate</phase>
+            <goals>
+              <goal>check</goal>
+            </goals>
+          </execution>
+        </executions>
+        <configuration>
+          <excludes combine.children="append">
+            <exclude>data/**</exclude>
+          </excludes>
         </configuration>
       </plugin>
     </plugins>

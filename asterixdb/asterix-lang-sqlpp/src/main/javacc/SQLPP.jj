@@ -1,3 +1,21 @@
+//
+// Licensed to the Apache Software Foundation (ASF) under one
+// or more contributor license agreements.  See the NOTICE file
+// distributed with this work for additional information
+// regarding copyright ownership.  The ASF licenses this file
+// to you under the Apache License, Version 2.0 (the
+// "License"); you may not use this file except in compliance
+// with the License.  You may obtain a copy of the License at
+//
+//   http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing,
+// software distributed under the License is distributed on an
+// "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+// KIND, either express or implied.  See the License for the
+// specific language governing permissions and limitations
+// under the License.
+//
 options {
 
 
@@ -144,8 +162,8 @@ import org.apache.asterix.lang.sqlpp.optype.SetOpType;
 import org.apache.asterix.lang.sqlpp.struct.SetOperationInput;
 import org.apache.asterix.lang.sqlpp.struct.SetOperationRight;
 import org.apache.asterix.lang.sqlpp.util.ExpressionToVariableUtil;
+import org.apache.asterix.lang.sqlpp.util.FunctionMapUtil;
 import org.apache.asterix.lang.sqlpp.util.SqlppVariableUtil;
-import org.apache.asterix.metadata.utils.MetadataConstants;
 import org.apache.hyracks.algebricks.common.utils.Pair;
 import org.apache.hyracks.algebricks.common.utils.Triple;
 import org.apache.hyracks.algebricks.core.algebra.expressions.IExpressionAnnotation;
@@ -335,6 +353,7 @@ List<Statement> Statement() throws ParseException:
       decls.add(stmt);
     }
   )*
+  (<SEMICOLON>)*
   <EOF>
   {
     return decls;
@@ -821,16 +840,27 @@ boolean IfNotExists() throws ParseException:
     }
 }
 
-FunctionSignature ApplyFunction() throws ParseException:
+List<FunctionSignature> ApplyFunction() throws ParseException:
 {
   FunctionName functioName = null;
-  FunctionSignature funcSig = null;
+  String fqFunctionName = null;
+  List<FunctionSignature> funcSigs = new ArrayList<FunctionSignature>();
 }
 {
   <APPLY> <FUNCTION> functioName = FunctionName()
     {
-       String fqFunctionName = functioName.library == null ? functioName.function : functioName.library + "#" + functioName.function;
-       return new FunctionSignature(functioName.dataverse, fqFunctionName, 1);
+       fqFunctionName = functioName.library == null ? functioName.function : functioName.library + "#" + functioName.function;
+       funcSigs.add(new FunctionSignature(functioName.dataverse, fqFunctionName, 1));
+    }
+  (
+      <COMMA> functioName = FunctionName()
+      {
+        fqFunctionName = functioName.library == null ? functioName.function : functioName.library + "#" + functioName.function;
+        funcSigs.add(new FunctionSignature(functioName.dataverse, fqFunctionName, 1));
+      }
+  )*
+    {
+        return funcSigs;
     }
 }
 
@@ -999,10 +1029,6 @@ DeleteStatement DeleteStatement() throws ParseException:
   VariableExpr varExpr = null;
   Expression condition = null;
   Pair<Identifier, Identifier> nameComponents;
-  // This is related to the new metadata lock management
-  setDataverses(new ArrayList<String>());
-  setDatasets(new ArrayList<String>());
-
 }
 {
   <DELETE>
@@ -1010,20 +1036,13 @@ DeleteStatement DeleteStatement() throws ParseException:
          ((<AS>)? varExpr = Variable())?
   (<WHERE> condition = Expression())?
   {
-      // First we get the dataverses and datasets that we want to lock
-      List<String> dataverses = getDataverses();
-      List<String> datasets = getDatasets();
-      // we remove the pointer to the dataverses and datasets
-      setDataverses(null);
-      setDatasets(null);
-
       if(varExpr == null){
         varExpr = new VariableExpr();
         VarIdentifier var = SqlppVariableUtil.toInternalVariableIdentifier(nameComponents.second.getValue());
         varExpr.setVar(var);
       }
       return new DeleteStatement(varExpr, nameComponents.first, nameComponents.second,
-          condition, getVarCounter(), dataverses, datasets);
+          condition, getVarCounter());
   }
 }
 
@@ -1235,16 +1254,16 @@ Statement ConnectStatement() throws ParseException:
   Pair<Identifier,Identifier> datasetNameComponents = null;
 
   Map<String,String> configuration = null;
-  FunctionSignature appliedFunction = null;
+  List<FunctionSignature> appliedFunctions = null;
   Statement stmt = null;
   String policy = null;
 }
 {
   (
     <FEED> feedNameComponents = QualifiedName() <TO> Dataset() datasetNameComponents = QualifiedName()
-    (appliedFunction = ApplyFunction())?  (policy = GetPolicy())?
+    (appliedFunctions = ApplyFunction())?  (policy = GetPolicy())?
       {
-        stmt = new ConnectFeedStatement(feedNameComponents, datasetNameComponents, appliedFunction,
+        stmt = new ConnectFeedStatement(feedNameComponents, datasetNameComponents, appliedFunctions,
          policy, getVarCounter());
       }
   )
@@ -1708,9 +1727,6 @@ Query ExplainStatement() throws ParseException:
 Query Query(boolean explain) throws ParseException:
 {
   Query query = new Query(explain);
-  // we set the pointers to the dataverses and datasets lists to fill them with entities to be locked
-  setDataverses(query.getDataverses());
-  setDatasets(query.getDatasets());
   Expression expr;
 }
 {
@@ -1721,9 +1737,6 @@ Query Query(boolean explain) throws ParseException:
   )
   {
     query.setBody(expr);
-    // we remove the pointers to the locked entities before we return the query object
-    setDataverses(null);
-    setDatasets(null);
     return query;
   }
 }
@@ -2501,7 +2514,7 @@ Expression FunctionCallExpr() throws ParseException:
       if (signature == null) {
         signature = new FunctionSignature(funcName.dataverse, fqFunctionName, arity);
       }
-      callExpr = new CallExpr(signature,argList);
+      callExpr = FunctionMapUtil.normalizedListInputFunctions(new CallExpr(signature,argList));
       if (hint != null) {
         if (hint.startsWith(INDEXED_NESTED_LOOP_JOIN_HINT)) {
           callExpr.addHint(IndexedNLJoinExpressionAnnotation.INSTANCE);

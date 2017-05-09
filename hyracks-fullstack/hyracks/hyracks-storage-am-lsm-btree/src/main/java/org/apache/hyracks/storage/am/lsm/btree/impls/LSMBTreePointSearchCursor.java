@@ -32,13 +32,9 @@ import org.apache.hyracks.storage.am.common.api.ICursorInitialState;
 import org.apache.hyracks.storage.am.common.api.ISearchOperationCallback;
 import org.apache.hyracks.storage.am.common.api.ISearchPredicate;
 import org.apache.hyracks.storage.am.common.api.ITreeIndexCursor;
-import org.apache.hyracks.storage.am.common.api.IndexException;
 import org.apache.hyracks.storage.am.common.impls.NoOpOperationCallback;
-import org.apache.hyracks.storage.am.lsm.common.api.ILSMComponent;
+import org.apache.hyracks.storage.am.lsm.common.api.*;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMComponent.LSMComponentType;
-import org.apache.hyracks.storage.am.lsm.common.api.ILSMHarness;
-import org.apache.hyracks.storage.am.lsm.common.api.ILSMIndexOperationContext;
-import org.apache.hyracks.storage.am.lsm.common.api.ILSMTreeTupleReference;
 import org.apache.hyracks.storage.am.lsm.common.impls.BloomFilterAwareBTreePointSearchCursor;
 import org.apache.hyracks.storage.common.buffercache.IBufferCache;
 import org.apache.hyracks.storage.common.buffercache.ICachedPage;
@@ -55,6 +51,7 @@ public class LSMBTreePointSearchCursor implements ITreeIndexCursor {
     private ILSMHarness lsmHarness;
     private boolean nextHasBeenCalled;
     private boolean foundTuple;
+    private int foundIn = -1;
     private ITupleReference frameTuple;
     private List<ILSMComponent> operationalComponents;
 
@@ -63,7 +60,7 @@ public class LSMBTreePointSearchCursor implements ITreeIndexCursor {
     }
 
     @Override
-    public boolean hasNext() throws HyracksDataException, IndexException {
+    public boolean hasNext() throws HyracksDataException {
         if (nextHasBeenCalled) {
             return false;
         } else if (foundTuple) {
@@ -74,16 +71,20 @@ public class LSMBTreePointSearchCursor implements ITreeIndexCursor {
             btreeAccessors[i].search(rangeCursors[i], predicate);
             if (rangeCursors[i].hasNext()) {
                 rangeCursors[i].next();
-                // We use the predicate's to lock the key instead of the tuple that we get from cursor to avoid copying the tuple when we do the "unlatch dance"
+                // We use the predicate's to lock the key instead of the tuple that we get from cursor
+                // to avoid copying the tuple when we do the "unlatch dance".
                 if (reconciled || searchCallback.proceed(predicate.getLowKey())) {
                     // if proceed is successful, then there's no need for doing the "unlatch dance"
                     if (((ILSMTreeTupleReference) rangeCursors[i].getTuple()).isAntimatter()) {
-                        searchCallback.cancel(predicate.getLowKey());
+                        if (reconciled) {
+                            searchCallback.cancel(predicate.getLowKey());
+                        }
                         rangeCursors[i].close();
                         return false;
                     } else {
                         frameTuple = rangeCursors[i].getTuple();
                         foundTuple = true;
+                        foundIn = i;
                         return true;
                     }
                 }
@@ -95,7 +96,6 @@ public class LSMBTreePointSearchCursor implements ITreeIndexCursor {
 
                     // retraverse
                     btreeAccessors[0].search(rangeCursors[i], predicate);
-                    searchCallback.complete(predicate.getLowKey());
                     if (rangeCursors[i].hasNext()) {
                         rangeCursors[i].next();
                         if (((ILSMTreeTupleReference) rangeCursors[i].getTuple()).isAntimatter()) {
@@ -105,9 +105,12 @@ public class LSMBTreePointSearchCursor implements ITreeIndexCursor {
                         } else {
                             frameTuple = rangeCursors[i].getTuple();
                             foundTuple = true;
+                            searchCallback.complete(predicate.getLowKey());
+                            foundIn = i;
                             return true;
                         }
                     } else {
+                        searchCallback.cancel(predicate.getLowKey());
                         rangeCursors[i].close();
                     }
                 } else {
@@ -115,6 +118,7 @@ public class LSMBTreePointSearchCursor implements ITreeIndexCursor {
                     searchCallback.reconcile(frameTuple);
                     searchCallback.complete(frameTuple);
                     foundTuple = true;
+                    foundIn = i;
                     return true;
                 }
             } else {
@@ -125,7 +129,7 @@ public class LSMBTreePointSearchCursor implements ITreeIndexCursor {
     }
 
     @Override
-    public void reset() throws HyracksDataException, IndexException {
+    public void reset() throws HyracksDataException {
         try {
             if (rangeCursors != null) {
                 for (int i = 0; i < rangeCursors.length; ++i) {
@@ -222,6 +226,25 @@ public class LSMBTreePointSearchCursor implements ITreeIndexCursor {
     @Override
     public ITupleReference getTuple() {
         return frameTuple;
+    }
+
+    @Override
+    public ITupleReference getFilterMinTuple() {
+        ILSMComponentFilter filter = getFilter();
+        return filter == null ? null : filter.getMinTuple();
+    }
+
+    @Override
+    public ITupleReference getFilterMaxTuple() {
+        ILSMComponentFilter filter = getFilter();
+        return filter == null ? null : filter.getMaxTuple();
+    }
+
+    private ILSMComponentFilter getFilter() {
+        if (foundTuple) {
+            return operationalComponents.get(foundIn).getLSMComponentFilter();
+        }
+        return null;
     }
 
     @Override

@@ -26,7 +26,7 @@ import java.util.Objects;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-import org.apache.asterix.active.ActiveJobNotificationHandler;
+import org.apache.asterix.active.ActiveLifecycleListener;
 import org.apache.asterix.active.IActiveEntityEventsListener;
 import org.apache.asterix.common.config.DatasetConfig.DatasetType;
 import org.apache.asterix.common.context.IStorageComponentProvider;
@@ -50,8 +50,8 @@ import org.apache.asterix.metadata.MetadataTransactionContext;
 import org.apache.asterix.metadata.api.IMetadataEntity;
 import org.apache.asterix.metadata.declared.BTreeDataflowHelperFactoryProvider;
 import org.apache.asterix.metadata.declared.MetadataProvider;
+import org.apache.asterix.metadata.lock.ExternalDatasetsRegistry;
 import org.apache.asterix.metadata.utils.DatasetUtil;
-import org.apache.asterix.metadata.utils.ExternalDatasetsRegistry;
 import org.apache.asterix.metadata.utils.ExternalIndexingOperations;
 import org.apache.asterix.metadata.utils.IndexUtil;
 import org.apache.asterix.metadata.utils.InvertedIndexDataflowHelperFactoryProvider;
@@ -60,6 +60,7 @@ import org.apache.asterix.metadata.utils.MetadataUtil;
 import org.apache.asterix.metadata.utils.RTreeDataflowHelperFactoryProvider;
 import org.apache.asterix.om.types.ARecordType;
 import org.apache.asterix.om.utils.RecordUtil;
+import org.apache.asterix.transaction.management.opcallbacks.AbstractIndexModificationOperationCallback.Operation;
 import org.apache.asterix.transaction.management.opcallbacks.LockThenSearchOperationCallbackFactory;
 import org.apache.asterix.transaction.management.opcallbacks.PrimaryIndexInstantSearchOperationCallbackFactory;
 import org.apache.asterix.transaction.management.opcallbacks.PrimaryIndexModificationOperationCallbackFactory;
@@ -67,6 +68,7 @@ import org.apache.asterix.transaction.management.opcallbacks.PrimaryIndexOperati
 import org.apache.asterix.transaction.management.opcallbacks.SecondaryIndexModificationOperationCallbackFactory;
 import org.apache.asterix.transaction.management.opcallbacks.SecondaryIndexOperationTrackerFactory;
 import org.apache.asterix.transaction.management.opcallbacks.SecondaryIndexSearchOperationCallbackFactory;
+import org.apache.asterix.transaction.management.opcallbacks.TempDatasetPrimaryIndexModificationOperationCallbackFactory;
 import org.apache.asterix.transaction.management.opcallbacks.TempDatasetSecondaryIndexModificationOperationCallbackFactory;
 import org.apache.asterix.transaction.management.opcallbacks.UpsertOperationCallbackFactory;
 import org.apache.asterix.transaction.management.runtime.CommitRuntimeFactory;
@@ -273,17 +275,18 @@ public class Dataset implements IMetadataEntity<Dataset>, IDataset {
      * @throws Exception
      *             if an error occur during the drop process or if the dataset can't be dropped for any reason
      */
-    public void drop(MetadataProvider metadataProvider, MutableObject<MetadataTransactionContext> mdTxnCtx,
-            List<JobSpecification> jobsToExecute, MutableBoolean bActiveTxn, MutableObject<ProgressState> progress,
-            IHyracksClientConnection hcc) throws Exception {
+    public void drop(MetadataProvider metadataProvider,
+            MutableObject<MetadataTransactionContext> mdTxnCtx, List<JobSpecification> jobsToExecute,
+            MutableBoolean bActiveTxn, MutableObject<ProgressState> progress, IHyracksClientConnection hcc)
+            throws Exception {
         Map<FeedConnectionId, Pair<JobSpecification, Boolean>> disconnectJobList = new HashMap<>();
         if (getDatasetType() == DatasetType.INTERNAL) {
             // prepare job spec(s) that would disconnect any active feeds involving the dataset.
-            IActiveEntityEventsListener[] activeListeners = ActiveJobNotificationHandler.INSTANCE.getEventListeners();
+            ActiveLifecycleListener activeListener =
+                    (ActiveLifecycleListener) metadataProvider.getApplicationContext().getActiveLifecycleListener();
+            IActiveEntityEventsListener[] activeListeners = activeListener.getNotificationHandler().getEventListeners();
             for (IActiveEntityEventsListener listener : activeListeners) {
-                IDataset ds = MetadataManager.INSTANCE.getDataset(metadataProvider.getMetadataTxnContext(),
-                        dataverseName, datasetName);
-                if (listener.isEntityUsingDataset(ds)) {
+                if (listener.isEntityUsingDataset(this)) {
                     throw new CompilationException(ErrorCode.COMPILATION_CANT_DROP_ACTIVE_DATASET,
                             RecordUtil.toFullyQualifiedName(dataverseName, datasetName),
                             listener.getEntityId().toString());
@@ -294,7 +297,7 @@ public class Dataset implements IMetadataEntity<Dataset>, IDataset {
                     MetadataManager.INSTANCE.getDatasetIndexes(mdTxnCtx.getValue(), dataverseName, datasetName);
             for (int j = 0; j < indexes.size(); j++) {
                 if (indexes.get(j).isSecondaryIndex()) {
-                    jobsToExecute.add(IndexUtil.dropJob(indexes.get(j), metadataProvider, this));
+                    jobsToExecute.add(IndexUtil.buildDropIndexJobSpec(indexes.get(j), metadataProvider, this));
                 }
             }
             Index primaryIndex =
@@ -333,7 +336,7 @@ public class Dataset implements IMetadataEntity<Dataset>, IDataset {
                     MetadataManager.INSTANCE.getDatasetIndexes(mdTxnCtx.getValue(), dataverseName, datasetName);
             for (int j = 0; j < indexes.size(); j++) {
                 if (ExternalIndexingOperations.isFileIndex(indexes.get(j))) {
-                    jobsToExecute.add(IndexUtil.dropJob(indexes.get(j), metadataProvider, this));
+                    jobsToExecute.add(IndexUtil.buildDropIndexJobSpec(indexes.get(j), metadataProvider, this));
                 } else {
                     jobsToExecute.add(DatasetUtil.buildDropFilesIndexJobSpec(metadataProvider, this));
                 }
@@ -517,23 +520,30 @@ public class Dataset implements IMetadataEntity<Dataset>, IDataset {
             IStorageComponentProvider componentProvider, Index index, JobId jobId, IndexOperation op,
             int[] primaryKeyFields) throws AlgebricksException {
         if (getDatasetDetails().isTemp()) {
-            return new TempDatasetSecondaryIndexModificationOperationCallbackFactory(jobId, getDatasetId(),
-                    primaryKeyFields, componentProvider.getTransactionSubsystemProvider(), op, index.resourceType());
+            return op == IndexOperation.DELETE || op == IndexOperation.INSERT || op == IndexOperation.UPSERT
+                    ? index.isPrimaryIndex()
+                            ? new TempDatasetPrimaryIndexModificationOperationCallbackFactory(jobId, datasetId,
+                                    primaryKeyFields, componentProvider.getTransactionSubsystemProvider(),
+                                    Operation.get(op), index.resourceType())
+                            : new TempDatasetSecondaryIndexModificationOperationCallbackFactory(jobId, getDatasetId(),
+                                    primaryKeyFields, componentProvider.getTransactionSubsystemProvider(),
+                                    Operation.get(op), index.resourceType())
+                    : NoOpOperationCallbackFactory.INSTANCE;
         } else if (index.isPrimaryIndex()) {
             return op == IndexOperation.UPSERT
                     ? new UpsertOperationCallbackFactory(jobId, getDatasetId(), primaryKeyFields,
-                            componentProvider.getTransactionSubsystemProvider(), op, index.resourceType(),
-                            hasMetaPart())
+                            componentProvider.getTransactionSubsystemProvider(), Operation.get(op),
+                            index.resourceType())
                     : op == IndexOperation.DELETE || op == IndexOperation.INSERT
                             ? new PrimaryIndexModificationOperationCallbackFactory(jobId, getDatasetId(),
-                                    primaryKeyFields, componentProvider.getTransactionSubsystemProvider(), op,
-                                    index.resourceType(), hasMetaPart())
+                                    primaryKeyFields, componentProvider.getTransactionSubsystemProvider(),
+                                    Operation.get(op), index.resourceType())
                             : NoOpOperationCallbackFactory.INSTANCE;
         } else {
             return op == IndexOperation.DELETE || op == IndexOperation.INSERT || op == IndexOperation.UPSERT
                     ? new SecondaryIndexModificationOperationCallbackFactory(jobId, getDatasetId(), primaryKeyFields,
-                            componentProvider.getTransactionSubsystemProvider(), op, index.resourceType(),
-                            hasMetaPart())
+                            componentProvider.getTransactionSubsystemProvider(), Operation.get(op),
+                            index.resourceType())
                     : NoOpOperationCallbackFactory.INSTANCE;
         }
     }
@@ -574,10 +584,10 @@ public class Dataset implements IMetadataEntity<Dataset>, IDataset {
     }
 
     public IPushRuntimeFactory getCommitRuntimeFactory(JobId jobId, int[] primaryKeyFields,
-            MetadataProvider metadataProvider, int upsertVarIdx, int[] datasetPartitions, boolean isSink) {
+            MetadataProvider metadataProvider, int[] datasetPartitions, boolean isSink) {
         return new CommitRuntimeFactory(jobId, datasetId, primaryKeyFields,
-                metadataProvider.isTemporaryDatasetWriteJob(), metadataProvider.isWriteTransaction(), upsertVarIdx,
-                datasetPartitions, isSink);
+                metadataProvider.isTemporaryDatasetWriteJob(), metadataProvider.isWriteTransaction(), datasetPartitions,
+                isSink);
     }
 
     /**
@@ -604,5 +614,9 @@ public class Dataset implements IMetadataEntity<Dataset>, IDataset {
 
     public IFrameOperationCallbackFactory getFrameOpCallbackFactory() {
         return NoOpFrameOperationCallbackFactory.INSTANCE;
+    }
+
+    public boolean isTemp() {
+        return getDatasetDetails().isTemp();
     }
 }

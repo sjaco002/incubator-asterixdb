@@ -20,8 +20,11 @@ package org.apache.asterix.external.adapter.factory;
 
 import java.util.List;
 import java.util.Map;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
-import org.apache.asterix.common.api.IAppRuntimeContext;
+import org.apache.asterix.common.api.IApplicationContext;
+import org.apache.asterix.common.api.INcApplicationContext;
 import org.apache.asterix.common.library.ILibraryManager;
 import org.apache.asterix.external.api.IAdapterFactory;
 import org.apache.asterix.external.api.IDataFlowController;
@@ -45,6 +48,8 @@ import org.apache.asterix.external.util.FeedUtils;
 import org.apache.asterix.om.types.ARecordType;
 import org.apache.hyracks.algebricks.common.constraints.AlgebricksAbsolutePartitionConstraint;
 import org.apache.hyracks.algebricks.common.exceptions.AlgebricksException;
+import org.apache.hyracks.api.application.INCServiceContext;
+import org.apache.hyracks.api.application.IServiceContext;
 import org.apache.hyracks.api.context.IHyracksTaskContext;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.apache.hyracks.api.io.FileSplit;
@@ -52,6 +57,7 @@ import org.apache.hyracks.api.io.FileSplit;
 public class GenericAdapterFactory implements IIndexingAdapterFactory, IAdapterFactory {
 
     private static final long serialVersionUID = 1L;
+    private static final Logger LOGGER = Logger.getLogger(GenericAdapterFactory.class.getName());
     private IExternalDataSourceFactory dataSourceFactory;
     private IDataParserFactory dataParserFactory;
     private ARecordType recordType;
@@ -85,11 +91,13 @@ public class GenericAdapterFactory implements IIndexingAdapterFactory, IAdapterF
     @Override
     public synchronized IDataSourceAdapter createAdapter(IHyracksTaskContext ctx, int partition)
             throws HyracksDataException {
-        IAppRuntimeContext appCtx =
-                (IAppRuntimeContext) ctx.getJobletContext().getServiceContext().getApplicationContext();
+        INCServiceContext serviceCtx = ctx.getJobletContext().getServiceContext();
+        INcApplicationContext appCtx =
+                (INcApplicationContext) serviceCtx.getApplicationContext();
         try {
-            restoreExternalObjects(appCtx.getLibraryManager());
+            restoreExternalObjects(serviceCtx, appCtx.getLibraryManager());
         } catch (Exception e) {
+            LOGGER.log(Level.INFO, "Failure restoring external objects", e);
             throw HyracksDataException.create(e);
         }
         if (isFeed) {
@@ -107,7 +115,7 @@ public class GenericAdapterFactory implements IIndexingAdapterFactory, IAdapterF
         }
     }
 
-    private void restoreExternalObjects(ILibraryManager libraryManager)
+    private void restoreExternalObjects(IServiceContext serviceContext, ILibraryManager libraryManager)
             throws HyracksDataException, AlgebricksException {
         if (dataSourceFactory == null) {
             dataSourceFactory = DatasourceFactoryProvider.getExternalDataSourceFactory(libraryManager, configuration);
@@ -115,7 +123,7 @@ public class GenericAdapterFactory implements IIndexingAdapterFactory, IAdapterF
             if (dataSourceFactory.isIndexible() && (files != null)) {
                 ((IIndexibleExternalDataSource) dataSourceFactory).setSnapshot(files, indexingOp);
             }
-            dataSourceFactory.configure(configuration);
+            dataSourceFactory.configure(serviceContext, configuration);
         }
         if (dataParserFactory == null) {
             // create and configure parser factory
@@ -127,17 +135,19 @@ public class GenericAdapterFactory implements IIndexingAdapterFactory, IAdapterF
     }
 
     @Override
-    public void configure(ILibraryManager libraryManager, Map<String, String> configuration)
+    public void configure(IServiceContext serviceContext, Map<String, String> configuration)
             throws HyracksDataException, AlgebricksException {
         this.configuration = configuration;
+        IApplicationContext appCtx = (IApplicationContext) serviceContext.getApplicationContext();
         ExternalDataUtils.validateDataSourceParameters(configuration);
-        dataSourceFactory = DatasourceFactoryProvider.getExternalDataSourceFactory(libraryManager, configuration);
+        dataSourceFactory =
+                DatasourceFactoryProvider.getExternalDataSourceFactory(appCtx.getLibraryManager(), configuration);
         if (dataSourceFactory.isIndexible() && (files != null)) {
             ((IIndexibleExternalDataSource) dataSourceFactory).setSnapshot(files, indexingOp);
         }
-        dataSourceFactory.configure(configuration);
+        dataSourceFactory.configure(serviceContext, configuration);
         ExternalDataUtils.validateDataParserParameters(configuration);
-        dataParserFactory = ParserFactoryProvider.getDataParserFactory(libraryManager, configuration);
+        dataParserFactory = ParserFactoryProvider.getDataParserFactory(appCtx.getLibraryManager(), configuration);
         dataParserFactory.setRecordType(recordType);
         dataParserFactory.setMetaType(metaType);
         dataParserFactory.configure(configuration);

@@ -31,28 +31,6 @@
              ResultOffsetPath="results"
              QueryOffsetPath="queries"
              QueryFileExtension=".aql">
-  <test-group name="external-library">
-    <test-case FilePath="external-library">
-      <compilation-unit name="typed_adapter">
-        <output-dir compare="Text">typed_adapter</output-dir>
-      </compilation-unit>
-    </test-case>
-    <test-case FilePath="external-library">
-      <compilation-unit name="classad-parser-new">
-        <output-dir compare="Text">classad-parser-new</output-dir>
-      </compilation-unit>
-    </test-case>
-    <test-case FilePath="external-library">
-      <compilation-unit name="classad-parser-old">
-        <output-dir compare="Text">classad-parser-old</output-dir>
-      </compilation-unit>
-    </test-case>
-    <test-case FilePath="external-library">
-      <compilation-unit name="getCapital">
-        <output-dir compare="Text">getCapital</output-dir>
-      </compilation-unit>
-    </test-case>
-  </test-group>
   <test-group name="external">
     <test-case FilePath="external">
       <compilation-unit name="invalid-format">
@@ -146,47 +124,22 @@
       </compilation-unit>
     </test-case>
     <test-case FilePath="feeds">
-      <compilation-unit name="feed-with-multiple-indexes">
-        <output-dir compare="Text">feed-with-multiple-indexes</output-dir>
-      </compilation-unit>
-    </test-case>
-    <test-case FilePath="feeds">
       <compilation-unit name="twitter-feed">
         <output-dir compare="Text">twitter-feed</output-dir>
-        <expected-error>One or more parameters are missing from adapter configuration</expected-error>
-        <expected-error>Unknown source feed</expected-error>
+        <expected-error>Twitter4J library not found!</expected-error>
+        <expected-error>Unknown source feed: TwitterFeed</expected-error>
       </compilation-unit>
     </test-case>
     <test-case FilePath="feeds">
       <compilation-unit name="revised-tweet-parser">
         <output-dir compare="Text">revised-tweet-parser</output-dir>
-        <expected-error>One or more parameters are missing from adapter configuration</expected-error>
-        <expected-error>Unknown source feed</expected-error>
+        <expected-error>Twitter4J library not found!</expected-error>
+        <expected-error>Unknown source feed: TwitterFeed</expected-error>
       </compilation-unit>
     </test-case>
     <test-case FilePath="feeds">
       <compilation-unit name="connect-feed">
         <output-dir compare="Text">connect-feed</output-dir>
-      </compilation-unit>
-    </test-case>
-    <test-case FilePath="feeds">
-      <compilation-unit name="feed-with-external-parser">
-        <output-dir compare="Text">feed-with-external-parser</output-dir>
-      </compilation-unit>
-    </test-case>
-    <test-case FilePath="feeds">
-      <compilation-unit name="feed-with-external-parser-with-open-index">
-        <output-dir compare="Text">feed-with-external-parser-with-open-index</output-dir>
-      </compilation-unit>
-    </test-case>
-    <test-case FilePath="feeds">
-      <compilation-unit name="feed-with-external-parser-with-two-open-indexes">
-        <output-dir compare="Text">feed-with-external-parser-with-two-open-indexes</output-dir>
-      </compilation-unit>
-    </test-case>
-    <test-case FilePath="feeds">
-      <compilation-unit name="feed-with-external-function">
-        <output-dir compare="Text">feed-with-external-function</output-dir>
       </compilation-unit>
     </test-case>
     <test-case FilePath="feeds">
@@ -204,11 +157,13 @@
         <output-dir compare="Text">change-feed</output-dir>
       </compilation-unit>
     </test-case>
+    <!-- see ASTERIXDB-1881
     <test-case FilePath="feeds">
       <compilation-unit name="feed-with-meta-pk-in-meta">
         <output-dir compare="Text">feed-with-meta-pk-in-meta</output-dir>
       </compilation-unit>
     </test-case>
+    -->
     <test-case FilePath="feeds">
       <compilation-unit name="feeds_07">
         <output-dir compare="Text">feeds_07</output-dir>
@@ -289,6 +244,33 @@
       <compilation-unit name="stop-stopped-feed">
         <output-dir compare="Text">stop-stopped-feed</output-dir>
         <expected-error>Feed TweetFeed is not started.</expected-error>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="feeds">
+      <compilation-unit name="push-socket-with-auuid">
+        <output-dir compare="Text">push-socket-with-auuid</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="feeds">
+      <compilation-unit name="connect-feed-with-aql-function">
+        <output-dir compare="Text">connect-feed-with-aql-function</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="feeds">
+      <compilation-unit name="disconnect-live-feed">
+        <output-dir compare="Text">disconnect-live-feed</output-dir>
+        <expected-error>This operation cannot be done when Feed</expected-error>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="feeds">
+      <compilation-unit name="connect-live-feed">
+        <output-dir compare="Text">connect-live-feed</output-dir>
+        <expected-error>This operation cannot be done when Feed</expected-error>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="feeds">
+      <compilation-unit name="record-reader-with-malformed-input-stream">
+        <output-dir compare="Text">record-reader-with-malformed-input-stream</output-dir>
       </compilation-unit>
     </test-case>
   </test-group>
@@ -443,6 +425,11 @@
     <test-case FilePath="fulltext">
       <compilation-unit name="fulltext-07">
         <output-dir compare="Text">fulltext-07</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="fulltext">
+      <compilation-unit name="fulltext-08">
+        <output-dir compare="Text">fulltext-08</output-dir>
       </compilation-unit>
     </test-case>
     <test-case FilePath="fulltext">
@@ -1668,7 +1655,7 @@
     <test-case FilePath="dml">
       <compilation-unit name="insert-duplicated-keys-from-query">
         <output-dir compare="Text">insert-duplicated-keys-from-query</output-dir>
-        <expected-error>Failed to insert key since key already exists</expected-error>
+        <expected-error>Inserting duplicate keys into the primary storage</expected-error>
       </compilation-unit>
     </test-case>
     <test-case FilePath="dml">
@@ -1851,7 +1838,7 @@
     <test-case FilePath="dml">
       <compilation-unit name="insert-duplicated-keys">
         <output-dir compare="Text">insert-duplicated-keys</output-dir>
-        <expected-error>org.apache.hyracks.storage.am.common.exceptions.TreeIndexDuplicateKeyException: Failed to insert key since key already exists</expected-error>
+        <expected-error>Inserting duplicate keys into the primary storage</expected-error>
       </compilation-unit>
     </test-case>
     <test-case FilePath="dml">
@@ -3326,11 +3313,13 @@
         <output-dir compare="Text">query_dataset_with_meta-2</output-dir>
       </compilation-unit>
     </test-case>
+    <!-- see ASTERIXDB-1881
     <test-case FilePath="meta">
       <compilation-unit name="query_dataset_with_meta_primary_index-1">
         <output-dir compare="Text">query_dataset_with_meta_primary_index-1</output-dir>
       </compilation-unit>
     </test-case>
+    -->
     <test-case FilePath="meta">
       <compilation-unit name="query_dataset_with_meta_failure">
         <output-dir compare="Text">query_dataset_with_meta_failure</output-dir>
@@ -6747,7 +6736,7 @@
     <test-case FilePath="load">
       <compilation-unit name="file-not-found">
         <output-dir compare="Text">none</output-dir>
-        <expected-error>org.apache.hyracks.api.exceptions.HyracksDataException: ASX3077: bla: path not found</expected-error>
+        <expected-error>ASX3077: bla: path not found</expected-error>
       </compilation-unit>
     </test-case>
     <test-case FilePath="user-defined-functions">
@@ -6758,7 +6747,7 @@
     <test-case FilePath="load">
       <compilation-unit name="duplicate-key-error">
         <output-dir compare="Text">none</output-dir>
-        <expected-error>Input stream given to BTree bulk load has duplicates</expected-error>
+        <expected-error>Loading duplicate keys into the primary storage</expected-error>
       </compilation-unit>
     </test-case>
     <test-case FilePath="load">

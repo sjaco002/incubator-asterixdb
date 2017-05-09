@@ -30,6 +30,7 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import org.apache.hyracks.api.dataflow.value.IBinaryComparatorFactory;
+import org.apache.hyracks.api.exceptions.ErrorCode;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.apache.hyracks.api.io.FileReference;
 import org.apache.hyracks.api.io.IIOManager;
@@ -53,9 +54,6 @@ import org.apache.hyracks.storage.am.common.api.ISearchPredicate;
 import org.apache.hyracks.storage.am.common.api.ITreeIndex;
 import org.apache.hyracks.storage.am.common.api.ITreeIndexCursor;
 import org.apache.hyracks.storage.am.common.api.ITreeIndexFrameFactory;
-import org.apache.hyracks.storage.am.common.api.IndexException;
-import org.apache.hyracks.storage.am.common.api.TreeIndexException;
-import org.apache.hyracks.storage.am.common.exceptions.TreeIndexDuplicateKeyException;
 import org.apache.hyracks.storage.am.common.impls.AbstractSearchPredicate;
 import org.apache.hyracks.storage.am.common.impls.NoOpOperationCallback;
 import org.apache.hyracks.storage.am.common.ophelpers.IndexOperation;
@@ -176,7 +174,7 @@ public class LSMBTree extends AbstractLSMIndex implements ITreeIndex {
         if (isActivated) {
             throw new HyracksDataException("Failed to create the index since it is activated.");
         }
-
+        // Why delete is part of the create??
         fileManager.deleteDirs();
         fileManager.createDirs();
         diskComponents.clear();
@@ -190,20 +188,11 @@ public class LSMBTree extends AbstractLSMIndex implements ITreeIndex {
         List<ILSMDiskComponent> immutableComponents = diskComponents;
         immutableComponents.clear();
         List<LSMComponentFileReferences> validFileReferences;
-        try {
-            validFileReferences = fileManager.cleanupAndGetValidFiles();
-        } catch (IndexException e) {
-            throw new HyracksDataException(e);
-        }
+        validFileReferences = fileManager.cleanupAndGetValidFiles();
         for (LSMComponentFileReferences lsmComonentFileReference : validFileReferences) {
             LSMBTreeDiskComponent component;
-            try {
-                component =
-                        createDiskComponent(componentFactory, lsmComonentFileReference.getInsertIndexFileReference(),
-                                lsmComonentFileReference.getBloomFilterFileReference(), false);
-            } catch (IndexException e) {
-                throw new HyracksDataException(e);
-            }
+            component = createDiskComponent(componentFactory, lsmComonentFileReference.getInsertIndexFileReference(),
+                    lsmComonentFileReference.getBloomFilterFileReference(), false);
             immutableComponents.add(component);
         }
         isActivated = true;
@@ -217,8 +206,7 @@ public class LSMBTree extends AbstractLSMIndex implements ITreeIndex {
 
         if (flushOnExit) {
             BlockingIOOperationCallbackWrapper cb = new BlockingIOOperationCallbackWrapper(ioOpCallback);
-            ILSMIndexAccessor accessor =
-                    createAccessor(NoOpOperationCallback.INSTANCE, NoOpOperationCallback.INSTANCE);
+            ILSMIndexAccessor accessor = createAccessor(NoOpOperationCallback.INSTANCE, NoOpOperationCallback.INSTANCE);
             accessor.scheduleFlush(cb);
             try {
                 cb.waitForIO();
@@ -299,10 +287,10 @@ public class LSMBTree extends AbstractLSMIndex implements ITreeIndex {
             case PHYSICALDELETE:
             case FLUSH:
             case DELETE:
+            case UPSERT:
                 operationalComponents.add(memoryComponents.get(cmc));
                 break;
             case INSERT:
-            case UPSERT:
                 addOperationalMutableComponents(operationalComponents);
                 operationalComponents.addAll(immutableComponents);
                 break;
@@ -315,7 +303,7 @@ public class LSMBTree extends AbstractLSMIndex implements ITreeIndex {
                         if (c.getLSMComponentFilter().satisfy(
                                 ((AbstractSearchPredicate) ctx.getSearchPredicate()).getMinFilterTuple(),
                                 ((AbstractSearchPredicate) ctx.getSearchPredicate()).getMaxFilterTuple(),
-                                ((LSMBTreeOpContext) ctx).filterCmp)) {
+                                ((LSMBTreeOpContext) ctx).getFilterCmp())) {
                             operationalComponents.add(c);
                         }
                     }
@@ -339,56 +327,55 @@ public class LSMBTree extends AbstractLSMIndex implements ITreeIndex {
     }
 
     @Override
-    public void modify(IIndexOperationContext ictx, ITupleReference tuple)
-            throws HyracksDataException, IndexException {
+    public void modify(IIndexOperationContext ictx, ITupleReference tuple) throws HyracksDataException {
         LSMBTreeOpContext ctx = (LSMBTreeOpContext) ictx;
 
         ITupleReference indexTuple;
-        if (ctx.indexTuple != null) {
-            ctx.indexTuple.reset(tuple);
-            indexTuple = ctx.indexTuple;
+        if (ctx.getIndexTuple() != null) {
+            ctx.getIndexTuple().reset(tuple);
+            indexTuple = ctx.getIndexTuple();
         } else {
             indexTuple = tuple;
         }
 
         switch (ctx.getOperation()) {
             case PHYSICALDELETE:
-                ctx.currentMutableBTreeAccessor.delete(indexTuple);
+                ctx.getCurrentMutableBTreeAccessor().delete(indexTuple);
                 break;
             case INSERT:
                 insert(indexTuple, ctx);
                 break;
             default:
-                ctx.currentMutableBTreeAccessor.upsert(indexTuple);
+                ctx.getCurrentMutableBTreeAccessor().upsert(indexTuple);
                 break;
         }
-        if (ctx.filterTuple != null) {
-            ctx.filterTuple.reset(tuple);
-            memoryComponents.get(currentMutableComponentId.get()).getLSMComponentFilter().update(ctx.filterTuple,
-                    ctx.filterCmp);
+        if (ctx.getFilterTuple() != null) {
+            ctx.getFilterTuple().reset(tuple);
+            memoryComponents.get(currentMutableComponentId.get()).getLSMComponentFilter().update(ctx.getFilterTuple(),
+                    ctx.getFilterCmp());
         }
     }
 
-    private boolean insert(ITupleReference tuple, LSMBTreeOpContext ctx) throws HyracksDataException, IndexException {
+    private boolean insert(ITupleReference tuple, LSMBTreeOpContext ctx) throws HyracksDataException {
         writeCount++;
-        LSMBTreePointSearchCursor searchCursor = ctx.insertSearchCursor;
-        IIndexCursor memCursor = ctx.memCursor;
+        LSMBTreePointSearchCursor searchCursor = ctx.getInsertSearchCursor();
+        IIndexCursor memCursor = ctx.getMemCursor();
         RangePredicate predicate = (RangePredicate) ctx.getSearchPredicate();
         predicate.setHighKey(tuple);
         predicate.setLowKey(tuple);
         Date checkStartTime = new Date();
         if (needKeyDupCheck) {
             // first check the inmemory component
-            ctx.currentMutableBTreeAccessor.search(memCursor, predicate);
+            ctx.getCurrentMutableBTreeAccessor().search(memCursor, predicate);
             try {
                 if (memCursor.hasNext()) {
                     memCursor.next();
                     LSMBTreeTupleReference lsmbtreeTuple = (LSMBTreeTupleReference) memCursor.getTuple();
                     if (!lsmbtreeTuple.isAntimatter()) {
-                        throw new TreeIndexDuplicateKeyException("Failed to insert key since key already exists.");
+                        throw HyracksDataException.create(ErrorCode.DUPLICATE_KEY);
                     } else {
                         memCursor.close();
-                        ctx.currentMutableBTreeAccessor.upsertIfConditionElseInsert(tuple,
+                        ctx.getCurrentMutableBTreeAccessor().upsertIfConditionElseInsert(tuple,
                                 AntimatterAwareTupleAcceptor.INSTANCE);
                         return true;
                     }
@@ -409,7 +396,7 @@ public class LSMBTree extends AbstractLSMIndex implements ITreeIndex {
             search(ctx, searchCursor, predicate, false);
             try {
                 if (searchCursor.hasNext()) {
-                    throw new TreeIndexDuplicateKeyException("Failed to insert key since key already exists.");
+                    throw HyracksDataException.create(ErrorCode.DUPLICATE_KEY);
                 }
             } finally {
                 searchCursor.close();
@@ -422,7 +409,7 @@ public class LSMBTree extends AbstractLSMIndex implements ITreeIndex {
         Date checkEndTime = new Date();
         experimentDuplCheckTime = experimentDuplCheckTime + (checkEndTime.getTime() - checkStartTime.getTime());
         ZonedDateTime startTime = ZonedDateTime.now();
-        ctx.currentMutableBTreeAccessor.upsertIfConditionElseInsert(tuple, AntimatterAwareTupleAcceptor.INSTANCE);
+        ctx.getCurrentMutableBTreeAccessor().upsertIfConditionElseInsert(tuple, AntimatterAwareTupleAcceptor.INSTANCE);
         Duration readTime = Duration.between(startTime, ZonedDateTime.now());
         if (writeCount % writeLogInterval == 0 && toString().contains("Tweets1")) {
             if (LOGGER.isLoggable(Level.SEVERE)) {
@@ -441,20 +428,20 @@ public class LSMBTree extends AbstractLSMIndex implements ITreeIndex {
     }
 
     public void search(ILSMIndexOperationContext ictx, IIndexCursor cursor, ISearchPredicate pred, boolean trueSearch)
-            throws HyracksDataException, IndexException {
+            throws HyracksDataException {
         LSMBTreeOpContext ctx = (LSMBTreeOpContext) ictx;
         List<ILSMComponent> operationalComponents = ctx.getComponentHolder();
-        ctx.searchInitialState.reset(pred, operationalComponents);
-        cursor.open(ctx.searchInitialState, pred);
+        ctx.getSearchInitialState().reset(pred, operationalComponents);
+        cursor.open(ctx.getSearchInitialState(), pred);
     }
 
     @Override
     public void search(ILSMIndexOperationContext ictx, IIndexCursor cursor, ISearchPredicate pred, long start)
-            throws HyracksDataException, IndexException {
+            throws HyracksDataException {
         LSMBTreeOpContext ctx = (LSMBTreeOpContext) ictx;
         List<ILSMComponent> operationalComponents = ctx.getComponentHolder();
-        ctx.searchInitialState.reset(pred, operationalComponents);
-        cursor.open(ctx.searchInitialState, pred);
+        ctx.getSearchInitialState().reset(pred, operationalComponents);
+        cursor.open(ctx.getSearchInitialState(), pred);
 
         long end = System.nanoTime();
         long microseconds = (end - start) / 1000;
@@ -487,7 +474,7 @@ public class LSMBTree extends AbstractLSMIndex implements ITreeIndex {
     }
 
     @Override
-    public ILSMDiskComponent flush(ILSMIOOperation operation) throws HyracksDataException, IndexException {
+    public ILSMDiskComponent flush(ILSMIOOperation operation) throws HyracksDataException {
         LSMBTreeFlushOperation flushOp = (LSMBTreeFlushOperation) operation;
         LSMBTreeMemoryComponent flushingComponent = (LSMBTreeMemoryComponent) flushOp.getFlushingComponent();
         IIndexAccessor accessor = flushingComponent.getBTree().createAccessor(NoOpOperationCallback.INSTANCE,
@@ -562,7 +549,7 @@ public class LSMBTree extends AbstractLSMIndex implements ITreeIndex {
 
     @Override
     public void scheduleMerge(ILSMIndexOperationContext ctx, ILSMIOOperationCallback callback)
-            throws HyracksDataException, IndexException {
+            throws HyracksDataException {
         LSMBTreeOpContext opCtx = createOpContext(NoOpOperationCallback.INSTANCE, NoOpOperationCallback.INSTANCE);
         opCtx.setOperation(IndexOperation.MERGE);
         List<ILSMComponent> mergingComponents = ctx.getComponentHolder();
@@ -587,7 +574,7 @@ public class LSMBTree extends AbstractLSMIndex implements ITreeIndex {
     }
 
     @Override
-    public ILSMDiskComponent merge(ILSMIOOperation operation) throws HyracksDataException, IndexException {
+    public ILSMDiskComponent merge(ILSMIOOperation operation) throws HyracksDataException {
         LSMBTreeMergeOperation mergeOp = (LSMBTreeMergeOperation) operation;
         ITreeIndexCursor cursor = mergeOp.getCursor();
         RangePredicate rangePred = new RangePredicate(null, null, true, true, null, null);
@@ -645,7 +632,7 @@ public class LSMBTree extends AbstractLSMIndex implements ITreeIndex {
 
     protected LSMBTreeDiskComponent createDiskComponent(LSMBTreeDiskComponentFactory factory,
             FileReference btreeFileRef, FileReference bloomFilterFileRef, boolean createComponent)
-                    throws HyracksDataException, IndexException {
+                    throws HyracksDataException {
         // Create new BTree instance.
         LSMBTreeDiskComponent component =
                 factory.createComponent(new LSMComponentFileReferences(btreeFileRef, null, bloomFilterFileRef));
@@ -668,15 +655,11 @@ public class LSMBTree extends AbstractLSMIndex implements ITreeIndex {
 
     @Override
     public IIndexBulkLoader createBulkLoader(float fillLevel, boolean verifyInput, long numElementsHint,
-            boolean checkIfEmptyIndex) throws TreeIndexException {
-        try {
-            return new LSMBTreeBulkLoader(fillLevel, verifyInput, numElementsHint, checkIfEmptyIndex);
-        } catch (HyracksDataException e) {
-            throw new TreeIndexException(e);
-        }
+            boolean checkIfEmptyIndex) throws HyracksDataException {
+        return new LSMBTreeBulkLoader(fillLevel, verifyInput, numElementsHint, checkIfEmptyIndex);
     }
 
-    protected ILSMDiskComponent createBulkLoadTarget() throws HyracksDataException, IndexException {
+    protected ILSMDiskComponent createBulkLoadTarget() throws HyracksDataException {
         LSMComponentFileReferences componentFileRefs = fileManager.getRelFlushFileReference();
         return createDiskComponent(bulkLoadComponentFactory, componentFileRefs.getInsertIndexFileReference(),
                 componentFileRefs.getBloomFilterFileReference(), true);
@@ -705,15 +688,11 @@ public class LSMBTree extends AbstractLSMIndex implements ITreeIndex {
         public final MultiComparator filterCmp;
 
         public LSMBTreeBulkLoader(float fillFactor, boolean verifyInput, long numElementsHint,
-                boolean checkIfEmptyIndex) throws TreeIndexException, HyracksDataException {
+                boolean checkIfEmptyIndex) throws HyracksDataException {
             if (checkIfEmptyIndex && !isEmptyIndex()) {
-                throw new TreeIndexException("Cannot load an index that is not empty");
+                throw HyracksDataException.create(ErrorCode.LOAD_NON_EMPTY_INDEX);
             }
-            try {
-                component = createBulkLoadTarget();
-            } catch (HyracksDataException | IndexException e) {
-                throw new TreeIndexException(e);
-            }
+            component = createBulkLoadTarget();
             bulkLoader = (BTreeBulkLoader) ((LSMBTreeDiskComponent) component).getBTree().createBulkLoader(fillFactor,
                     verifyInput, numElementsHint, false);
 
@@ -739,7 +718,7 @@ public class LSMBTree extends AbstractLSMIndex implements ITreeIndex {
         }
 
         @Override
-        public void add(ITupleReference tuple) throws IndexException, HyracksDataException {
+        public void add(ITupleReference tuple) throws HyracksDataException {
             try {
                 ITupleReference t;
                 if (indexTuple != null) {
@@ -758,7 +737,7 @@ public class LSMBTree extends AbstractLSMIndex implements ITreeIndex {
                     filterTuple.reset(tuple);
                     component.getLSMComponentFilter().update(filterTuple, filterCmp);
                 }
-            } catch (IndexException | HyracksDataException | RuntimeException e) {
+            } catch (Exception e) {
                 cleanupArtifacts();
                 throw e;
             }
@@ -784,7 +763,7 @@ public class LSMBTree extends AbstractLSMIndex implements ITreeIndex {
         }
 
         @Override
-        public void end() throws HyracksDataException, IndexException {
+        public void end() throws HyracksDataException {
             if (!cleanedUpArtifacts) {
                 if (hasBloomFilter && !endedBloomFilterLoad) {
                     builder.end();
@@ -847,7 +826,7 @@ public class LSMBTree extends AbstractLSMIndex implements ITreeIndex {
 
         public MultiComparator getMultiComparator() {
             LSMBTreeOpContext concreteCtx = (LSMBTreeOpContext) ctx;
-            return concreteCtx.cmp;
+            return concreteCtx.getCmp();
         }
     }
 

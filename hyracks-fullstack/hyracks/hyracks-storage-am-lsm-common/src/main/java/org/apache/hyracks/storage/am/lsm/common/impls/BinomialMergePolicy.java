@@ -27,7 +27,6 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import org.apache.hyracks.api.exceptions.HyracksDataException;
-import org.apache.hyracks.storage.am.common.api.IndexException;
 import org.apache.hyracks.storage.am.common.impls.NoOpOperationCallback;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMComponent;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMComponent.ComponentState;
@@ -46,7 +45,7 @@ public class BinomialMergePolicy implements ILSMMergePolicy {
 
     @Override
     public void diskComponentAdded(final ILSMIndex index, boolean fullMergeIsRequested, boolean isMergeOp)
-            throws HyracksDataException, IndexException {
+            throws HyracksDataException {
 
         if (isMergeOp) {
             return;
@@ -70,7 +69,7 @@ public class BinomialMergePolicy implements ILSMMergePolicy {
         scheduleMerge(index);
     }
 
-    private boolean scheduleMerge(final ILSMIndex index) throws HyracksDataException, IndexException {
+    private boolean scheduleMerge(final ILSMIndex index) throws HyracksDataException {
         List<ILSMDiskComponent> immutableComponents = new ArrayList<>(index.getImmutableComponents());
         Collections.reverse(immutableComponents);
         int size = immutableComponents.size();
@@ -204,7 +203,7 @@ public class BinomialMergePolicy implements ILSMMergePolicy {
     }
 
     @Override
-    public boolean isMergeLagging(ILSMIndex index) throws HyracksDataException, IndexException {
+    public boolean isMergeLagging(ILSMIndex index) throws HyracksDataException {
         List<ILSMDiskComponent> immutableComponents = index.getImmutableComponents();
         boolean isMergeOngoing = isMergeOngoing(immutableComponents);
         if (isMergeOngoing) {

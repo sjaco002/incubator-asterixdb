@@ -18,6 +18,7 @@
  */
 package org.apache.asterix.metadata.utils;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
@@ -97,31 +98,27 @@ public class IndexUtil {
         return empty;
     }
 
-    public static JobSpecification dropJob(Index index, MetadataProvider metadataProvider, Dataset dataset)
-            throws AlgebricksException {
-        JobSpecification spec = RuntimeUtils.createJobSpecification();
-        IStorageComponentProvider storageComponentProvider = metadataProvider.getStorageComponentProvider();
-        Pair<IFileSplitProvider, AlgebricksPartitionConstraint> splitsAndConstraint =
-                metadataProvider.getSplitProviderAndConstraints(dataset, index.getIndexName());
-        Pair<ILSMMergePolicyFactory, Map<String, String>> compactionInfo =
-                DatasetUtil.getMergePolicyFactory(dataset, metadataProvider.getMetadataTxnContext());
+    public static JobSpecification buildDropIndexJobSpec(Index index, MetadataProvider metadataProvider,
+            Dataset dataset) throws AlgebricksException {
         ARecordType recordType =
                 (ARecordType) metadataProvider.findType(dataset.getItemTypeDataverseName(), dataset.getItemTypeName());
         ARecordType metaType = DatasetUtil.getMetaType(metadataProvider, dataset);
-        IIndexDataflowHelperFactory dataflowHelperFactory = dataset.getIndexDataflowHelperFactory(metadataProvider,
-                index, recordType, metaType, compactionInfo.first, compactionInfo.second);
-        IndexDropOperatorDescriptor btreeDrop =
-                new IndexDropOperatorDescriptor(spec, storageComponentProvider.getStorageManager(),
-                        storageComponentProvider.getIndexLifecycleManagerProvider(), splitsAndConstraint.first,
-                        dataflowHelperFactory, storageComponentProvider.getMetadataPageManagerFactory());
-        AlgebricksPartitionConstraintHelper.setPartitionConstraintInJobSpec(spec, btreeDrop,
-                splitsAndConstraint.second);
-        spec.addRoot(btreeDrop);
-        return spec;
+        ARecordType enforcedType = null;
+        ARecordType enforcedMetaType = null;
+        if (index.isEnforcingKeyFileds()) {
+            Pair<ARecordType, ARecordType> enforcedTypes =
+                    TypeUtil.createEnforcedType(recordType, metaType, Collections.singletonList(index));
+            enforcedType = enforcedTypes.first;
+            enforcedMetaType = enforcedTypes.second;
+        }
+        SecondaryIndexOperationsHelper secondaryIndexHelper =
+                SecondaryIndexOperationsHelper.createIndexOperationsHelper(dataset, index, metadataProvider,
+                        physicalOptimizationConfig, recordType, metaType, enforcedType, enforcedMetaType);
+        return secondaryIndexHelper.buildDropJobSpec();
     }
 
-    public static JobSpecification buildSecondaryIndexCreationJobSpec(Dataset dataset, Index index,
-            ARecordType recType, ARecordType metaType, ARecordType enforcedType, ARecordType enforcedMetaType,
+    public static JobSpecification buildSecondaryIndexCreationJobSpec(Dataset dataset, Index index, ARecordType recType,
+            ARecordType metaType, ARecordType enforcedType, ARecordType enforcedMetaType,
             MetadataProvider metadataProvider) throws AlgebricksException {
         SecondaryIndexOperationsHelper secondaryIndexHelper =
                 SecondaryIndexOperationsHelper.createIndexOperationsHelper(dataset, index, metadataProvider,
@@ -150,7 +147,7 @@ public class IndexUtil {
 
     public static JobSpecification buildDropSecondaryIndexJobSpec(Index index, MetadataProvider metadataProvider,
             Dataset dataset) throws AlgebricksException {
-        JobSpecification spec = RuntimeUtils.createJobSpecification();
+        JobSpecification spec = RuntimeUtils.createJobSpecification(metadataProvider.getApplicationContext());
         IStorageComponentProvider storageComponentProvider = metadataProvider.getStorageComponentProvider();
         Pair<IFileSplitProvider, AlgebricksPartitionConstraint> splitsAndConstraint =
                 metadataProvider.getSplitProviderAndConstraints(dataset, index.getIndexName());

@@ -22,7 +22,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
-import org.apache.asterix.common.dataflow.IApplicationContextInfo;
+import org.apache.asterix.common.dataflow.ICcApplicationContext;
 import org.apache.asterix.metadata.MetadataException;
 import org.apache.asterix.metadata.MetadataManager;
 import org.apache.asterix.metadata.declared.DataSourceId;
@@ -117,8 +117,7 @@ public class InvertedIndexPOperator extends IndexSearchPOperator {
         MetadataProvider metadataProvider = (MetadataProvider) context.getMetadataProvider();
         Dataset dataset;
         try {
-            dataset = MetadataManager.INSTANCE.getDataset(metadataProvider.getMetadataTxnContext(),
-                    jobGenParams.getDataverseName(), jobGenParams.getDatasetName());
+            dataset = metadataProvider.findDataset(jobGenParams.getDataverseName(), jobGenParams.getDatasetName());
         } catch (MetadataException e) {
             throw new AlgebricksException(e);
         }
@@ -235,7 +234,7 @@ public class InvertedIndexPOperator extends IndexSearchPOperator {
                     invertedIndexFieldsForNonBulkLoadOps[k] = k;
                 }
             }
-            IApplicationContextInfo appContext = (IApplicationContextInfo) context.getAppContext();
+            ICcApplicationContext appContext = (ICcApplicationContext) context.getAppContext();
             Pair<IFileSplitProvider, AlgebricksPartitionConstraint> secondarySplitsAndConstraint =
                     metadataProvider.getSplitProviderAndConstraints(dataset, indexName);
             // TODO: Here we assume there is only one search key field.
@@ -257,8 +256,7 @@ public class InvertedIndexPOperator extends IndexSearchPOperator {
                     jobSpec, queryField, appContext.getStorageManager(), secondarySplitsAndConstraint.first,
                     appContext.getIndexLifecycleManagerProvider(), tokenTypeTraits, tokenComparatorFactories,
                     invListsTypeTraits, invListsComparatorFactories, dataflowHelperFactory, queryTokenizerFactory,
-                    searchModifierFactory, outputRecDesc, retainInput, retainMissing,
-                    context.getMissingWriterFactory(),
+                    searchModifierFactory, outputRecDesc, retainInput, retainMissing, context.getMissingWriterFactory(),
                     dataset.getSearchCallbackFactory(metadataProvider.getStorageComponentProvider(), secondaryIndex,
                             ((JobEventListenerFactory) jobSpec.getJobletEventListenerFactory()).getJobId(),
                             IndexOperation.SEARCH, null),
