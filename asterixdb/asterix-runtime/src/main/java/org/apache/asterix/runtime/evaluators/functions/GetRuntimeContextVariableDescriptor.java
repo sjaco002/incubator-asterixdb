@@ -47,7 +47,7 @@ public class GetRuntimeContextVariableDescriptor extends AbstractScalarFunctionD
         return new IScalarEvaluatorFactory() {
             private static final long serialVersionUID = 1L;
             private byte[] result;
-    
+
             @Override
             public IScalarEvaluator createScalarEvaluator(IHyracksTaskContext ctx) throws HyracksDataException {
                 return new AbstractUnaryStringStringEval(ctx, args[0], GetRuntimeContextVariableDescriptor.this.getIdentifier()) {
