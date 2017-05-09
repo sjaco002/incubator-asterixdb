@@ -20,9 +20,9 @@ package org.apache.hyracks.api.client;
 
 import java.io.Serializable;
 import java.net.URL;
-import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import org.apache.hyracks.api.dataset.DatasetDirectoryRecord;
 import org.apache.hyracks.api.dataset.ResultSetId;
@@ -166,12 +166,12 @@ public class HyracksClientInterfaceFunctions {
         private static final long serialVersionUID = 1L;
 
         private final byte[] acggfBytes;
-        private final EnumSet<JobFlag> jobFlags;
+        private final Set<JobFlag> jobFlags;
         private final DeploymentId deploymentId;
         private final JobId jobId;
         private final Map<byte[], byte[]> contextRuntTimeVarMap;
 
-        public StartJobFunction(DeploymentId deploymentId, byte[] acggfBytes, EnumSet<JobFlag> jobFlags, JobId jobId,
+        public StartJobFunction(DeploymentId deploymentId, byte[] acggfBytes, Set<JobFlag> jobFlags, JobId jobId,
                 Map<byte[], byte[]> contextRuntTimeVarMap) {
             this.acggfBytes = acggfBytes;
             this.jobFlags = jobFlags;
@@ -184,11 +184,11 @@ public class HyracksClientInterfaceFunctions {
             this(null, null, null, jobId, contextRuntTimeVarMap);
         }
 
-        public StartJobFunction(byte[] acggfBytes, EnumSet<JobFlag> jobFlags) {
+        public StartJobFunction(byte[] acggfBytes, Set<JobFlag> jobFlags) {
             this(null, acggfBytes, jobFlags, null, null);
         }
 
-        public StartJobFunction(DeploymentId deploymentId, byte[] acggfBytes, EnumSet<JobFlag> jobFlags) {
+        public StartJobFunction(DeploymentId deploymentId, byte[] acggfBytes, Set<JobFlag> jobFlags) {
             this(deploymentId, acggfBytes, jobFlags, null, null);
         }
 
@@ -209,7 +209,7 @@ public class HyracksClientInterfaceFunctions {
             return acggfBytes;
         }
 
-        public EnumSet<JobFlag> getJobFlags() {
+        public Set<JobFlag> getJobFlags() {
             return jobFlags;
         }
 
