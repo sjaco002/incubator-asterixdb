@@ -25,7 +25,6 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Map.Entry;
 import java.util.Set;
 
 import org.apache.hyracks.api.constraints.Constraint;
@@ -122,9 +121,7 @@ public class JobRun implements IJobStatusConditionVariable {
             throws HyracksException {
         this(deploymentId, jobId, EnumSet.noneOf(JobFlag.class),
                 distributedJobDescriptor.getJobSpecification(), distributedJobDescriptor.getActivityClusterGraph());
-        for (Entry<byte[], byte[]> entry : contextRuntimeVarMap.entrySet()) {
-            acg.getRuntimeContextVarMap().put(entry.getKey(), entry.getValue());
-        }
+        acg.getRuntimeContextVarStore().setMap(contextRuntimeVarMap);
         Set<Constraint> constaints = distributedJobDescriptor.getActivityClusterGraphConstraints();
         this.scheduler = new JobExecutor(ccs, this, constaints, true);
     }

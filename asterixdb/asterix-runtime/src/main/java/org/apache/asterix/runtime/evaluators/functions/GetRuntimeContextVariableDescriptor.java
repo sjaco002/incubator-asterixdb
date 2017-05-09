@@ -19,20 +19,19 @@
 
 package org.apache.asterix.runtime.evaluators.functions;
 
+import java.io.IOException;
+
 import org.apache.asterix.om.functions.BuiltinFunctions;
 import org.apache.asterix.om.functions.IFunctionDescriptor;
 import org.apache.asterix.om.functions.IFunctionDescriptorFactory;
-import org.apache.asterix.om.types.ATypeTag;
 import org.apache.asterix.runtime.evaluators.base.AbstractScalarFunctionDynamicDescriptor;
-import org.apache.asterix.runtime.exceptions.TypeMismatchException;
 import org.apache.hyracks.algebricks.core.algebra.functions.FunctionIdentifier;
 import org.apache.hyracks.algebricks.runtime.base.IScalarEvaluator;
 import org.apache.hyracks.algebricks.runtime.base.IScalarEvaluatorFactory;
 import org.apache.hyracks.api.context.IHyracksTaskContext;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.apache.hyracks.data.std.api.IPointable;
-import org.apache.hyracks.data.std.primitive.VoidPointable;
-import org.apache.hyracks.dataflow.common.data.accessors.IFrameTupleReference;
+import org.apache.hyracks.data.std.primitive.UTF8StringPointable;
 
 public class GetRuntimeContextVariableDescriptor extends AbstractScalarFunctionDynamicDescriptor {
     private static final long serialVersionUID = 1L;
@@ -42,54 +41,28 @@ public class GetRuntimeContextVariableDescriptor extends AbstractScalarFunctionD
             return new GetRuntimeContextVariableDescriptor();
         }
     };
-    /*
+
     @Override
     public IScalarEvaluatorFactory createEvaluatorFactory(IScalarEvaluatorFactory[] args) {
         return new IScalarEvaluatorFactory() {
             private static final long serialVersionUID = 1L;
+            private byte[] result;
     
             @Override
             public IScalarEvaluator createScalarEvaluator(IHyracksTaskContext ctx) throws HyracksDataException {
-                return new AbstractUnaryStringStringEval(ctx, args[0], StringInitCapDescriptor.this.getIdentifier()) {
+                return new AbstractUnaryStringStringEval(ctx, args[0], GetRuntimeContextVariableDescriptor.this.getIdentifier()) {
                     @Override
                     protected void process(UTF8StringPointable inputString, IPointable resultPointable)
                             throws IOException {
-                        inputString.initCap(resultBuilder, resultArray);
+                        result = ctx.getRuntimeContextVariable(inputString.getByteArray(), inputString.getStartOffset(),
+                                inputString.getLength());
                     }
-                };
-            }
-        };
-    }*/
-
-    @Override
-    public IScalarEvaluatorFactory createEvaluatorFactory(final IScalarEvaluatorFactory[] args) {
-
-        return new IScalarEvaluatorFactory() {
-            private static final long serialVersionUID = 1L;
-
-            @Override
-            public IScalarEvaluator createScalarEvaluator(final IHyracksTaskContext ctx) throws HyracksDataException {
-                final IScalarEvaluator argEval = args[0].createScalarEvaluator(ctx);
-                final VoidPointable argPtr = new VoidPointable();
-
-                return new IScalarEvaluator() {
 
                     @Override
-                    public void evaluate(IFrameTupleReference tuple, IPointable result) throws HyracksDataException {
-
-                        argEval.evaluate(tuple, argPtr);
-                        byte[] argBytes = argPtr.getByteArray();
-                        int offset = argPtr.getStartOffset();
-                        byte inputTypeTag = argBytes[offset];
-                        if (inputTypeTag != ATypeTag.SERIALIZED_STRING_TYPE_TAG) {
-                            throw new TypeMismatchException(getIdentifier(), 0, argBytes[offset],
-                                    ATypeTag.SERIALIZED_STRING_TYPE_TAG);
-                        }
-                        byte[] buffer = ctx.getRuntimeContextVariable(argBytes);
-                        result.set(buffer, 0, buffer.length - 1);
+                    void writeResult(IPointable resultPointable) throws IOException {
+                        resultPointable.set(result, 0, result.length - 1);
                     }
                 };
-
             }
         };
     }

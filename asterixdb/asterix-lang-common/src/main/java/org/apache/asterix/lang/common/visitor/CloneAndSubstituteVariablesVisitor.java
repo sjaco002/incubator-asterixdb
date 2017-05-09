@@ -44,7 +44,6 @@ import org.apache.asterix.lang.common.expression.LiteralExpr;
 import org.apache.asterix.lang.common.expression.OperatorExpr;
 import org.apache.asterix.lang.common.expression.QuantifiedExpression;
 import org.apache.asterix.lang.common.expression.RecordConstructor;
-import org.apache.asterix.lang.common.expression.RuntimeContextVarExpr;
 import org.apache.asterix.lang.common.expression.UnaryExpr;
 import org.apache.asterix.lang.common.expression.VariableExpr;
 import org.apache.asterix.lang.common.rewrites.LangRewritingContext;
@@ -206,12 +205,6 @@ public class CloneAndSubstituteVariablesVisitor extends
     public Pair<ILangExpression, VariableSubstitutionEnvironment> visit(LiteralExpr l,
             VariableSubstitutionEnvironment env) throws CompilationException {
         return new Pair<>(l, env);
-    }
-
-    @Override
-    public Pair<ILangExpression, VariableSubstitutionEnvironment> visit(RuntimeContextVarExpr rcv,
-            VariableSubstitutionEnvironment env) throws CompilationException {
-        return new Pair<>(rcv, env);
     }
 
     @Override

@@ -35,7 +35,6 @@ import org.apache.hyracks.algebricks.core.algebra.expressions.AbstractFunctionCa
 import org.apache.hyracks.algebricks.core.algebra.expressions.AbstractLogicalExpression;
 import org.apache.hyracks.algebricks.core.algebra.expressions.ConstantExpression;
 import org.apache.hyracks.algebricks.core.algebra.expressions.IVariableTypeEnvironment;
-import org.apache.hyracks.algebricks.core.algebra.expressions.RuntimeContextVariableReferenceExpression;
 import org.apache.hyracks.algebricks.core.algebra.expressions.VariableReferenceExpression;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.AbstractLogicalOperator;
 import org.apache.hyracks.algebricks.core.algebra.visitors.AbstractConstVarFunVisitor;
@@ -98,12 +97,6 @@ public class SetClosedRecordConstructorsRule implements IAlgebraicRewriteRule {
 
         @Override
         public ClosedDataInfo visitConstantExpression(ConstantExpression expr, Void arg) throws AlgebricksException {
-            return new ClosedDataInfo(false, hasClosedType(expr), expr);
-        }
-
-        @Override
-        public ClosedDataInfo visitRuntimeContextVariableExpression(RuntimeContextVariableReferenceExpression expr,
-                Void arg) throws AlgebricksException {
             return new ClosedDataInfo(false, hasClosedType(expr), expr);
         }
 

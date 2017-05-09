@@ -513,7 +513,7 @@ public class JobExecutor {
                     }
                     byte[] jagBytes = changed ? acgBytes : null;
                     node.getNodeController().startTasks(deploymentId, jobId, jagBytes, taskDescriptors,
-                            connectorPolicies, jobRun.getFlags(), acg.getRuntimeContextVarMap());
+                            connectorPolicies, jobRun.getFlags(), acg.getRuntimeContextVarStore().getMap());
                 }
             }
         } catch (Exception e) {

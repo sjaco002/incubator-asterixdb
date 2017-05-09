@@ -24,7 +24,6 @@ import org.apache.hyracks.algebricks.core.algebra.base.ILogicalExpression;
 import org.apache.hyracks.algebricks.core.algebra.expressions.AbstractFunctionCallExpression;
 import org.apache.hyracks.algebricks.core.algebra.expressions.AggregateFunctionCallExpression;
 import org.apache.hyracks.algebricks.core.algebra.expressions.ConstantExpression;
-import org.apache.hyracks.algebricks.core.algebra.expressions.RuntimeContextVariableReferenceExpression;
 import org.apache.hyracks.algebricks.core.algebra.expressions.ScalarFunctionCallExpression;
 import org.apache.hyracks.algebricks.core.algebra.expressions.StatefulFunctionCallExpression;
 import org.apache.hyracks.algebricks.core.algebra.expressions.UnnestingFunctionCallExpression;
@@ -39,12 +38,6 @@ public class IsExpressionStatefulVisitor implements ILogicalExpressionVisitor<Bo
 
     @Override
     public Boolean visitConstantExpression(ConstantExpression expr, Void arg) throws AlgebricksException {
-        return false;
-    }
-
-    @Override
-    public Boolean visitRuntimeContextVariableExpression(RuntimeContextVariableReferenceExpression expr, Void arg)
-            throws AlgebricksException {
         return false;
     }
 

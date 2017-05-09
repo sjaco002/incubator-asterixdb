@@ -37,7 +37,6 @@ import org.apache.hyracks.algebricks.core.algebra.expressions.AggregateFunctionC
 import org.apache.hyracks.algebricks.core.algebra.expressions.ConstantExpression;
 import org.apache.hyracks.algebricks.core.algebra.expressions.ILogicalExpressionJobGen;
 import org.apache.hyracks.algebricks.core.algebra.expressions.IVariableTypeEnvironment;
-import org.apache.hyracks.algebricks.core.algebra.expressions.RuntimeContextVariableReferenceExpression;
 import org.apache.hyracks.algebricks.core.algebra.expressions.StatefulFunctionCallExpression;
 import org.apache.hyracks.algebricks.core.algebra.expressions.UnnestingFunctionCallExpression;
 import org.apache.hyracks.algebricks.core.algebra.expressions.VariableReferenceExpression;
@@ -49,7 +48,6 @@ import org.apache.hyracks.algebricks.runtime.base.IScalarEvaluatorFactory;
 import org.apache.hyracks.algebricks.runtime.base.ISerializedAggregateEvaluatorFactory;
 import org.apache.hyracks.algebricks.runtime.base.IUnnestingEvaluatorFactory;
 import org.apache.hyracks.algebricks.runtime.evaluators.ColumnAccessEvalFactory;
-import org.apache.hyracks.algebricks.runtime.evaluators.RuntimeVariableAccessEvalFactory;
 
 public class QueryLogicalExpressionJobGen implements ILogicalExpressionJobGen {
 
@@ -112,20 +110,10 @@ public class QueryLogicalExpressionJobGen implements ILogicalExpressionJobGen {
                         inputSchemas, context);
                 return copyEvaluatorFactory;
             }
-            case RUNTIME_CONTEXT_VAR: {
-                copyEvaluatorFactory =
-                        createContextVarEvaluatorFactory((RuntimeContextVariableReferenceExpression) expr);
-                return copyEvaluatorFactory;
-            }
             default:
                 throw new IllegalStateException();
         }
 
-    }
-
-    private IScalarEvaluatorFactory createContextVarEvaluatorFactory(RuntimeContextVariableReferenceExpression expr)
-            throws AlgebricksException {
-        return new RuntimeVariableAccessEvalFactory(expr.getValue());
     }
 
     private IScalarEvaluatorFactory createVariableEvaluatorFactory(VariableReferenceExpression expr,

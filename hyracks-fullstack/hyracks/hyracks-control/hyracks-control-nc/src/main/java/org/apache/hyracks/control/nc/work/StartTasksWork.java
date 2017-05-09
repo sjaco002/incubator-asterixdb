@@ -24,7 +24,6 @@ import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.Map.Entry;
 import java.util.Set;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -199,9 +198,7 @@ public class StartTasksWork extends AbstractWork {
                 }
                 acg = (ActivityClusterGraph) DeploymentUtils.deserialize(acgBytes, deploymentId, appCtx);
             }
-            for (Entry<byte[], byte[]> entry : contextRuntimeVarMap.entrySet()) {
-                acg.getRuntimeContextVarMap().put(entry.getKey(), entry.getValue());
-            }
+            acg.getRuntimeContextVarStore().setMap(contextRuntimeVarMap);
             ji = new Joblet(ncs, deploymentId, jobId, appCtx, acg);
             jobletMap.put(jobId, ji);
         }
