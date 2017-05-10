@@ -121,6 +121,10 @@ public final class HyracksConnection implements IHyracksClientConnection {
 
     @Override
     public JobId startJob(JobId jobId, Map<byte[], byte[]> jobParameters) throws Exception {
+        JobStatus status = getJobStatus(jobId);
+        if (status != null && status.equals(JobStatus.RUNNING)) {
+            throw new HyracksException("Tried to run a pre-distributed job while already running");
+        }
         return hci.startJob(jobId, jobParameters);
     }
 
