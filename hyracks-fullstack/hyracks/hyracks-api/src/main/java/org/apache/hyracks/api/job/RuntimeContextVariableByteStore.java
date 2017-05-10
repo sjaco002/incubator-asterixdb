@@ -21,12 +21,14 @@ package org.apache.hyracks.api.job;
 import java.io.Serializable;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Map.Entry;
 
 public class RuntimeContextVariableByteStore implements Serializable {
 
     private static final long serialVersionUID = 1L;
 
     private Map<byte[], byte[]> vars;
+    private final byte[] empty = new byte[0];
 
     public RuntimeContextVariableByteStore() {
         vars = new HashMap<>();
@@ -41,7 +43,8 @@ public class RuntimeContextVariableByteStore implements Serializable {
     }
 
     public byte[] getValue(byte[] name, int start, int length) {
-        for (byte[] key : vars.keySet()) {
+        for (Entry<byte[], byte[]> entry : vars.entrySet()) {
+            byte[] key = entry.getKey();
             if (key.length == length) {
                 boolean matched = true;
                 for (int j = 0; j < length; j++) {
@@ -51,11 +54,11 @@ public class RuntimeContextVariableByteStore implements Serializable {
                     }
                 }
                 if (matched) {
-                    return vars.get(key);
+                    return entry.getValue();
                 }
             }
         }
-        return null;
+        return empty;
     }
 
 }

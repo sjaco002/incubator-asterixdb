@@ -18,8 +18,8 @@
  */
 package org.apache.hyracks.control.cc.work;
 
-import java.util.EnumSet;
 import java.util.Map;
+import java.util.Set;
 
 import org.apache.hyracks.api.deployment.DeploymentId;
 import org.apache.hyracks.api.job.IActivityClusterGraphGenerator;
@@ -37,7 +37,7 @@ import org.apache.hyracks.control.common.work.SynchronizableWork;
 public class JobStartWork extends SynchronizableWork {
     private final ClusterControllerService ccs;
     private final byte[] acggfBytes;
-    private final EnumSet<JobFlag> jobFlags;
+    private final Set<JobFlag> jobFlags;
     private final DeploymentId deploymentId;
     private final JobId jobId;
     private final IResultCallback<JobId> callback;
@@ -45,7 +45,7 @@ public class JobStartWork extends SynchronizableWork {
     private final Map<byte[], byte[]> contextRuntimeVarMap;
 
     public JobStartWork(ClusterControllerService ccs, DeploymentId deploymentId, byte[] acggfBytes,
-            EnumSet<JobFlag> jobFlags, JobId jobId, Map<byte[], byte[]> contextRuntimeVarMap,
+            Set<JobFlag> jobFlags, JobId jobId, Map<byte[], byte[]> contextRuntimeVarMap,
             IResultCallback<JobId> callback, boolean predestributed) {
         this.deploymentId = deploymentId;
         this.jobId = jobId;
