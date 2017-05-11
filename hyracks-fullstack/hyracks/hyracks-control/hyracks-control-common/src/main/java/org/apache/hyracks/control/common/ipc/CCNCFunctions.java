@@ -753,19 +753,19 @@ public class CCNCFunctions {
         private final List<TaskAttemptDescriptor> taskDescriptors;
         private final Map<ConnectorDescriptorId, IConnectorPolicy> connectorPolicies;
         private final Set<JobFlag> flags;
-        private final Map<byte[], byte[]> contextRuntTimeVarMap;
+        private final Map<byte[], byte[]> jobParameters;
 
         public StartTasksFunction(DeploymentId deploymentId, JobId jobId, byte[] planBytes,
                 List<TaskAttemptDescriptor> taskDescriptors,
                 Map<ConnectorDescriptorId, IConnectorPolicy> connectorPolicies, Set<JobFlag> flags,
-                Map<byte[], byte[]> contextRuntTimeVarMap) {
+                Map<byte[], byte[]> jobParameters) {
             this.deploymentId = deploymentId;
             this.jobId = jobId;
             this.planBytes = planBytes;
             this.taskDescriptors = taskDescriptors;
             this.connectorPolicies = connectorPolicies;
             this.flags = flags;
-            this.contextRuntTimeVarMap = contextRuntTimeVarMap;
+            this.jobParameters = jobParameters;
         }
 
         @Override
@@ -781,8 +781,8 @@ public class CCNCFunctions {
             return jobId;
         }
 
-        public Map<byte[], byte[]> getContextRuntTimeVarMap() {
-            return contextRuntTimeVarMap;
+        public Map<byte[], byte[]> getJobParameters() {
+            return jobParameters;
         }
 
         public byte[] getPlanBytes() {
@@ -845,9 +845,9 @@ public class CCNCFunctions {
                 flags.add(JobFlag.values()[(dis.readInt())]);
             }
 
-            // read runTimeVars
+            // read job parameters
             int runTimeVarsSize = dis.readInt();
-            Map<byte[], byte[]> contextRuntTimeVarMap = new HashMap<>();
+            Map<byte[], byte[]> jobParameters = new HashMap<>();
             for (int i = 0; i < runTimeVarsSize; i++) {
                 int nameLength = dis.readInt();
                 byte[] nameBytes = null;
@@ -861,11 +861,11 @@ public class CCNCFunctions {
                     valueBytes = new byte[valueLength];
                     dis.read(valueBytes, 0, valueLength);
                 }
-                contextRuntTimeVarMap.put(nameBytes, valueBytes);
+                jobParameters.put(nameBytes, valueBytes);
             }
 
             return new StartTasksFunction(deploymentId, jobId, planBytes, taskDescriptors, connectorPolicies, flags,
-                    contextRuntTimeVarMap);
+                    jobParameters);
         }
 
         public static void serialize(OutputStream out, Object object) throws Exception {
@@ -904,9 +904,9 @@ public class CCNCFunctions {
                 dos.writeInt(flag.ordinal());
             }
 
-            //write runtime context variables
-            dos.writeInt(fn.contextRuntTimeVarMap.size());
-            for (Entry<byte[], byte[]> entry : fn.contextRuntTimeVarMap.entrySet()) {
+            //write job parameters
+            dos.writeInt(fn.jobParameters.size());
+            for (Entry<byte[], byte[]> entry : fn.jobParameters.entrySet()) {
                 dos.writeInt(entry.getKey().length);
                 dos.write(entry.getKey(), 0, entry.getKey().length);
                 dos.writeInt(entry.getValue().length);

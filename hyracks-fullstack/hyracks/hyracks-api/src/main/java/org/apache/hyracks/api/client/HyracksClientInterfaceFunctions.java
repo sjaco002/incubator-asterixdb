@@ -169,19 +169,19 @@ public class HyracksClientInterfaceFunctions {
         private final Set<JobFlag> jobFlags;
         private final DeploymentId deploymentId;
         private final JobId jobId;
-        private final Map<byte[], byte[]> contextRuntTimeVarMap;
+        private final Map<byte[], byte[]> jobParameters;
 
         public StartJobFunction(DeploymentId deploymentId, byte[] acggfBytes, Set<JobFlag> jobFlags, JobId jobId,
-                Map<byte[], byte[]> contextRuntTimeVarMap) {
+                Map<byte[], byte[]> jobParameters) {
             this.acggfBytes = acggfBytes;
             this.jobFlags = jobFlags;
             this.deploymentId = deploymentId;
             this.jobId = jobId;
-            this.contextRuntTimeVarMap = contextRuntTimeVarMap;
+            this.jobParameters = jobParameters;
         }
 
-        public StartJobFunction(JobId jobId, Map<byte[], byte[]> contextRuntTimeVarMap) {
-            this(null, null, null, jobId, contextRuntTimeVarMap);
+        public StartJobFunction(JobId jobId, Map<byte[], byte[]> jobParameters) {
+            this(null, null, null, jobId, jobParameters);
         }
 
         public StartJobFunction(byte[] acggfBytes, Set<JobFlag> jobFlags) {
@@ -197,8 +197,8 @@ public class HyracksClientInterfaceFunctions {
             return FunctionId.START_JOB;
         }
 
-        public Map<byte[], byte[]> getContextRuntTimeVarMap() {
-            return contextRuntTimeVarMap;
+        public Map<byte[], byte[]> getJobParameters() {
+            return jobParameters;
         }
 
         public JobId getJobId() {

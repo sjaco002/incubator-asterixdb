@@ -413,7 +413,7 @@ public class Task implements IHyracksTaskContext, ICounterContext, Runnable {
     }
 
     @Override
-    public byte[] getRuntimeContextVariable(byte[] name, int start, int length) {
-        return joblet.getActivityClusterGraph().getRuntimeContextVarStore().getValue(name, start, length);
+    public byte[] getJobParameter(byte[] name, int start, int length) {
+        return joblet.getActivityClusterGraph().getJobParameterByteStore().getParameterValue(name, start, length);
     }
 }

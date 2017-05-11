@@ -797,8 +797,8 @@ public class BuiltinFunctions {
     public static final FunctionIdentifier EXTERNAL_LOOKUP = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
             "external-lookup", FunctionIdentifier.VARARGS);
 
-    public static final FunctionIdentifier GET_RUNTIME_CONTEXT_VARIABLE =
-            new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "get-runtime-context-variable", 1);
+    public static final FunctionIdentifier GET_JOB_PARAMETER =
+            new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "get-job-param", 1);
 
     public static final FunctionIdentifier META = new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "meta",
             FunctionIdentifier.VARARGS);
@@ -1175,8 +1175,8 @@ public class BuiltinFunctions {
         // external lookup
         addPrivateFunction(EXTERNAL_LOOKUP, AnyTypeComputer.INSTANCE, false);
 
-        // get runtime context variable
-        addFunction(GET_RUNTIME_CONTEXT_VARIABLE, AnyTypeComputer.INSTANCE, false);
+        // get job parameter
+        addFunction(GET_JOB_PARAMETER, AnyTypeComputer.INSTANCE, false);
 
         // unnesting function
         addPrivateFunction(SCAN_COLLECTION, CollectionMemberResultType.INSTANCE, true);

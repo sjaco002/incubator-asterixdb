@@ -23,26 +23,26 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Map.Entry;
 
-public class RuntimeContextVariableByteStore implements Serializable {
+public class JobParameterByteStore implements Serializable {
 
     private static final long serialVersionUID = 1L;
 
     private Map<byte[], byte[]> vars;
     private final byte[] empty = new byte[0];
 
-    public RuntimeContextVariableByteStore() {
+    public JobParameterByteStore() {
         vars = new HashMap<>();
     }
 
-    public Map<byte[], byte[]> getMap() {
+    public Map<byte[], byte[]> getParameterMap() {
         return vars;
     }
 
-    public void setMap(Map<byte[], byte[]> map) {
+    public void setParameters(Map<byte[], byte[]> map) {
         vars = map;
     }
 
-    public byte[] getValue(byte[] name, int start, int length) {
+    public byte[] getParameterValue(byte[] name, int start, int length) {
         for (Entry<byte[], byte[]> entry : vars.entrySet()) {
             byte[] key = entry.getKey();
             if (key.length == length) {

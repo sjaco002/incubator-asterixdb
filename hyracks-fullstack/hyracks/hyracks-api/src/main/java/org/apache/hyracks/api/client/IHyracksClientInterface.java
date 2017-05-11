@@ -38,7 +38,7 @@ public interface IHyracksClientInterface {
 
     public JobId startJob(byte[] acggfBytes, EnumSet<JobFlag> jobFlags) throws Exception;
 
-    public JobId startJob(JobId jobId, Map<byte[], byte[]> contextRuntTimeVarMap) throws Exception;
+    public JobId startJob(JobId jobId, Map<byte[], byte[]> jobParameters) throws Exception;
 
     public void cancelJob(JobId jobId) throws Exception;
 

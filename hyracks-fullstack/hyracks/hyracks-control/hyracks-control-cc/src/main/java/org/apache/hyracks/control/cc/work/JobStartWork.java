@@ -42,10 +42,10 @@ public class JobStartWork extends SynchronizableWork {
     private final JobId jobId;
     private final IResultCallback<JobId> callback;
     private final boolean predestributed;
-    private final Map<byte[], byte[]> contextRuntimeVarMap;
+    private final Map<byte[], byte[]> jobParameters;
 
     public JobStartWork(ClusterControllerService ccs, DeploymentId deploymentId, byte[] acggfBytes,
-            Set<JobFlag> jobFlags, JobId jobId, Map<byte[], byte[]> contextRuntimeVarMap,
+            Set<JobFlag> jobFlags, JobId jobId, Map<byte[], byte[]> jobParameters,
             IResultCallback<JobId> callback, boolean predestributed) {
         this.deploymentId = deploymentId;
         this.jobId = jobId;
@@ -54,7 +54,7 @@ public class JobStartWork extends SynchronizableWork {
         this.jobFlags = jobFlags;
         this.callback = callback;
         this.predestributed = predestributed;
-        this.contextRuntimeVarMap = contextRuntimeVarMap;
+        this.jobParameters = jobParameters;
     }
 
     @Override
@@ -73,7 +73,7 @@ public class JobStartWork extends SynchronizableWork {
             } else {
                 //ActivityClusterGraph has already been distributed
                 run = new JobRun(ccs, deploymentId, jobId,
-                        ccs.getPreDistributedJobStore().getDistributedJobDescriptor(jobId), contextRuntimeVarMap);
+                        ccs.getPreDistributedJobStore().getDistributedJobDescriptor(jobId), jobParameters);
             }
             jobManager.add(run);
             callback.setValue(jobId);

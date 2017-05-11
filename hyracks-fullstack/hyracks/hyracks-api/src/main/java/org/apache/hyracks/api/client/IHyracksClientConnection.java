@@ -111,11 +111,11 @@ public interface IHyracksClientConnection extends IClusterInfoCollector {
      *
      * @param jobId
      *            The id of the predistributed job
-     * @param contextRuntTimeVarMap
-     *            The serialized runtime context variables
+     * @param jobParameters
+     *            The serialized job parameters
      * @throws Exception
      */
-    public JobId startJob(JobId jobId, Map<byte[], byte[]> contextRuntTimeVarMap) throws Exception;
+    public JobId startJob(JobId jobId, Map<byte[], byte[]> jobParameters) throws Exception;
 
     /**
      * Start the specified Job.

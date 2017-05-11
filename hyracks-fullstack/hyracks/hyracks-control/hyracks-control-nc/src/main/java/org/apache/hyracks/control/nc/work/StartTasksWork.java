@@ -86,12 +86,12 @@ public class StartTasksWork extends AbstractWork {
 
     private final Set<JobFlag> flags;
 
-    private final Map<byte[], byte[]> contextRuntimeVarMap;
+    private final Map<byte[], byte[]> jobParameters;
 
     public StartTasksWork(NodeControllerService ncs, DeploymentId deploymentId, JobId jobId, byte[] acgBytes,
             List<TaskAttemptDescriptor> taskDescriptors,
             Map<ConnectorDescriptorId, IConnectorPolicy> connectorPoliciesMap, Set<JobFlag> flags,
-            Map<byte[], byte[]> contextRuntimeVarMap) {
+            Map<byte[], byte[]> jobParameters) {
         this.ncs = ncs;
         this.deploymentId = deploymentId;
         this.jobId = jobId;
@@ -99,7 +99,7 @@ public class StartTasksWork extends AbstractWork {
         this.taskDescriptors = taskDescriptors;
         this.connectorPoliciesMap = connectorPoliciesMap;
         this.flags = flags;
-        this.contextRuntimeVarMap = contextRuntimeVarMap;
+        this.jobParameters = jobParameters;
     }
 
     @Override
@@ -198,7 +198,7 @@ public class StartTasksWork extends AbstractWork {
                 }
                 acg = (ActivityClusterGraph) DeploymentUtils.deserialize(acgBytes, deploymentId, appCtx);
             }
-            acg.getRuntimeContextVarStore().setMap(contextRuntimeVarMap);
+            acg.getJobParameterByteStore().setParameters(jobParameters);
             ji = new Joblet(ncs, deploymentId, jobId, appCtx, acg);
             jobletMap.put(jobId, ji);
         }

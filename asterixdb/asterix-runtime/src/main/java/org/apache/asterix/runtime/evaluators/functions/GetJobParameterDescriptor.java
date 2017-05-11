@@ -33,12 +33,12 @@ import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.apache.hyracks.data.std.api.IPointable;
 import org.apache.hyracks.data.std.primitive.UTF8StringPointable;
 
-public class GetRuntimeContextVariableDescriptor extends AbstractScalarFunctionDynamicDescriptor {
+public class GetJobParameterDescriptor extends AbstractScalarFunctionDynamicDescriptor {
     private static final long serialVersionUID = 1L;
     public static final IFunctionDescriptorFactory FACTORY = new IFunctionDescriptorFactory() {
         @Override
         public IFunctionDescriptor createFunctionDescriptor() {
-            return new GetRuntimeContextVariableDescriptor();
+            return new GetJobParameterDescriptor();
         }
     };
 
@@ -50,13 +50,13 @@ public class GetRuntimeContextVariableDescriptor extends AbstractScalarFunctionD
             @Override
             public IScalarEvaluator createScalarEvaluator(IHyracksTaskContext ctx) throws HyracksDataException {
                 return new AbstractUnaryStringStringEval(ctx, args[0],
-                        GetRuntimeContextVariableDescriptor.this.getIdentifier()) {
+                        GetJobParameterDescriptor.this.getIdentifier()) {
                     private byte[] result;
 
                     @Override
                     protected void process(UTF8StringPointable inputString, IPointable resultPointable)
                             throws IOException {
-                        result = ctx.getRuntimeContextVariable(inputString.getByteArray(), inputString.getStartOffset(),
+                        result = ctx.getJobParameter(inputString.getByteArray(), inputString.getStartOffset(),
                                 inputString.getLength());
                     }
 
@@ -71,7 +71,7 @@ public class GetRuntimeContextVariableDescriptor extends AbstractScalarFunctionD
 
     @Override
     public FunctionIdentifier getIdentifier() {
-        return BuiltinFunctions.GET_RUNTIME_CONTEXT_VARIABLE;
+        return BuiltinFunctions.GET_JOB_PARAMETER;
     }
 
 }

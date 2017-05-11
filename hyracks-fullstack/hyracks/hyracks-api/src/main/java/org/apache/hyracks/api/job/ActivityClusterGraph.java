@@ -44,7 +44,7 @@ public class ActivityClusterGraph implements Serializable {
 
     private final Map<ConnectorDescriptorId, ActivityCluster> connectorMap;
 
-    private RuntimeContextVariableByteStore runtimeContextVarStore;
+    private JobParameterByteStore jobParameterByteStore;
 
     private int frameSize;
 
@@ -65,7 +65,7 @@ public class ActivityClusterGraph implements Serializable {
         activityClusterMap = new HashMap<ActivityClusterId, ActivityCluster>();
         activityMap = new HashMap<ActivityId, ActivityCluster>();
         connectorMap = new HashMap<ConnectorDescriptorId, ActivityCluster>();
-        runtimeContextVarStore = new RuntimeContextVariableByteStore();
+        jobParameterByteStore = new JobParameterByteStore();
         frameSize = 32768;
         reportTaskDetails = true;
     }
@@ -78,8 +78,8 @@ public class ActivityClusterGraph implements Serializable {
         return connectorMap;
     }
 
-    public RuntimeContextVariableByteStore getRuntimeContextVarStore() {
-        return runtimeContextVarStore;
+    public JobParameterByteStore getJobParameterByteStore() {
+        return jobParameterByteStore;
     }
 
     public Map<ActivityClusterId, ActivityCluster> getActivityClusterMap() {
