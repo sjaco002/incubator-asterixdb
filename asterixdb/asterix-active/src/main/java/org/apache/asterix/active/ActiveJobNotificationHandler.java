@@ -57,6 +57,10 @@ public class ActiveJobNotificationHandler implements Runnable {
                     if (listener != null) {
                         LOGGER.log(Level.FINER, "Notifying the listener");
                         listener.notify(event);
+                    } else if (event.getEventKind() == Kind.JOB_FINISHED) {
+                        LOGGER.log(Level.FINER, "Removing the job");
+                        jobId2ActiveJobInfos.remove(event.getJobId());
+
                     }
 
                 } else {
