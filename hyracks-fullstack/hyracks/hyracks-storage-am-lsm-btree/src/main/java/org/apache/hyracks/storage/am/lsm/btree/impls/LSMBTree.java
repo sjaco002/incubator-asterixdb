@@ -92,7 +92,7 @@ public class LSMBTree extends AbstractLSMIndex implements ITreeIndex {
     private long writeCount = 0;
     private long experimentDuplCheckTime = 0;
     private long writeLogInterval = 50000;
-    private long readLogInterval = 5;
+    private long readLogInterval = 1;
     private long totalDiskComponents = 0;
     private long readCount = 0;
 
