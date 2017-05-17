@@ -458,9 +458,11 @@ public class LSMHarness implements ILSMHarness {
 
     @Override
     public void flush(ILSMIndexOperationContext ctx, ILSMIOOperation operation) throws HyracksDataException {
-        if (LOGGER.isLoggable(Level.INFO)) {
-            LOGGER.info("Started a flush operation for index: " + lsmIndex + " ...");
+        if (LOGGER.isLoggable(Level.SEVERE)) {
+            LOGGER.severe(
+                    "Merge Policy Experiment started a flush operation at " + new Date() + " for index: " + lsmIndex);
         }
+
 
         ILSMDiskComponent newComponent = null;
         try {
@@ -474,8 +476,10 @@ public class LSMHarness implements ILSMHarness {
             exitComponents(ctx, LSMOperationType.FLUSH, newComponent, false);
             operation.getCallback().afterFinalize(LSMOperationType.FLUSH, newComponent);
         }
-        if (LOGGER.isLoggable(Level.INFO)) {
-            LOGGER.info("Finished the flush operation for index: " + lsmIndex);
+
+        if (LOGGER.isLoggable(Level.SEVERE)) {
+            LOGGER.severe("Merge Policy Experiment finished the flush operation at " + new Date() + " for index: "
+                    + lsmIndex);
         }
     }
 
@@ -505,8 +509,8 @@ public class LSMHarness implements ILSMHarness {
 
     @Override
     public void merge(ILSMIndexOperationContext ctx, ILSMIOOperation operation) throws HyracksDataException {
-        if (LOGGER.isLoggable(Level.INFO)) {
-            LOGGER.info(
+        if (LOGGER.isLoggable(Level.SEVERE)) {
+            LOGGER.severe(
                     "Merge Policy Experiment started a merge operation at " + new Date() + " for index: " + lsmIndex);
         }
 
@@ -522,8 +526,8 @@ public class LSMHarness implements ILSMHarness {
             exitComponents(ctx, LSMOperationType.MERGE, newComponent, false);
             operation.getCallback().afterFinalize(LSMOperationType.MERGE, newComponent);
         }
-        if (LOGGER.isLoggable(Level.INFO)) {
-            LOGGER.info(
+        if (LOGGER.isLoggable(Level.SEVERE)) {
+            LOGGER.severe(
 "Merge Policy Experiment finished the merge operation at " + new Date() + " for index: "
                     + lsmIndex);
         }
