@@ -35,6 +35,8 @@ import org.apache.http.impl.client.DefaultHttpClient;
 import org.apache.hyracks.api.client.impl.JobSpecificationActivityClusterGraphGeneratorFactory;
 import org.apache.hyracks.api.comm.NetworkAddress;
 import org.apache.hyracks.api.deployment.DeploymentId;
+import org.apache.hyracks.api.exceptions.ErrorCode;
+import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.apache.hyracks.api.exceptions.HyracksException;
 import org.apache.hyracks.api.job.IActivityClusterGraphGeneratorFactory;
 import org.apache.hyracks.api.job.JobFlag;
@@ -123,7 +125,7 @@ public final class HyracksConnection implements IHyracksClientConnection {
     public JobId startJob(JobId jobId, Map<byte[], byte[]> jobParameters) throws Exception {
         JobStatus status = getJobStatus(jobId);
         if (status != null && status.equals(JobStatus.RUNNING)) {
-            throw new HyracksException("Tried to run a pre-distributed job while already running");
+            throw HyracksDataException.create(ErrorCode.DISTRIBUTED_JOB_ALREADY_RUNNING, jobId);
         }
         return hci.startJob(jobId, jobParameters);
     }
