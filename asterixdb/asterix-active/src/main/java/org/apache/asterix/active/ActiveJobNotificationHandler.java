@@ -75,7 +75,8 @@ public class ActiveJobNotificationHandler implements Runnable {
         LOGGER.log(Level.INFO, "Stopped " + ActiveJobNotificationHandler.class.getSimpleName());
     }
 
-    public synchronized void removeListener(IActiveEntityEventsListener listener, JobId jobId) throws HyracksDataException {
+    public synchronized void removeListener(IActiveEntityEventsListener listener, JobId jobId)
+            throws HyracksDataException {
         LOGGER.log(Level.FINER, "Removing the listener since it is not active anymore");
         unregisterListener(listener);
         LOGGER.log(Level.FINER, "Removing the job");
