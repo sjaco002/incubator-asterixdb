@@ -189,9 +189,6 @@ public class DatasetDirectoryService implements IDatasetDirectoryService {
 
     @Override
     public synchronized long getResultTimestamp(JobId jobId) {
-        if (preDistributedJobStore.jobIsPredistributed(jobId)){
-            return -1;
-        }
         return getState(jobId).getTimestamp();
     }
 

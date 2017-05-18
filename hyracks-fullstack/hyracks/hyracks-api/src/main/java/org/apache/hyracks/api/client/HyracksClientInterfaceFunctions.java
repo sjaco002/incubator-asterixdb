@@ -146,10 +146,10 @@ public class HyracksClientInterfaceFunctions {
     public static class DestroyJobFunction extends Function {
         private static final long serialVersionUID = 1L;
 
-        private final JobId jobId;
+        private final long predestributedId;
 
-        public DestroyJobFunction(JobId jobId) {
-            this.jobId = jobId;
+        public DestroyJobFunction(long predestributedId) {
+            this.predestributedId = predestributedId;
         }
 
         @Override
@@ -157,8 +157,8 @@ public class HyracksClientInterfaceFunctions {
             return FunctionId.DESTROY_JOB;
         }
 
-        public JobId getJobId() {
-            return jobId;
+        public long getPredistributedId() {
+            return predestributedId;
         }
     }
 
@@ -168,28 +168,28 @@ public class HyracksClientInterfaceFunctions {
         private final byte[] acggfBytes;
         private final Set<JobFlag> jobFlags;
         private final DeploymentId deploymentId;
-        private final JobId jobId;
+        private final long predistributedId;
         private final Map<byte[], byte[]> jobParameters;
 
-        public StartJobFunction(DeploymentId deploymentId, byte[] acggfBytes, Set<JobFlag> jobFlags, JobId jobId,
-                Map<byte[], byte[]> jobParameters) {
+        public StartJobFunction(DeploymentId deploymentId, byte[] acggfBytes, Set<JobFlag> jobFlags,
+                long predistributedId, Map<byte[], byte[]> jobParameters) {
             this.acggfBytes = acggfBytes;
             this.jobFlags = jobFlags;
             this.deploymentId = deploymentId;
-            this.jobId = jobId;
+            this.predistributedId = predistributedId;
             this.jobParameters = jobParameters;
         }
 
-        public StartJobFunction(JobId jobId, Map<byte[], byte[]> jobParameters) {
+        public StartJobFunction(long jobId, Map<byte[], byte[]> jobParameters) {
             this(null, null, null, jobId, jobParameters);
         }
 
         public StartJobFunction(byte[] acggfBytes, Set<JobFlag> jobFlags) {
-            this(null, acggfBytes, jobFlags, null, null);
+            this(null, acggfBytes, jobFlags, -1, null);
         }
 
         public StartJobFunction(DeploymentId deploymentId, byte[] acggfBytes, Set<JobFlag> jobFlags) {
-            this(deploymentId, acggfBytes, jobFlags, null, null);
+            this(deploymentId, acggfBytes, jobFlags, -1, null);
         }
 
         @Override
@@ -201,8 +201,8 @@ public class HyracksClientInterfaceFunctions {
             return jobParameters;
         }
 
-        public JobId getJobId() {
-            return jobId;
+        public long getpredistributedId() {
+            return predistributedId;
         }
 
         public byte[] getACGGFBytes() {

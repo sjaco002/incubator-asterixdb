@@ -109,8 +109,8 @@ public class PredistributedJobsTest {
         JobSpecification spec2 = HeapSortMergeTest.createSortMergeJobSpec();
 
         //distribute both jobs
-        JobId jobId1 = hcc.distributeJob(spec1);
-        JobId jobId2 = hcc.distributeJob(spec2);
+        long distributedId1 = hcc.distributeJob(spec1);
+        long distributedId2 = hcc.distributeJob(spec2);
 
         //make sure it finished
         //cc will get the store once to check for duplicate insertion and once to insert per job
@@ -121,17 +121,17 @@ public class PredistributedJobsTest {
         verify(nc2, Mockito.timeout(5000).times(2)).checkForDuplicateDistributedJob(any());
 
         //confirm that both jobs are distributed
-        Assert.assertTrue(nc1.getActivityClusterGraph(jobId1) != null && nc2.getActivityClusterGraph(jobId1) != null);
-        Assert.assertTrue(nc1.getActivityClusterGraph(jobId2) != null && nc2.getActivityClusterGraph(jobId2) != null);
-        Assert.assertTrue(cc.getPreDistributedJobStore().getDistributedJobDescriptor(jobId1) != null);
-        Assert.assertTrue(cc.getPreDistributedJobStore().getDistributedJobDescriptor(jobId2) != null);
+        Assert.assertTrue(nc1.getActivityClusterGraph(distributedId1) != null && nc2.getActivityClusterGraph(distributedId1) != null);
+        Assert.assertTrue(nc1.getActivityClusterGraph(distributedId2) != null && nc2.getActivityClusterGraph(distributedId2) != null);
+        Assert.assertTrue(cc.getPreDistributedJobStore().getDistributedJobDescriptor(distributedId1) != null);
+        Assert.assertTrue(cc.getPreDistributedJobStore().getDistributedJobDescriptor(distributedId2) != null);
 
         //run the first job
-        hcc.startJob(jobId1, new HashMap<>());
-        hcc.waitForCompletion(jobId1);
+        JobId jobRun1Id = hcc.startJob(distributedId1, new HashMap<>());
+        hcc.waitForCompletion(jobRun1Id);
 
         //destroy the first job
-        hcc.destroyJob(jobId1);
+        hcc.destroyJob(distributedId1);
 
         //make sure it finished
         verify(cc, Mockito.timeout(5000).times(8)).getPreDistributedJobStore();
@@ -139,23 +139,23 @@ public class PredistributedJobsTest {
         verify(nc2, Mockito.timeout(5000).times(1)).removeActivityClusterGraph(any());
 
         //confirm the first job is destroyed
-        Assert.assertTrue(nc1.getActivityClusterGraph(jobId1) == null && nc2.getActivityClusterGraph(jobId1) == null);
-        cc.getPreDistributedJobStore().checkForExistingDistributedJobDescriptor(jobId1);
+        Assert.assertTrue(nc1.getActivityClusterGraph(distributedId1) == null && nc2.getActivityClusterGraph(distributedId1) == null);
+        cc.getPreDistributedJobStore().checkForExistingDistributedJobDescriptor(distributedId1);
 
         //run the second job
-        hcc.startJob(jobId2, new HashMap<>());
-        hcc.waitForCompletion(jobId2);
+        JobId jobRun2Id = hcc.startJob(distributedId2, new HashMap<>());
+        hcc.waitForCompletion(jobRun2Id);
 
         //wait ten seconds to ensure the result sweeper does not break the job
         //The result sweeper runs every 5 seconds during the tests
         Thread.sleep(10000);
 
         //run the second job again
-        hcc.startJob(jobId2, new HashMap<>());
-        hcc.waitForCompletion(jobId2);
+        JobId jobRun3Id = hcc.startJob(distributedId2, new HashMap<>());
+        hcc.waitForCompletion(jobRun3Id);
 
         //destroy the second job
-        hcc.destroyJob(jobId2);
+        hcc.destroyJob(distributedId2);
 
         //make sure it finished
         verify(cc, Mockito.timeout(5000).times(12)).getPreDistributedJobStore();
@@ -163,8 +163,8 @@ public class PredistributedJobsTest {
         verify(nc2, Mockito.timeout(5000).times(2)).removeActivityClusterGraph(any());
 
         //confirm the second job is destroyed
-        Assert.assertTrue(nc1.getActivityClusterGraph(jobId2) == null && nc2.getActivityClusterGraph(jobId2) == null);
-        cc.getPreDistributedJobStore().checkForExistingDistributedJobDescriptor(jobId2);
+        Assert.assertTrue(nc1.getActivityClusterGraph(distributedId2) == null && nc2.getActivityClusterGraph(distributedId2) == null);
+        cc.getPreDistributedJobStore().checkForExistingDistributedJobDescriptor(distributedId2);
     }
 
     @AfterClass

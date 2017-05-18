@@ -141,9 +141,9 @@ public class ClusterControllerRemoteProxy implements IClusterController {
     }
 
     @Override
-    public void notifyDistributedJobFailure(JobId jobId, String nodeId) throws Exception {
+    public void notifyDistributedJobFailure(long predestributedId, String nodeId) throws Exception {
         CCNCFunctions.ReportDistributedJobFailureFunction fn =
-                new CCNCFunctions.ReportDistributedJobFailureFunction(jobId, nodeId);
+                new CCNCFunctions.ReportDistributedJobFailureFunction(predestributedId, nodeId);
         ipcHandle.send(-1, fn, null);
     }
 

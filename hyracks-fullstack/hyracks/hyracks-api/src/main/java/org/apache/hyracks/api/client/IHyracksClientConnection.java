@@ -95,7 +95,7 @@ public interface IHyracksClientConnection extends IClusterInfoCollector {
      *            Flags
      * @throws Exception
      */
-    public JobId distributeJob(JobSpecification jobSpec) throws Exception;
+    public long distributeJob(JobSpecification jobSpec) throws Exception;
 
     /**
      * Destroy the distributed graph for a pre-distributed job
@@ -104,7 +104,7 @@ public interface IHyracksClientConnection extends IClusterInfoCollector {
      *            The id of the predistributed job
      * @throws Exception
      */
-    public JobId destroyJob(JobId jobId) throws Exception;
+    public JobId destroyJob(long predestributedId) throws Exception;
 
     /**
      * Used to run a pre-distributed job by id (the same JobId will be returned)
@@ -115,7 +115,7 @@ public interface IHyracksClientConnection extends IClusterInfoCollector {
      *            The serialized job parameters
      * @throws Exception
      */
-    public JobId startJob(JobId jobId, Map<byte[], byte[]> jobParameters) throws Exception;
+    public JobId startJob(long predestributedId, Map<byte[], byte[]> jobParameters) throws Exception;
 
     /**
      * Start the specified Job.

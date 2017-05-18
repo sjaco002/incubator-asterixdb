@@ -38,10 +38,12 @@ public class DistributeJobWork extends SynchronizableWork {
     private final ClusterControllerService ccs;
     private final byte[] acggfBytes;
     private final JobId jobId;
+    private final long predestributedId;
     private final IResultCallback<JobId> callback;
 
-    public DistributeJobWork(ClusterControllerService ccs, byte[] acggfBytes, JobId jobId,
+    public DistributeJobWork(ClusterControllerService ccs, byte[] acggfBytes, JobId jobId, long predestributedId,
             IResultCallback<JobId> callback) {
+        this.predestributedId = predestributedId;
         this.jobId = jobId;
         this.ccs = ccs;
         this.acggfBytes = acggfBytes;
@@ -52,13 +54,14 @@ public class DistributeJobWork extends SynchronizableWork {
     protected void doRun() throws Exception {
         try {
             final CCServiceContext ccServiceCtx = ccs.getContext();
-            ccs.getPreDistributedJobStore().checkForExistingDistributedJobDescriptor(jobId);
+            ccs.getPreDistributedJobStore().checkForExistingDistributedJobDescriptor(predestributedId);
             IActivityClusterGraphGeneratorFactory acggf =
                     (IActivityClusterGraphGeneratorFactory) DeploymentUtils.deserialize(acggfBytes, null, ccServiceCtx);
             IActivityClusterGraphGenerator acgg =
                     acggf.createActivityClusterGraphGenerator(jobId, ccServiceCtx, EnumSet.noneOf(JobFlag.class));
             ActivityClusterGraph acg = acgg.initialize();
-            ccs.getPreDistributedJobStore().addDistributedJobDescriptor(jobId, acg, acggf.getJobSpecification(),
+            ccs.getPreDistributedJobStore().addDistributedJobDescriptor(predestributedId, acg,
+                    acggf.getJobSpecification(),
                     acgg.getConstraints());
 
             ccServiceCtx.notifyJobCreation(jobId, acggf.getJobSpecification());
@@ -67,7 +70,7 @@ public class DistributeJobWork extends SynchronizableWork {
 
             INodeManager nodeManager = ccs.getNodeManager();
             for (NodeControllerState node : nodeManager.getAllNodeControllerStates()) {
-                node.getNodeController().distributeJob(jobId, acgBytes);
+                node.getNodeController().distributeJob(predestributedId, acgBytes);
             }
 
             callback.setValue(jobId);

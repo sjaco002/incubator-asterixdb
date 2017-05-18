@@ -76,9 +76,9 @@ public class HyracksClientInterfaceRemoteProxy implements IHyracksClientInterfac
     }
 
     @Override
-    public JobId startJob(JobId jobId, Map<byte[], byte[]> jobParameters) throws Exception {
+    public JobId startJob(long predestributedId, Map<byte[], byte[]> jobParameters) throws Exception {
         HyracksClientInterfaceFunctions.StartJobFunction sjf =
-                new HyracksClientInterfaceFunctions.StartJobFunction(jobId, jobParameters);
+                new HyracksClientInterfaceFunctions.StartJobFunction(predestributedId, jobParameters);
         return (JobId) rpci.call(ipcHandle, sjf);
     }
 
@@ -90,16 +90,16 @@ public class HyracksClientInterfaceRemoteProxy implements IHyracksClientInterfac
     }
 
     @Override
-    public JobId distributeJob(byte[] acggfBytes) throws Exception {
+    public long distributeJob(byte[] acggfBytes) throws Exception {
         HyracksClientInterfaceFunctions.DistributeJobFunction sjf =
                 new HyracksClientInterfaceFunctions.DistributeJobFunction(acggfBytes);
-        return (JobId) rpci.call(ipcHandle, sjf);
+        return (long) rpci.call(ipcHandle, sjf);
     }
 
     @Override
-    public JobId destroyJob(JobId jobId) throws Exception {
+    public JobId destroyJob(long predestributedId) throws Exception {
         HyracksClientInterfaceFunctions.DestroyJobFunction sjf =
-                new HyracksClientInterfaceFunctions.DestroyJobFunction(jobId);
+                new HyracksClientInterfaceFunctions.DestroyJobFunction(predestributedId);
         return (JobId) rpci.call(ipcHandle, sjf);
     }
 

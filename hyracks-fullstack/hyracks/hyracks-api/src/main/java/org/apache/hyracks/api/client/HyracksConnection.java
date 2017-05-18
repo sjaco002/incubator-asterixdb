@@ -35,8 +35,6 @@ import org.apache.http.impl.client.DefaultHttpClient;
 import org.apache.hyracks.api.client.impl.JobSpecificationActivityClusterGraphGeneratorFactory;
 import org.apache.hyracks.api.comm.NetworkAddress;
 import org.apache.hyracks.api.deployment.DeploymentId;
-import org.apache.hyracks.api.exceptions.ErrorCode;
-import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.apache.hyracks.api.exceptions.HyracksException;
 import org.apache.hyracks.api.job.IActivityClusterGraphGeneratorFactory;
 import org.apache.hyracks.api.job.JobFlag;
@@ -110,31 +108,27 @@ public final class HyracksConnection implements IHyracksClientConnection {
     }
 
     @Override
-    public JobId distributeJob(JobSpecification jobSpec) throws Exception {
+    public long distributeJob(JobSpecification jobSpec) throws Exception {
         JobSpecificationActivityClusterGraphGeneratorFactory jsacggf =
                 new JobSpecificationActivityClusterGraphGeneratorFactory(jobSpec);
         return distributeJob(jsacggf);
     }
 
     @Override
-    public JobId destroyJob(JobId jobId) throws Exception {
-        return hci.destroyJob(jobId);
+    public JobId destroyJob(long predestributedId) throws Exception {
+        return hci.destroyJob(predestributedId);
     }
 
     @Override
-    public JobId startJob(JobId jobId, Map<byte[], byte[]> jobParameters) throws Exception {
-        JobStatus status = getJobStatus(jobId);
-        if (status != null && status.equals(JobStatus.RUNNING)) {
-            throw HyracksDataException.create(ErrorCode.DISTRIBUTED_JOB_ALREADY_RUNNING, jobId);
-        }
-        return hci.startJob(jobId, jobParameters);
+    public JobId startJob(long predestributedId, Map<byte[], byte[]> jobParameters) throws Exception {
+        return hci.startJob(predestributedId, jobParameters);
     }
 
     public JobId startJob(IActivityClusterGraphGeneratorFactory acggf, EnumSet<JobFlag> jobFlags) throws Exception {
         return hci.startJob(JavaSerializationUtils.serialize(acggf), jobFlags);
     }
 
-    public JobId distributeJob(IActivityClusterGraphGeneratorFactory acggf) throws Exception {
+    public long distributeJob(IActivityClusterGraphGeneratorFactory acggf) throws Exception {
         return hci.distributeJob(JavaSerializationUtils.serialize(acggf));
     }
 

@@ -78,6 +78,8 @@ public class StartTasksWork extends AbstractWork {
 
     private final JobId jobId;
 
+    private final long predistributedId;
+
     private final byte[] acgBytes;
 
     private final List<TaskAttemptDescriptor> taskDescriptors;
@@ -91,10 +93,11 @@ public class StartTasksWork extends AbstractWork {
     public StartTasksWork(NodeControllerService ncs, DeploymentId deploymentId, JobId jobId, byte[] acgBytes,
             List<TaskAttemptDescriptor> taskDescriptors,
             Map<ConnectorDescriptorId, IConnectorPolicy> connectorPoliciesMap, Set<JobFlag> flags,
-            Map<byte[], byte[]> jobParameters) {
+            Map<byte[], byte[]> jobParameters, long predistributedId) {
         this.ncs = ncs;
         this.deploymentId = deploymentId;
         this.jobId = jobId;
+        this.predistributedId = predistributedId;
         this.acgBytes = acgBytes;
         this.taskDescriptors = taskDescriptors;
         this.connectorPoliciesMap = connectorPoliciesMap;
@@ -107,7 +110,7 @@ public class StartTasksWork extends AbstractWork {
         Task task = null;
         try {
             NCServiceContext serviceCtx = ncs.getContext();
-            Joblet joblet = getOrCreateLocalJoblet(deploymentId, jobId, serviceCtx, acgBytes);
+            Joblet joblet = getOrCreateLocalJoblet(deploymentId, predistributedId, serviceCtx, acgBytes);
             final ActivityClusterGraph acg = joblet.getActivityClusterGraph();
             IRecordDescriptorProvider rdp = new IRecordDescriptorProvider() {
                 @Override
@@ -186,12 +189,12 @@ public class StartTasksWork extends AbstractWork {
         }
     }
 
-    private Joblet getOrCreateLocalJoblet(DeploymentId deploymentId, JobId jobId, INCServiceContext appCtx,
+    private Joblet getOrCreateLocalJoblet(DeploymentId deploymentId, long destributedId, INCServiceContext appCtx,
             byte[] acgBytes) throws HyracksException {
         Map<JobId, Joblet> jobletMap = ncs.getJobletMap();
         Joblet ji = jobletMap.get(jobId);
         if (ji == null) {
-            ActivityClusterGraph acg = ncs.getActivityClusterGraph(jobId);
+            ActivityClusterGraph acg = ncs.getActivityClusterGraph(destributedId);
             if (acg == null) {
                 if (acgBytes == null) {
                     throw HyracksException.create(ErrorCode.ERROR_FINDING_DISTRIBUTED_JOB, jobId);

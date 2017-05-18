@@ -65,7 +65,7 @@ final class NodeControllerIPCI implements IIPCI {
                 ncs.getWorkQueue()
                         .schedule(new StartTasksWork(ncs, stf.getDeploymentId(), stf.getJobId(), stf.getPlanBytes(),
                                 stf.getTaskDescriptors(), stf.getConnectorPolicies(), stf.getFlags(),
-                                stf.getJobParameters()));
+                                stf.getJobParameters(), stf.getPredistributedId()));
                 return;
             case ABORT_TASKS:
                 CCNCFunctions.AbortTasksFunction atf = (CCNCFunctions.AbortTasksFunction) fn;
@@ -105,12 +105,12 @@ final class NodeControllerIPCI implements IIPCI {
 
             case DISTRIBUTE_JOB:
                 CCNCFunctions.DistributeJobFunction djf = (CCNCFunctions.DistributeJobFunction) fn;
-                ncs.getWorkQueue().schedule(new DistributeJobWork(ncs, djf.getJobId(), djf.getacgBytes()));
+                ncs.getWorkQueue().schedule(new DistributeJobWork(ncs, djf.getPredistributedId(), djf.getacgBytes()));
                 return;
 
             case DESTROY_JOB:
                 CCNCFunctions.DestroyJobFunction dsjf = (CCNCFunctions.DestroyJobFunction) fn;
-                ncs.getWorkQueue().schedule(new DestroyJobWork(ncs, dsjf.getJobId()));
+                ncs.getWorkQueue().schedule(new DestroyJobWork(ncs, dsjf.getPredistributedId()));
                 return;
 
             case STATE_DUMP_REQUEST:

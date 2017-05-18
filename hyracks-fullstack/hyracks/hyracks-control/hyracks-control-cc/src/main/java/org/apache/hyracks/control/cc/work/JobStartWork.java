@@ -41,19 +41,20 @@ public class JobStartWork extends SynchronizableWork {
     private final DeploymentId deploymentId;
     private final JobId jobId;
     private final IResultCallback<JobId> callback;
-    private final boolean predestributed;
+    private final long predestributedId;
     private final Map<byte[], byte[]> jobParameters;
 
     public JobStartWork(ClusterControllerService ccs, DeploymentId deploymentId, byte[] acggfBytes,
             Set<JobFlag> jobFlags, JobId jobId, Map<byte[], byte[]> jobParameters,
-            IResultCallback<JobId> callback, boolean predestributed) {
+ IResultCallback<JobId> callback,
+            long predestributedId) {
         this.deploymentId = deploymentId;
         this.jobId = jobId;
         this.ccs = ccs;
         this.acggfBytes = acggfBytes;
         this.jobFlags = jobFlags;
         this.callback = callback;
-        this.predestributed = predestributed;
+        this.predestributedId = predestributedId;
         this.jobParameters = jobParameters;
     }
 
@@ -63,7 +64,7 @@ public class JobStartWork extends SynchronizableWork {
         try {
             final CCServiceContext ccServiceCtx = ccs.getContext();
             JobRun run;
-            if (!predestributed) {
+            if (predestributedId == -1) {
                 //Need to create the ActivityClusterGraph
                 IActivityClusterGraphGeneratorFactory acggf = (IActivityClusterGraphGeneratorFactory) DeploymentUtils
                         .deserialize(acggfBytes, deploymentId, ccServiceCtx);
@@ -73,7 +74,8 @@ public class JobStartWork extends SynchronizableWork {
             } else {
                 //ActivityClusterGraph has already been distributed
                 run = new JobRun(ccs, deploymentId, jobId,
-                        ccs.getPreDistributedJobStore().getDistributedJobDescriptor(jobId), jobParameters);
+                        ccs.getPreDistributedJobStore().getDistributedJobDescriptor(predestributedId), jobParameters,
+                        predestributedId);
             }
             jobManager.add(run);
             callback.setValue(jobId);

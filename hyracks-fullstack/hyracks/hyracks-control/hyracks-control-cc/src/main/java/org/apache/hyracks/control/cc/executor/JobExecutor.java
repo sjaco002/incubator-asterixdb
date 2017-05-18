@@ -76,7 +76,7 @@ public class JobExecutor {
 
     private final PartitionConstraintSolver solver;
 
-    private final boolean predistributed;
+    private final long predistributedId;
 
     private final Map<PartitionId, TaskCluster> partitionProducingTaskClusterMap;
 
@@ -87,10 +87,10 @@ public class JobExecutor {
     private boolean cancelled = false;
 
     public JobExecutor(ClusterControllerService ccs, JobRun jobRun, Collection<Constraint> constraints,
-            boolean predistributed) {
+            long predistributedId) {
         this.ccs = ccs;
         this.jobRun = jobRun;
-        this.predistributed = predistributed;
+        this.predistributedId = predistributedId;
         solver = new PartitionConstraintSolver();
         partitionProducingTaskClusterMap = new HashMap<>();
         inProgressTaskClusters = new HashSet<>();
@@ -99,7 +99,7 @@ public class JobExecutor {
     }
 
     public boolean isPredistributed() {
-        return predistributed;
+        return predistributedId != -1;
     }
 
     public JobRun getJobRun() {
@@ -500,7 +500,7 @@ public class JobExecutor {
                 jobRun.getConnectorPolicyMap());
         INodeManager nodeManager = ccs.getNodeManager();
         try {
-            byte[] acgBytes = predistributed ? null : JavaSerializationUtils.serialize(acg);
+            byte[] acgBytes = isPredistributed() ? null : JavaSerializationUtils.serialize(acg);
             for (Map.Entry<String, List<TaskAttemptDescriptor>> entry : taskAttemptMap.entrySet()) {
                 String nodeId = entry.getKey();
                 final List<TaskAttemptDescriptor> taskDescriptors = entry.getValue();
@@ -513,7 +513,8 @@ public class JobExecutor {
                     }
                     byte[] jagBytes = changed ? acgBytes : null;
                     node.getNodeController().startTasks(deploymentId, jobId, jagBytes, taskDescriptors,
-                            connectorPolicies, jobRun.getFlags(), acg.getJobParameterByteStore().getParameterMap());
+                            connectorPolicies, jobRun.getFlags(), acg.getJobParameterByteStore().getParameterMap(),
+                            predistributedId);
                 }
             }
         } catch (Exception e) {

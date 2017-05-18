@@ -46,9 +46,9 @@ public class NodeControllerRemoteProxy implements INodeController {
     @Override
     public void startTasks(DeploymentId deploymentId, JobId jobId, byte[] planBytes,
             List<TaskAttemptDescriptor> taskDescriptors, Map<ConnectorDescriptorId, IConnectorPolicy> connectorPolicies,
-            Set<JobFlag> flags, Map<byte[], byte[]> jobParameters) throws Exception {
+            Set<JobFlag> flags, Map<byte[], byte[]> jobParameters, long predistributedId) throws Exception {
         CCNCFunctions.StartTasksFunction stf = new CCNCFunctions.StartTasksFunction(deploymentId, jobId, planBytes,
-                taskDescriptors, connectorPolicies, flags, jobParameters);
+                taskDescriptors, connectorPolicies, flags, jobParameters, predistributedId);
         ipcHandle.send(-1, stf, null);
     }
 
@@ -84,14 +84,14 @@ public class NodeControllerRemoteProxy implements INodeController {
     }
 
     @Override
-    public void distributeJob(JobId jobId, byte[] planBytes) throws Exception {
-        CCNCFunctions.DistributeJobFunction fn = new CCNCFunctions.DistributeJobFunction(jobId, planBytes);
+    public void distributeJob(long predistributedId, byte[] planBytes) throws Exception {
+        CCNCFunctions.DistributeJobFunction fn = new CCNCFunctions.DistributeJobFunction(predistributedId, planBytes);
         ipcHandle.send(-1, fn, null);
     }
 
     @Override
-    public void destroyJob(JobId jobId) throws Exception {
-        CCNCFunctions.DestroyJobFunction fn = new CCNCFunctions.DestroyJobFunction(jobId);
+    public void destroyJob(long predistributedId) throws Exception {
+        CCNCFunctions.DestroyJobFunction fn = new CCNCFunctions.DestroyJobFunction(predistributedId);
         ipcHandle.send(-1, fn, null);
     }
 
