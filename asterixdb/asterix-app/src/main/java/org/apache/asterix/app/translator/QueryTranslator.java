@@ -2325,7 +2325,7 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
         Date checkEndTime = new Date();
         long experimentDuplCheckTime = (checkEndTime.getTime() - checkStartTime.getTime());
         if (LOGGER.isLoggable(Level.SEVERE)) {
-            // LOGGER.severe("Merge Policy Experiment Read Time: " + experimentDuplCheckTime + " " + new Date());
+            LOGGER.severe("Merge Policy Experiment Total Read Time: " + experimentDuplCheckTime + " " + new Date());
         }
     }
 
