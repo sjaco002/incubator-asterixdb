@@ -97,10 +97,10 @@ public class HyracksClientInterfaceRemoteProxy implements IHyracksClientInterfac
     }
 
     @Override
-    public JobId destroyJob(long predestributedId) throws Exception {
+    public long destroyJob(long predestributedId) throws Exception {
         HyracksClientInterfaceFunctions.DestroyJobFunction sjf =
                 new HyracksClientInterfaceFunctions.DestroyJobFunction(predestributedId);
-        return (JobId) rpci.call(ipcHandle, sjf);
+        return (long) rpci.call(ipcHandle, sjf);
     }
 
     @Override

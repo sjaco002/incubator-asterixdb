@@ -39,10 +39,10 @@ public class DistributeJobWork extends SynchronizableWork {
     private final byte[] acggfBytes;
     private final JobId jobId;
     private final long predestributedId;
-    private final IResultCallback<JobId> callback;
+    private final IResultCallback<Long> callback;
 
     public DistributeJobWork(ClusterControllerService ccs, byte[] acggfBytes, JobId jobId, long predestributedId,
-            IResultCallback<JobId> callback) {
+            IResultCallback<Long> callback) {
         this.predestributedId = predestributedId;
         this.jobId = jobId;
         this.ccs = ccs;
@@ -73,7 +73,7 @@ public class DistributeJobWork extends SynchronizableWork {
                 node.getNodeController().distributeJob(predestributedId, acgBytes);
             }
 
-            callback.setValue(jobId);
+            callback.setValue(predestributedId);
         } catch (Exception e) {
             callback.setException(e);
         }

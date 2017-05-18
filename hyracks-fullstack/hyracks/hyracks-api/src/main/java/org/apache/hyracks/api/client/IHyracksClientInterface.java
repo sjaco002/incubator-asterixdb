@@ -44,7 +44,7 @@ public interface IHyracksClientInterface {
 
     public long distributeJob(byte[] acggfBytes) throws Exception;
 
-    public JobId destroyJob(long predestributedId) throws Exception;
+    public long destroyJob(long predestributedId) throws Exception;
 
     public NetworkAddress getDatasetDirectoryServiceInfo() throws Exception;
 

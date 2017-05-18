@@ -88,8 +88,7 @@ class ClientInterfaceIPCI implements IIPCI {
                 HyracksClientInterfaceFunctions.DistributeJobFunction djf =
                         (HyracksClientInterfaceFunctions.DistributeJobFunction) fn;
                 ccs.getWorkQueue().schedule(new DistributeJobWork(ccs, djf.getACGGFBytes(), jobIdFactory.create(),
-                        predistributedId++,
-                        new IPCResponder<JobId>(handle, mid)));
+                        predistributedId++, new IPCResponder<Long>(handle, mid)));
                 break;
             case DESTROY_JOB:
                 HyracksClientInterfaceFunctions.DestroyJobFunction dsjf =

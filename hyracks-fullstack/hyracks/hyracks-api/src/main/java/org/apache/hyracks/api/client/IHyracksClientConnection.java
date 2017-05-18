@@ -104,7 +104,7 @@ public interface IHyracksClientConnection extends IClusterInfoCollector {
      *            The id of the predistributed job
      * @throws Exception
      */
-    public JobId destroyJob(long predestributedId) throws Exception;
+    public long destroyJob(long predestributedId) throws Exception;
 
     /**
      * Used to run a pre-distributed job by id (the same JobId will be returned)

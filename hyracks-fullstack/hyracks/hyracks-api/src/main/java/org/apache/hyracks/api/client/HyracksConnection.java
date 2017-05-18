@@ -115,7 +115,7 @@ public final class HyracksConnection implements IHyracksClientConnection {
     }
 
     @Override
-    public JobId destroyJob(long predestributedId) throws Exception {
+    public long destroyJob(long predestributedId) throws Exception {
         return hci.destroyJob(predestributedId);
     }
 
