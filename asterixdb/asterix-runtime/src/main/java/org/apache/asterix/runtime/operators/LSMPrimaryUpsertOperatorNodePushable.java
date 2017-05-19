@@ -21,6 +21,9 @@ package org.apache.asterix.runtime.operators;
 import java.io.DataOutput;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.Date;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 import org.apache.asterix.common.api.INcApplicationContext;
 import org.apache.asterix.common.dataflow.LSMIndexUtil;
@@ -89,7 +92,10 @@ public class LSMPrimaryUpsertOperatorNodePushable extends LSMIndexInsertUpdateDe
     private IFrameOperationCallback frameOpCallback;
     private final IFrameOperationCallbackFactory frameOpCallbackFactory;
     private AbstractIndexModificationOperationCallback abstractModCallback;
+    private long writeLogInterval = 50000;
+    private long writeCount = 0;
     private final boolean hasSecondaries;
+    private static final Logger LOGGER = Logger.getLogger(LSMPrimaryUpsertOperatorNodePushable.class.getName());
 
     public LSMPrimaryUpsertOperatorNodePushable(IIndexOperatorDescriptor opDesc, IHyracksTaskContext ctx, int partition,
             int[] fieldPermutation, IRecordDescriptorProvider recordDescProvider, int numOfPrimaryKeys,
@@ -265,6 +271,13 @@ public class LSMPrimaryUpsertOperatorNodePushable extends LSMIndexInsertUpdateDe
                     } else {
                         lsmAccessor.forceUpsert(tuple);
                     }
+                    writeCount++;
+                    if (writeCount % writeLogInterval == 0) {
+                        if (LOGGER.isLoggable(Level.SEVERE)) {
+                            LOGGER.severe("Merge Policy Experiment Write Count: " + writeCount + " " + new Date());
+                        }
+                    }
+                    
                     recordWasInserted = true;
                 }
                 writeOutput(i, recordWasInserted, prevTuple != null);
