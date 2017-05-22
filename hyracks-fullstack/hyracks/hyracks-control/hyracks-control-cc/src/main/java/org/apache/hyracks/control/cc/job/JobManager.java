@@ -303,9 +303,7 @@ public class JobManager implements IJobManager {
 
         CCServiceContext serviceCtx = ccs.getContext();
         JobSpecification spec = run.getJobSpecification();
-        if (!run.getExecutor().isPredistributed()) {
-            serviceCtx.notifyJobCreation(jobId, spec);
-        }
+        serviceCtx.notifyJobCreation(jobId, spec);
         run.setStatus(JobStatus.RUNNING, null);
         executeJobInternal(run);
     }
