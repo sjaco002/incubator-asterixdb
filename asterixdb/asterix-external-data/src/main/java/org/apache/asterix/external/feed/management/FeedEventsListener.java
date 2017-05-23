@@ -110,7 +110,7 @@ public class FeedEventsListener extends ActiveEntityEventsListener {
         JobStatus status = hcc.getJobStatus(jobId);
         state = status.equals(JobStatus.FAILURE) ? ActivityState.FAILED : ActivityState.STOPPED;
         ActiveLifecycleListener activeLcListener = (ActiveLifecycleListener) appCtx.getActiveLifecycleListener();
-        activeLcListener.getNotificationHandler().removeListener(this, jobId);
+        activeLcListener.getNotificationHandler().removeListener(this);
     }
 
     private void start(ActiveEvent event) {
