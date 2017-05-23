@@ -444,7 +444,7 @@ public class LSMBTree extends AbstractLSMIndex implements ITreeIndex {
         cursor.open(ctx.getSearchInitialState(), pred);
 
         long end = System.nanoTime();
-        long microseconds = (end - start) / 1000;
+        long microseconds = (end - start);
         if (toString().contains("Tweets1")) {
             readCount++;
             if (readCount % readLogInterval == 0) {

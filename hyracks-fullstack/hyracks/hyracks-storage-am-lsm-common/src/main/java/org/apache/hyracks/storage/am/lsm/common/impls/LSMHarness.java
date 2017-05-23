@@ -462,6 +462,7 @@ public class LSMHarness implements ILSMHarness {
             LOGGER.severe(
                     "Merge Policy Experiment started a flush operation at " + new Date() + " for index: " + lsmIndex);
         }
+        long start = System.nanoTime();
 
 
         ILSMDiskComponent newComponent = null;
@@ -476,9 +477,10 @@ public class LSMHarness implements ILSMHarness {
             exitComponents(ctx, LSMOperationType.FLUSH, newComponent, false);
             operation.getCallback().afterFinalize(LSMOperationType.FLUSH, newComponent);
         }
-
+        long end = System.nanoTime();
+        long nonoSeconds = (end - start);
         if (LOGGER.isLoggable(Level.SEVERE)) {
-            LOGGER.severe("Merge Policy Experiment finished the flush operation at " + new Date() + " for index: "
+            LOGGER.severe("Merge Policy Experiment finished the flush operation after " + nonoSeconds + " for index: "
                     + lsmIndex);
         }
     }
@@ -513,6 +515,7 @@ public class LSMHarness implements ILSMHarness {
             LOGGER.severe(
                     "Merge Policy Experiment started a merge operation at " + new Date() + " for index: " + lsmIndex);
         }
+        long start = System.nanoTime();
 
         ILSMDiskComponent newComponent = null;
         try {
@@ -526,8 +529,10 @@ public class LSMHarness implements ILSMHarness {
             exitComponents(ctx, LSMOperationType.MERGE, newComponent, false);
             operation.getCallback().afterFinalize(LSMOperationType.MERGE, newComponent);
         }
+        long end = System.nanoTime();
+        long nonoSeconds = (end - start);
         if (LOGGER.isLoggable(Level.SEVERE)) {
-            LOGGER.severe("Merge Policy Experiment finished the merge operation at " + new Date() + " for index: "
+            LOGGER.severe("Merge Policy Experiment finished the merge operation after " + nonoSeconds + " for index: "
                     + lsmIndex);
         }
     }
