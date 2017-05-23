@@ -122,7 +122,7 @@ public class JobRun implements IJobStatusConditionVariable {
             throws HyracksException {
         this(deploymentId, jobId, EnumSet.noneOf(JobFlag.class),
                 distributedJobDescriptor.getJobSpecification(), distributedJobDescriptor.getActivityClusterGraph());
-        acg.getJobParameterByteStore().setParameters(jobParameters);
+        ccs.createOrGetJobParameterByteStore(jobId).setParameters(jobParameters);
         Set<Constraint> constaints = distributedJobDescriptor.getActivityClusterGraphConstraints();
         this.scheduler = new JobExecutor(ccs, this, constaints, predestributedId);
     }

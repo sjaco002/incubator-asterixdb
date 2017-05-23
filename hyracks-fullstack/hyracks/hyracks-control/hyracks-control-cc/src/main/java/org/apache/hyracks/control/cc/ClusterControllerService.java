@@ -48,6 +48,8 @@ import org.apache.hyracks.api.context.ICCContext;
 import org.apache.hyracks.api.deployment.DeploymentId;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.apache.hyracks.api.exceptions.HyracksException;
+import org.apache.hyracks.api.job.JobId;
+import org.apache.hyracks.api.job.JobParameterByteStore;
 import org.apache.hyracks.api.job.resource.IJobCapacityController;
 import org.apache.hyracks.api.service.IControllerService;
 import org.apache.hyracks.api.topology.ClusterTopology;
@@ -105,6 +107,8 @@ public class ClusterControllerService implements IControllerService {
 
     private final PreDistributedJobStore preDistributedJobStore = new PreDistributedJobStore();
 
+    private final Map<JobId, JobParameterByteStore> jobParameterByteStoreMap = new HashMap<>();
+
     private final WorkQueue workQueue;
 
     private ExecutorService executor;
@@ -154,8 +158,8 @@ public class ClusterControllerService implements IControllerService {
         final ClusterTopology topology = computeClusterTopology(ccConfig);
         ccContext = new ClusterControllerContext(topology);
         sweeper = new DeadNodeSweeper();
-        datasetDirectoryService = new DatasetDirectoryService(ccConfig.getResultTTL(),
-                ccConfig.getResultSweepThreshold(), preDistributedJobStore);
+        datasetDirectoryService =
+                new DatasetDirectoryService(ccConfig.getResultTTL(), ccConfig.getResultSweepThreshold());
 
         deploymentRunMap = new HashMap<>();
         stateDumpRunMap = new HashMap<>();
@@ -310,6 +314,19 @@ public class ClusterControllerService implements IControllerService {
 
     public PreDistributedJobStore getPreDistributedJobStore() throws HyracksException {
         return preDistributedJobStore;
+    }
+
+    public void removeJobParameterByteStore(JobId jobId) throws HyracksException {
+        jobParameterByteStoreMap.remove(jobId);
+    }
+
+    public JobParameterByteStore createOrGetJobParameterByteStore(JobId jobId) throws HyracksException {
+        JobParameterByteStore jpbs = jobParameterByteStoreMap.get(jobId);
+        if (jpbs == null) {
+            jpbs = new JobParameterByteStore();
+            jobParameterByteStoreMap.put(jobId, jpbs);
+        }
+        return jpbs;
     }
 
     public IResourceManager getResourceManager() {

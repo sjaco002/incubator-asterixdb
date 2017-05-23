@@ -87,8 +87,8 @@ class ClientInterfaceIPCI implements IIPCI {
             case DISTRIBUTE_JOB:
                 HyracksClientInterfaceFunctions.DistributeJobFunction djf =
                         (HyracksClientInterfaceFunctions.DistributeJobFunction) fn;
-                ccs.getWorkQueue().schedule(new DistributeJobWork(ccs, djf.getACGGFBytes(), jobIdFactory.create(),
-                        predistributedId++, new IPCResponder<Long>(handle, mid)));
+                ccs.getWorkQueue().schedule(new DistributeJobWork(ccs, djf.getACGGFBytes(), predistributedId++,
+                        new IPCResponder<Long>(handle, mid)));
                 break;
             case DESTROY_JOB:
                 HyracksClientInterfaceFunctions.DestroyJobFunction dsjf =
@@ -105,16 +105,15 @@ class ClientInterfaceIPCI implements IIPCI {
             case START_JOB:
                 HyracksClientInterfaceFunctions.StartJobFunction sjf =
                         (HyracksClientInterfaceFunctions.StartJobFunction) fn;
-                long predistributedId = sjf.getpredistributedId();
+                long id = sjf.getpredistributedId();
                 byte[] acggfBytes = null;
-                boolean predistributed = false;
-                if (predistributedId == -1) {
+                if (id == -1) {
                     //The job is new
                     acggfBytes = sjf.getACGGFBytes();
                 }
                 JobId jobId = jobIdFactory.create();
                 ccs.getWorkQueue().schedule(new JobStartWork(ccs, sjf.getDeploymentId(), acggfBytes, sjf.getJobFlags(),
-                        jobId, sjf.getJobParameters(), new IPCResponder<JobId>(handle, mid), predistributedId));
+                        jobId, sjf.getJobParameters(), new IPCResponder<JobId>(handle, mid), id));
                 break;
             case GET_DATASET_DIRECTORY_SERIVICE_INFO:
                 ccs.getWorkQueue().schedule(new GetDatasetDirectoryServiceInfoWork(ccs,

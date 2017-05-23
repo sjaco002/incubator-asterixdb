@@ -201,7 +201,7 @@ public class StartTasksWork extends AbstractWork {
                 }
                 acg = (ActivityClusterGraph) DeploymentUtils.deserialize(acgBytes, deploymentId, appCtx);
             }
-            acg.getJobParameterByteStore().setParameters(jobParameters);
+            ncs.createOrGetJobParameterByteStore(jobId).setParameters(jobParameters);
             ji = new Joblet(ncs, deploymentId, jobId, appCtx, acg);
             jobletMap.put(jobId, ji);
         }

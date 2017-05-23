@@ -100,7 +100,7 @@ public interface IHyracksClientConnection extends IClusterInfoCollector {
     /**
      * Destroy the distributed graph for a pre-distributed job
      *
-     * @param jobId
+     * @param predestributedId
      *            The id of the predistributed job
      * @throws Exception
      */
@@ -109,7 +109,7 @@ public interface IHyracksClientConnection extends IClusterInfoCollector {
     /**
      * Used to run a pre-distributed job by id (the same JobId will be returned)
      *
-     * @param jobId
+     * @param predestributedId
      *            The id of the predistributed job
      * @param jobParameters
      *            The serialized job parameters

@@ -128,8 +128,13 @@ public class PredistributedJobsTest {
         Assert.assertTrue(cc.getPreDistributedJobStore().getDistributedJobDescriptor(distributedId2) != null);
 
         //run the first job
-        JobId jobRun1Id = hcc.startJob(distributedId1, new HashMap<>());
-        hcc.waitForCompletion(jobRun1Id);
+        JobId jobRunId1 = hcc.startJob(distributedId1, new HashMap<>());
+        hcc.waitForCompletion(jobRunId1);
+
+        //Make sure the job parameter map was removed
+        verify(cc, Mockito.timeout(5000).times(1)).removeJobParameterByteStore(any());
+        verify(nc1, Mockito.timeout(5000).times(1)).removeJobParameterByteStore(any());
+        verify(nc2, Mockito.timeout(5000).times(1)).removeJobParameterByteStore(any());
 
         //destroy the first job
         hcc.destroyJob(distributedId1);
@@ -144,16 +149,26 @@ public class PredistributedJobsTest {
         cc.getPreDistributedJobStore().checkForExistingDistributedJobDescriptor(distributedId1);
 
         //run the second job
-        JobId jobRun2Id = hcc.startJob(distributedId2, new HashMap<>());
-        hcc.waitForCompletion(jobRun2Id);
+        JobId jobRunId2 = hcc.startJob(distributedId2, new HashMap<>());
+        hcc.waitForCompletion(jobRunId2);
+
+        //Make sure the job parameter map was removed
+        verify(cc, Mockito.timeout(5000).times(2)).removeJobParameterByteStore(any());
+        verify(nc1, Mockito.timeout(5000).times(2)).removeJobParameterByteStore(any());
+        verify(nc2, Mockito.timeout(5000).times(2)).removeJobParameterByteStore(any());
 
         //wait ten seconds to ensure the result sweeper does not break the job
         //The result sweeper runs every 5 seconds during the tests
         Thread.sleep(10000);
 
         //run the second job again
-        JobId jobRun3Id = hcc.startJob(distributedId2, new HashMap<>());
-        hcc.waitForCompletion(jobRun3Id);
+        JobId jobRunId3 = hcc.startJob(distributedId2, new HashMap<>());
+        hcc.waitForCompletion(jobRunId3);
+
+        //Make sure the job parameter map was removed
+        verify(cc, Mockito.timeout(5000).times(3)).removeJobParameterByteStore(any());
+        verify(nc1, Mockito.timeout(5000).times(3)).removeJobParameterByteStore(any());
+        verify(nc2, Mockito.timeout(5000).times(3)).removeJobParameterByteStore(any());
 
         //destroy the second job
         hcc.destroyJob(distributedId2);

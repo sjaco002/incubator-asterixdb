@@ -103,7 +103,8 @@ class ClusterControllerIPCI implements IIPCI {
             case DISTRIBUTED_JOB_FAILURE:
                 CCNCFunctions.ReportDistributedJobFailureFunction rdjf =
                         (CCNCFunctions.ReportDistributedJobFailureFunction) fn;
-                ccs.getWorkQueue().schedule(new DistributedJobFailureWork(rdjf.getPredistributedId(), rdjf.getNodeId()));
+                ccs.getWorkQueue()
+                        .schedule(new DistributedJobFailureWork(rdjf.getPredistributedId(), rdjf.getNodeId()));
                 break;
             case REGISTER_PARTITION_PROVIDER:
                 CCNCFunctions.RegisterPartitionProviderFunction rppf =

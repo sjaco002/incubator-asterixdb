@@ -44,8 +44,6 @@ public class ActivityClusterGraph implements Serializable {
 
     private final Map<ConnectorDescriptorId, ActivityCluster> connectorMap;
 
-    private JobParameterByteStore jobParameterByteStore;
-
     private int frameSize;
 
     private int maxReattempts;
@@ -65,7 +63,6 @@ public class ActivityClusterGraph implements Serializable {
         activityClusterMap = new HashMap<ActivityClusterId, ActivityCluster>();
         activityMap = new HashMap<ActivityId, ActivityCluster>();
         connectorMap = new HashMap<ConnectorDescriptorId, ActivityCluster>();
-        jobParameterByteStore = new JobParameterByteStore();
         frameSize = 32768;
         reportTaskDetails = true;
     }
@@ -76,10 +73,6 @@ public class ActivityClusterGraph implements Serializable {
 
     public Map<ConnectorDescriptorId, ActivityCluster> getConnectorMap() {
         return connectorMap;
-    }
-
-    public JobParameterByteStore getJobParameterByteStore() {
-        return jobParameterByteStore;
     }
 
     public Map<ActivityClusterId, ActivityCluster> getActivityClusterMap() {

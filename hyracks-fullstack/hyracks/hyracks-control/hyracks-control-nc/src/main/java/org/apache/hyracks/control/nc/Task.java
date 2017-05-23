@@ -413,7 +413,7 @@ public class Task implements IHyracksTaskContext, ICounterContext, Runnable {
     }
 
     @Override
-    public byte[] getJobParameter(byte[] name, int start, int length) {
-        return joblet.getActivityClusterGraph().getJobParameterByteStore().getParameterValue(name, start, length);
+    public byte[] getJobParameter(byte[] name, int start, int length) throws HyracksException {
+        return ncs.createOrGetJobParameterByteStore(joblet.getJobId()).getParameterValue(name, start, length);
     }
 }

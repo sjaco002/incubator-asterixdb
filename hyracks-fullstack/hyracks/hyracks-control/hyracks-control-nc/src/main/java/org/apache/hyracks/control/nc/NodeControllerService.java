@@ -29,6 +29,7 @@ import java.lang.management.RuntimeMXBean;
 import java.lang.management.ThreadMXBean;
 import java.lang.reflect.Field;
 import java.net.InetSocketAddress;
+import java.util.HashMap;
 import java.util.Hashtable;
 import java.util.List;
 import java.util.Map;
@@ -52,6 +53,7 @@ import org.apache.hyracks.api.exceptions.HyracksException;
 import org.apache.hyracks.api.io.IODeviceHandle;
 import org.apache.hyracks.api.job.ActivityClusterGraph;
 import org.apache.hyracks.api.job.JobId;
+import org.apache.hyracks.api.job.JobParameterByteStore;
 import org.apache.hyracks.api.lifecycle.ILifeCycleComponentManager;
 import org.apache.hyracks.api.lifecycle.LifeCycleComponentManager;
 import org.apache.hyracks.api.service.IControllerService;
@@ -121,6 +123,8 @@ public class NodeControllerService implements IControllerService {
     private final Map<JobId, Joblet> jobletMap;
 
     private final Map<Long, ActivityClusterGraph> preDistributedJobActivityClusterGraphMap;
+
+    private final Map<JobId, JobParameterByteStore> jobParameterByteStoreMap = new HashMap<>();
 
     private ExecutorService executor;
 
@@ -376,6 +380,20 @@ public class NodeControllerService implements IControllerService {
     public Map<JobId, Joblet> getJobletMap() {
         return jobletMap;
     }
+
+    public void removeJobParameterByteStore(JobId jobId) {
+        jobParameterByteStoreMap.remove(jobId);
+    }
+
+    public JobParameterByteStore createOrGetJobParameterByteStore(JobId jobId) throws HyracksException {
+        JobParameterByteStore jpbs = jobParameterByteStoreMap.get(jobId);
+        if (jpbs == null){
+            jpbs = new JobParameterByteStore();
+            jobParameterByteStoreMap.put(jobId, jpbs);
+        }
+        return jpbs;
+    }
+
 
     public void storeActivityClusterGraph(long predestributedId, ActivityClusterGraph acg) throws HyracksException {
         if (preDistributedJobActivityClusterGraphMap.get(predestributedId) != null) {

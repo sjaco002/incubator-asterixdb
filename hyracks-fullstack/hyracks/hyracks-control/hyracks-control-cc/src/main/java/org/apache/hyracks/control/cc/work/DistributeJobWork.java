@@ -24,7 +24,6 @@ import org.apache.hyracks.api.job.ActivityClusterGraph;
 import org.apache.hyracks.api.job.IActivityClusterGraphGenerator;
 import org.apache.hyracks.api.job.IActivityClusterGraphGeneratorFactory;
 import org.apache.hyracks.api.job.JobFlag;
-import org.apache.hyracks.api.job.JobId;
 import org.apache.hyracks.api.util.JavaSerializationUtils;
 import org.apache.hyracks.control.cc.ClusterControllerService;
 import org.apache.hyracks.control.cc.NodeControllerState;
@@ -37,14 +36,12 @@ import org.apache.hyracks.control.common.work.SynchronizableWork;
 public class DistributeJobWork extends SynchronizableWork {
     private final ClusterControllerService ccs;
     private final byte[] acggfBytes;
-    private final JobId jobId;
     private final long predestributedId;
     private final IResultCallback<Long> callback;
 
-    public DistributeJobWork(ClusterControllerService ccs, byte[] acggfBytes, JobId jobId, long predestributedId,
+    public DistributeJobWork(ClusterControllerService ccs, byte[] acggfBytes, long predestributedId,
             IResultCallback<Long> callback) {
         this.predestributedId = predestributedId;
-        this.jobId = jobId;
         this.ccs = ccs;
         this.acggfBytes = acggfBytes;
         this.callback = callback;
