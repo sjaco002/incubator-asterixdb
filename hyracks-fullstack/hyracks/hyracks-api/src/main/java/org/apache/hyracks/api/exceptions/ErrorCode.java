@@ -82,7 +82,6 @@ public class ErrorCode {
     public static final int UNSORTED_LOAD_INPUT = 46;
     public static final int OPERATION_EXCEEDED_MAX_RESTARTS = 47;
     public static final int DUPLICATE_LOAD_INPUT = 48;
-    public static final int DISTRIBUTED_JOB_ALREADY_RUNNING = 49;
 
     // Compilation error codes.
     public static final int RULECOLLECTION_NOT_INSTANCE_OF_LIST = 10000;
