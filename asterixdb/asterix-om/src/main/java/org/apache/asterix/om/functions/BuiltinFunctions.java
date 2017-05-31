@@ -1178,6 +1178,10 @@ public class BuiltinFunctions {
         // get job parameter
         addFunction(GET_JOB_PARAMETER, AnyTypeComputer.INSTANCE, false);
 
+        // get job parameter
+        //TODO: ture or false?
+        addFunction(GET_NONPURE_SINGLETON, AnyTypeComputer.INSTANCE, false);
+
         // unnesting function
         addPrivateFunction(SCAN_COLLECTION, CollectionMemberResultType.INSTANCE, true);
 
