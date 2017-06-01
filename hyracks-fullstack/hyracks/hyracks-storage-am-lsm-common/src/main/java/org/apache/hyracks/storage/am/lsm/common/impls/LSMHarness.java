@@ -422,6 +422,8 @@ public class LSMHarness implements ILSMHarness {
     @Override
     public void search(ILSMIndexOperationContext ctx, IIndexCursor cursor, ISearchPredicate pred)
             throws HyracksDataException {
+        LOGGER.severe("Merge Policy Experiment Read LSM Start: on stack size "
+                + ((AbstractLSMIndex) lsmIndex).diskComponents.size() + " " + new Date() + " ");
         LSMOperationType opType = LSMOperationType.SEARCH;
         ctx.setSearchPredicate(pred);
         long start = System.nanoTime();
@@ -433,6 +435,15 @@ public class LSMHarness implements ILSMHarness {
             exitComponents(ctx, opType, null, true);
             throw e;
         }
+        long end = System.nanoTime();
+        long microseconds = (end - start);
+
+        if (LOGGER.isLoggable(Level.SEVERE)) {
+            LOGGER.severe("Merge Policy Experiment Read LSM micro: " + microseconds + " " + new Date());
+            LOGGER.severe("Merge Policy Experiment Read LSM End: on stack size "
+                    + ((AbstractLSMIndex) lsmIndex).diskComponents.size() + " " + new Date() + " ");
+        }
+
     }
 
     @Override

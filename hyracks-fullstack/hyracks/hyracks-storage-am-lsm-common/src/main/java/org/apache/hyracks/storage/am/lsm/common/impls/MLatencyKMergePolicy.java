@@ -56,6 +56,7 @@ public class MLatencyKMergePolicy implements ILSMMergePolicy {
             return;
         }
         if (fullMergeIsRequested) {
+            LOGGER.severe("Full Merge Requested");
             ILSMIndexAccessor accessor = (ILSMIndexAccessor) index.createAccessor(NoOpOperationCallback.INSTANCE,
                     NoOpOperationCallback.INSTANCE);
             accessor.scheduleFullMerge(index.getIOOperationCallback());

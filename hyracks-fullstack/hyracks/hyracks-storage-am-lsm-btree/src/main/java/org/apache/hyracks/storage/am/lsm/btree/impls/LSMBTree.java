@@ -438,19 +438,30 @@ public class LSMBTree extends AbstractLSMIndex implements ITreeIndex {
     @Override
     public void search(ILSMIndexOperationContext ictx, IIndexCursor cursor, ISearchPredicate pred, long start)
             throws HyracksDataException {
+        long startIt = System.nanoTime();
+        if (toString().contains("Tweets1")) {
+            if (readCount % readLogInterval == 0) {
+                if (LOGGER.isLoggable(Level.SEVERE)) {
+                    LOGGER.severe("Merge Policy Experiment Read Search Start: on stack size " + diskComponents.size()
+                            + " " + new Date() + " ");
+                }
+            }
+        }
+
         LSMBTreeOpContext ctx = (LSMBTreeOpContext) ictx;
         List<ILSMComponent> operationalComponents = ctx.getComponentHolder();
         ctx.getSearchInitialState().reset(pred, operationalComponents);
         cursor.open(ctx.getSearchInitialState(), pred);
 
         long end = System.nanoTime();
-        long microseconds = (end - start);
+        long microseconds = (end - startIt);
         if (toString().contains("Tweets1")) {
             readCount++;
             if (readCount % readLogInterval == 0) {
                 if (LOGGER.isLoggable(Level.SEVERE)) {
-                    LOGGER.severe("Merge Policy Experiment Read micro: " + microseconds + " " + new Date());
-                    LOGGER.severe("Merge Policy Experiment Read: on stack size " + diskComponents.size() + " "
+                    LOGGER.severe("Merge Policy Experiment Read Search micro: " + microseconds + " " + new Date());
+                    LOGGER.severe("Merge Policy Experiment Read Search End: on stack size " + diskComponents.size()
+                            + " "
                             + new Date() + " ");
                 }
             }
