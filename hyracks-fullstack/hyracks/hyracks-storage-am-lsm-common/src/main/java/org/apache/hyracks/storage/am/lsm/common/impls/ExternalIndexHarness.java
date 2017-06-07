@@ -184,7 +184,7 @@ public class ExternalIndexHarness extends LSMHarness {
         LSMOperationType opType = LSMOperationType.SEARCH;
         getAndEnterComponents(ctx, opType, false);
         try {
-            lsmIndex.search(ctx, cursor, pred, 0);
+            lsmIndex.search(ctx, cursor, pred, 0, 0);
         } catch (Exception e) {
             exitComponents(ctx, opType, null, true);
             throw e;

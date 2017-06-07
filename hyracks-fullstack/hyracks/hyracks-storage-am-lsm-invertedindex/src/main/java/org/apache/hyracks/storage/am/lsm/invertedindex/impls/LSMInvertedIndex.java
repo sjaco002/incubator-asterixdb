@@ -366,7 +366,8 @@ public class LSMInvertedIndex extends AbstractLSMIndex implements IInvertedIndex
     }
 
     @Override
-    public void search(ILSMIndexOperationContext ictx, IIndexCursor cursor, ISearchPredicate pred, long start)
+    public void search(ILSMIndexOperationContext ictx, IIndexCursor cursor, ISearchPredicate pred, long start,
+            int stackSize)
             throws HyracksDataException {
         List<ILSMComponent> operationalComponents = ictx.getComponentHolder();
         int numComponents = operationalComponents.size();
@@ -578,7 +579,7 @@ public class LSMInvertedIndex extends AbstractLSMIndex implements IInvertedIndex
         ILSMIndexOperationContext opCtx = ((LSMIndexSearchCursor) cursor).getOpCtx();
         opCtx.getComponentHolder().addAll(mergeOp.getMergingComponents());
         // Scan diskInvertedIndexes ignoring the memoryInvertedIndex.
-        search(opCtx, cursor, mergePred, 0);
+        search(opCtx, cursor, mergePred, 0, 0);
 
         // Create an inverted index instance.
         LSMInvertedIndexDiskComponent component =
@@ -595,7 +596,7 @@ public class LSMInvertedIndex extends AbstractLSMIndex implements IInvertedIndex
 
             LSMInvertedIndexDeletedKeysBTreeMergeCursor btreeCursor =
                     new LSMInvertedIndexDeletedKeysBTreeMergeCursor(opCtx);
-            search(opCtx, btreeCursor, mergePred, 0);
+            search(opCtx, btreeCursor, mergePred, 0, 0);
 
             BTree btree = component.getDeletedKeysBTree();
             IIndexBulkLoader btreeBulkLoader = btree.createBulkLoader(1.0f, true, 0L, false);

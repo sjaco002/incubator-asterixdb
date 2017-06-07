@@ -307,7 +307,8 @@ public class ExternalBTreeWithBuddy extends AbstractLSMIndex implements ITreeInd
     }
 
     @Override
-    public void search(ILSMIndexOperationContext ictx, IIndexCursor cursor, ISearchPredicate pred, long start)
+    public void search(ILSMIndexOperationContext ictx, IIndexCursor cursor, ISearchPredicate pred, long start,
+            int stackSize)
             throws HyracksDataException {
         ExternalBTreeWithBuddyOpContext ctx = (ExternalBTreeWithBuddyOpContext) ictx;
         List<ILSMComponent> operationalComponents = ictx.getComponentHolder();
@@ -379,7 +380,7 @@ public class ExternalBTreeWithBuddy extends AbstractLSMIndex implements ITreeInd
         ISearchPredicate btreeSearchPred = new RangePredicate(null, null, true, true, null, null);
         ILSMIndexOperationContext opCtx = ((LSMBTreeWithBuddySortedCursor) cursor).getOpCtx();
         opCtx.getComponentHolder().addAll(mergeOp.getMergingComponents());
-        search(opCtx, cursor, btreeSearchPred, 0);
+        search(opCtx, cursor, btreeSearchPred, 0, 0);
 
         LSMBTreeWithBuddyDiskComponent mergedComponent =
                 createDiskComponent(componentFactory, mergeOp.getBTreeMergeTarget(), mergeOp.getBuddyBTreeMergeTarget(),
@@ -394,7 +395,7 @@ public class ExternalBTreeWithBuddy extends AbstractLSMIndex implements ITreeInd
             // Keep the deleted tuples since the oldest disk component is not
             // included in the merge operation
             LSMBuddyBTreeMergeCursor buddyBtreeCursor = new LSMBuddyBTreeMergeCursor(opCtx);
-            search(opCtx, buddyBtreeCursor, btreeSearchPred, 0);
+            search(opCtx, buddyBtreeCursor, btreeSearchPred, 0, 0);
 
             BTree buddyBtree = mergedComponent.getBuddyBTree();
             IIndexBulkLoader buddyBtreeBulkLoader = buddyBtree.createBulkLoader(1.0f, true, 0L, false);

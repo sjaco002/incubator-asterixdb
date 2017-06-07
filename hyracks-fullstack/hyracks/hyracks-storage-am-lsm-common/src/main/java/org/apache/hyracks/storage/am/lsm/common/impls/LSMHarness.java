@@ -422,29 +422,17 @@ public class LSMHarness implements ILSMHarness {
     @Override
     public void search(ILSMIndexOperationContext ctx, IIndexCursor cursor, ISearchPredicate pred)
             throws HyracksDataException {
-        if (lsmIndex.toString().contains("Tweets1")) {
-        LOGGER.severe("Merge Policy Experiment Read LSM Start: on stack size "
-                + ((AbstractLSMIndex) lsmIndex).diskComponents.size() + " " + new Date() + " ");
-        }
+        int beforeSize = ((AbstractLSMIndex) lsmIndex).diskComponents.size();
         LSMOperationType opType = LSMOperationType.SEARCH;
         ctx.setSearchPredicate(pred);
         long start = System.nanoTime();
         getAndEnterComponents(ctx, opType, false);
         try {
             ctx.getSearchOperationCallback().before(pred.getLowKey());
-            lsmIndex.search(ctx, cursor, pred, start);
+            lsmIndex.search(ctx, cursor, pred, start, beforeSize);
         } catch (Exception e) {
             exitComponents(ctx, opType, null, true);
             throw e;
-        }
-        long end = System.nanoTime();
-        long microseconds = (end - start);
-        if (lsmIndex.toString().contains("Tweets1")) {
-        if (LOGGER.isLoggable(Level.SEVERE)) {
-            LOGGER.severe("Merge Policy Experiment Read LSM micro: " + microseconds + " " + new Date());
-            LOGGER.severe("Merge Policy Experiment Read LSM End: on stack size "
-                    + ((AbstractLSMIndex) lsmIndex).diskComponents.size() + " " + new Date() + " ");
-        }
         }
 
     }

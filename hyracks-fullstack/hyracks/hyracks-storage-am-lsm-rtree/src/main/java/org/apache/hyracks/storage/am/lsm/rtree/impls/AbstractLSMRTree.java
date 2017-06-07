@@ -255,7 +255,8 @@ public abstract class AbstractLSMRTree extends AbstractLSMIndex implements ITree
     }
 
     @Override
-    public void search(ILSMIndexOperationContext ictx, IIndexCursor cursor, ISearchPredicate pred, long start)
+    public void search(ILSMIndexOperationContext ictx, IIndexCursor cursor, ISearchPredicate pred, long start,
+            int stackSize)
             throws HyracksDataException {
         LSMRTreeOpContext ctx = (LSMRTreeOpContext) ictx;
         cursor.open(ctx.getSearchInitialState(), pred);

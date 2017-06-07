@@ -150,7 +150,8 @@ public class ExternalBTree extends LSMBTree implements ITwoPCIndex {
 
     // The only reason to override the following method is that it uses a different context object
     @Override
-    public void search(ILSMIndexOperationContext ictx, IIndexCursor cursor, ISearchPredicate pred, long start)
+    public void search(ILSMIndexOperationContext ictx, IIndexCursor cursor, ISearchPredicate pred, long start,
+            int stackSize)
             throws HyracksDataException {
         ExternalBTreeOpContext ctx = (ExternalBTreeOpContext) ictx;
         List<ILSMComponent> operationalComponents = ctx.getComponentHolder();

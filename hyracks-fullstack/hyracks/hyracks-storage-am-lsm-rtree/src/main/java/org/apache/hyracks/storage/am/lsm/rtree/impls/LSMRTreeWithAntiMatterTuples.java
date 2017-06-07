@@ -282,7 +282,7 @@ public class LSMRTreeWithAntiMatterTuples extends AbstractLSMRTree {
         ISearchPredicate rtreeSearchPred = new SearchPredicate(null, null);
         ILSMIndexOperationContext opCtx = ((LSMIndexSearchCursor) cursor).getOpCtx();
         opCtx.getComponentHolder().addAll(mergeOp.getMergingComponents());
-        search(opCtx, cursor, rtreeSearchPred, 0);
+        search(opCtx, cursor, rtreeSearchPred, 0, 0);
 
         // Bulk load the tuples from all on-disk RTrees into the new RTree.
         LSMRTreeDiskComponent component =

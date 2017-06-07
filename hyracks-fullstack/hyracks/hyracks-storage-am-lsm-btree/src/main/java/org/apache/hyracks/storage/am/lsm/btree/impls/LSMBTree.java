@@ -436,9 +436,11 @@ public class LSMBTree extends AbstractLSMIndex implements ITreeIndex {
     }
 
     @Override
-    public void search(ILSMIndexOperationContext ictx, IIndexCursor cursor, ISearchPredicate pred, long start)
+    public void search(ILSMIndexOperationContext ictx, IIndexCursor cursor, ISearchPredicate pred, long start,
+            int stackSize)
             throws HyracksDataException {
         long startIt = System.nanoTime();
+        int startSize = diskComponents.size();
         if (toString().contains("Tweets1")) {
             if (readCount % readLogInterval == 0) {
                 if (LOGGER.isLoggable(Level.SEVERE)) {
@@ -455,14 +457,13 @@ public class LSMBTree extends AbstractLSMIndex implements ITreeIndex {
 
         long end = System.nanoTime();
         long microseconds = (end - startIt);
+        long longerMicroseconds = (end - start);
         if (toString().contains("Tweets1")) {
             readCount++;
             if (readCount % readLogInterval == 0) {
                 if (LOGGER.isLoggable(Level.SEVERE)) {
-                    LOGGER.severe("Merge Policy Experiment Read Search micro: " + microseconds + " " + new Date());
-                    LOGGER.severe("Merge Policy Experiment Read Search End: on stack size " + diskComponents.size()
-                            + " "
-                            + new Date() + " ");
+                    LOGGER.severe("Merge Policy Experiment Read Search micro: " + stackSize + " " + startSize + " "
+                            + diskComponents.size() + " " + longerMicroseconds + " " + microseconds + " " + new Date());
                 }
             }
         }

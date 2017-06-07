@@ -345,7 +345,7 @@ public class LSMRTree extends AbstractLSMRTree {
         ISearchPredicate rtreeSearchPred = new SearchPredicate(null, null);
         ILSMIndexOperationContext opCtx = ((LSMRTreeSortedCursor) cursor).getOpCtx();
         opCtx.getComponentHolder().addAll(mergeOp.getMergingComponents());
-        search(opCtx, cursor, rtreeSearchPred, 0);
+        search(opCtx, cursor, rtreeSearchPred, 0, 0);
 
         LSMRTreeDiskComponent mergedComponent = createDiskComponent(componentFactory, mergeOp.getRTreeMergeTarget(),
                 mergeOp.getBTreeMergeTarget(), mergeOp.getBloomFilterMergeTarget(), true);
@@ -359,7 +359,7 @@ public class LSMRTree extends AbstractLSMRTree {
             // Keep the deleted tuples since the oldest disk component is not included in the merge operation
 
             LSMRTreeDeletedKeysBTreeMergeCursor btreeCursor = new LSMRTreeDeletedKeysBTreeMergeCursor(opCtx);
-            search(opCtx, btreeCursor, rtreeSearchPred, 0);
+            search(opCtx, btreeCursor, rtreeSearchPred, 0, 0);
 
             long numElements = 0L;
             for (int i = 0; i < mergeOp.getMergingComponents().size(); ++i) {
