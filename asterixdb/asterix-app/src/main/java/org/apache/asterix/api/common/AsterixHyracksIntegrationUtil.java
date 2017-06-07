@@ -19,6 +19,7 @@
 package org.apache.asterix.api.common;
 
 import static org.apache.asterix.api.common.AsterixHyracksIntegrationUtil.LoggerHolder.LOGGER;
+import static org.apache.hyracks.util.file.FileUtil.joinPath;
 
 import java.io.File;
 import java.io.IOException;
@@ -47,29 +48,30 @@ import org.apache.hyracks.api.job.JobSpecification;
 import org.apache.hyracks.control.cc.ClusterControllerService;
 import org.apache.hyracks.control.common.config.ConfigManager;
 import org.apache.hyracks.control.common.controllers.CCConfig;
+import org.apache.hyracks.control.common.controllers.ControllerConfig;
 import org.apache.hyracks.control.common.controllers.NCConfig;
 import org.apache.hyracks.control.nc.NodeControllerService;
+import org.kohsuke.args4j.CmdLineException;
 
 public class AsterixHyracksIntegrationUtil {
     static class LoggerHolder {
         static final Logger LOGGER = Logger.getLogger(AsterixHyracksIntegrationUtil.class.getName());
+
         private LoggerHolder() {
         }
     }
 
-    private static final String IO_DIR_KEY = "java.io.tmpdir";
     public static final int DEFAULT_HYRACKS_CC_CLIENT_PORT = 1098;
     public static final int DEFAULT_HYRACKS_CC_CLUSTER_PORT = 1099;
 
     public ClusterControllerService cc;
-    public NodeControllerService[] ncs;
+    public NodeControllerService[] ncs = new NodeControllerService[0];
     public IHyracksClientConnection hcc;
 
     private ConfigManager configManager;
     private List<String> nodeNames;
 
     public void init(boolean deleteOldInstanceData) throws Exception {
-        ncs = new NodeControllerService[0]; // ensure that ncs is not null
         final ICCApplication ccApplication = createCCApplication();
         configManager = new ConfigManager();
         ccApplication.registerConfig(configManager);
@@ -81,26 +83,28 @@ public class AsterixHyracksIntegrationUtil {
             deleteTransactionLogs();
             removeTestStorageFiles();
         }
-        final List<NCConfig> ncConfigs = new ArrayList<>();
-        nodeNames.forEach(nodeId -> ncConfigs.add(createNCConfig(nodeId, configManager)));
-        final PropertiesAccessor accessor = PropertiesAccessor.getInstance(configManager.getAppConfig());
-        ncConfigs.forEach((ncConfig1) -> fixupIODevices(ncConfig1, accessor));
+        final List<NodeControllerService> nodeControllers = new ArrayList<>();
+        for (String nodeId : nodeNames) {
+            // mark this NC as virtual in the CC's config manager, so he doesn't try to contact NCService...
+            configManager.set(nodeId, NCConfig.Option.VIRTUAL_NC, true);
+            final INCApplication ncApplication = createNCApplication();
+            ConfigManager ncConfigManager = new ConfigManager();
+            ncApplication.registerConfig(ncConfigManager);
+            nodeControllers.add(
+                    new NodeControllerService(fixupIODevices(createNCConfig(nodeId, ncConfigManager)), ncApplication));
+        } ;
 
         cc.start();
 
         // Starts ncs.
         nodeNames = ccConfig.getConfigManager().getNodeNames();
-        List<NodeControllerService> nodeControllers = new ArrayList<>();
         List<Thread> startupThreads = new ArrayList<>();
-        for (NCConfig ncConfig : ncConfigs) {
-            final INCApplication ncApplication = createNCApplication();
-            NodeControllerService nodeControllerService = new NodeControllerService(ncConfig, ncApplication);
-            nodeControllers.add(nodeControllerService);
-            Thread ncStartThread = new Thread("IntegrationUtil-" + ncConfig.getNodeId()) {
+        for (NodeControllerService nc : nodeControllers) {
+            Thread ncStartThread = new Thread("IntegrationUtil-" + nc.getId()) {
                 @Override
                 public void run() {
                     try {
-                        nodeControllerService.start();
+                        nc.start();
                     } catch (Exception e) {
                         LOGGER.log(Level.SEVERE, e.getMessage(), e);
                     }
@@ -113,17 +117,10 @@ public class AsterixHyracksIntegrationUtil {
         for (Thread thread : startupThreads) {
             thread.join();
         }
-        for (NCConfig ncConfig : ncConfigs) {
-            for (String ioDevice : ncConfig.getIODevices()) {
-                if (!new File(ioDevice).isAbsolute()) {
-                    throw new IllegalStateException("iodevice not absolute: " + ioDevice);
-                }
-            }
-        }
         // Wait until cluster becomes active
         ClusterStateManager.INSTANCE.waitForState(ClusterState.ACTIVE);
         hcc = new HyracksConnection(cc.getConfig().getClientListenAddress(), cc.getConfig().getClientListenPort());
-        ncs = nodeControllers.toArray(new NodeControllerService[nodeControllers.size()]);
+        this.ncs = nodeControllers.toArray(new NodeControllerService[nodeControllers.size()]);
     }
 
     protected CCConfig createCCConfig(ConfigManager configManager) throws IOException {
@@ -134,6 +131,7 @@ public class AsterixHyracksIntegrationUtil {
         ccConfig.setClusterListenPort(DEFAULT_HYRACKS_CC_CLUSTER_PORT);
         ccConfig.setResultTTL(120000L);
         ccConfig.setResultSweepThreshold(1000L);
+        configManager.set(ControllerConfig.Option.DEFAULT_DIR, joinPath(getDefaultStoragePath(), "asterixdb"));
         return ccConfig;
     }
 
@@ -152,6 +150,7 @@ public class AsterixHyracksIntegrationUtil {
         ncConfig.setResultTTL(120000L);
         ncConfig.setResultSweepThreshold(1000L);
         ncConfig.setVirtualNC(true);
+        configManager.set(ControllerConfig.Option.DEFAULT_DIR, joinPath(getDefaultStoragePath(), "asterixdb", ncName));
         return ncConfig;
     }
 
@@ -159,30 +158,21 @@ public class AsterixHyracksIntegrationUtil {
         return new NCApplication();
     }
 
-    private NCConfig fixupIODevices(NCConfig ncConfig, PropertiesAccessor accessor) {
-        String tempPath = System.getProperty(IO_DIR_KEY);
-        if (tempPath.endsWith(File.separator)) {
-            tempPath = tempPath.substring(0, tempPath.length() - 1);
-        }
-        LOGGER.info("Using the temp path: " + tempPath);
-        // get initial partitions from properties
-        String[] nodeStores = accessor.getStores().get(ncConfig.getNodeId());
+    private NCConfig fixupIODevices(NCConfig ncConfig) throws IOException, AsterixException, CmdLineException {
+        // we have to first process the config
+        ncConfig.getConfigManager().processConfig();
+
+        // get initial partitions from config
+        String[] nodeStores = ncConfig.getAppConfig().getStringArray(NCConfig.Option.IODEVICES);
         if (nodeStores == null) {
             throw new IllegalStateException("Couldn't find stores for NC: " + ncConfig.getNodeId());
         }
-        String tempDirPath = System.getProperty(IO_DIR_KEY);
-        if (!tempDirPath.endsWith(File.separator)) {
-            tempDirPath += File.separator;
-        }
-        List<String> ioDevices = new ArrayList<>();
-        for (String nodeStore : nodeStores) {
+        LOGGER.info("Using the path: " + getDefaultStoragePath());
+        for (int i = 0; i < nodeStores.length; i++) {
             // create IO devices based on stores
-            String iodevicePath = tempDirPath + ncConfig.getNodeId() + File.separator + nodeStore;
-            File ioDeviceDir = new File(iodevicePath);
-            ioDeviceDir.mkdirs();
-            ioDevices.add(iodevicePath);
+            nodeStores[i] = joinPath(getDefaultStoragePath(), ncConfig.getNodeId(), nodeStores[i]);
         }
-        configManager.set(ncConfig.getNodeId(), NCConfig.Option.IODEVICES, ioDevices.toArray(new String[0]));
+        ncConfig.getConfigManager().set(ncConfig.getNodeId(), NCConfig.Option.IODEVICES, nodeStores);
         return ncConfig;
     }
 
@@ -232,8 +222,12 @@ public class AsterixHyracksIntegrationUtil {
         hcc.waitForCompletion(jobId);
     }
 
+    protected String getDefaultStoragePath() {
+        return joinPath("target", "io", "dir");
+    }
+
     public void removeTestStorageFiles() {
-        File dir = new File(System.getProperty(IO_DIR_KEY));
+        File dir = new File(getDefaultStoragePath());
         for (String ncName : nodeNames) {
             File ncDir = new File(dir, ncName);
             FileUtils.deleteQuietly(ncDir);

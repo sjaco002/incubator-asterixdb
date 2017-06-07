@@ -42,7 +42,7 @@ import org.apache.hyracks.storage.common.ISearchPredicate;
  */
 public interface ILSMIndex extends IIndex {
 
-    void deactivate(boolean flushOnExit) throws HyracksDataException;
+    void deactivate(boolean flush) throws HyracksDataException;
 
     @Override
     ILSMIndexAccessor createAccessor(IModificationOperationCallback modificationCallback,
@@ -64,6 +64,8 @@ public interface ILSMIndex extends IIndex {
     void modify(IIndexOperationContext ictx, ITupleReference tuple) throws HyracksDataException;
 
     void search(ILSMIndexOperationContext ictx, IIndexCursor cursor, ISearchPredicate pred) throws HyracksDataException;
+
+    public void scanDiskComponents(ILSMIndexOperationContext ctx, IIndexCursor cursor) throws HyracksDataException;
 
     void scheduleFlush(ILSMIndexOperationContext ctx, ILSMIOOperationCallback callback) throws HyracksDataException;
 
@@ -130,4 +132,30 @@ public interface ILSMIndex extends IIndex {
      * @return true if the index is durable. Otherwise false.
      */
     boolean isDurable();
+
+    /**
+     * Update the filter with the passed tuple
+     *
+     * @param ictx
+     * @param tuple
+     * @throws HyracksDataException
+     */
+    void updateFilter(ILSMIndexOperationContext ictx, ITupleReference tuple) throws HyracksDataException;
+
+    /**
+     * Create a component bulk loader for the given component
+     *
+     * @param component
+     * @param fillFactor
+     * @param verifyInput
+     * @param numElementsHint
+     * @param checkIfEmptyIndex
+     * @param withFilter
+     * @return
+     * @throws HyracksDataException
+     */
+    ILSMDiskComponentBulkLoader createComponentBulkLoader(ILSMDiskComponent component, float fillFactor,
+            boolean verifyInput, long numElementsHint, boolean checkIfEmptyIndex, boolean withFilter)
+            throws HyracksDataException;
+
 }

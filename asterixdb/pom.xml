@@ -85,7 +85,6 @@
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-surefire-plugin</artifactId>
-        <version>2.16</version>
         <configuration>
           <failIfNoTests>false</failIfNoTests>
           <systemPropertyVariables>
@@ -113,10 +112,10 @@
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-failsafe-plugin</artifactId>
-        <version>2.6</version>
         <configuration>
           <runOrder>alphabetical</runOrder>
-          <forkMode>pertest</forkMode>
+          <forkCount>1</forkCount>
+          <reuseForks>false</reuseForks>
           <argLine>${coverageArgLine}</argLine>
           <excludes>
             <exclude>${failsafe.test.excludes}</exclude>
@@ -404,6 +403,16 @@
           <artifactId>apache-rat-plugin</artifactId>
           <version>0.12</version>
         </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-surefire-plugin</artifactId>
+          <version>2.20</version>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-failsafe-plugin</artifactId>
+          <version>2.20</version>
+        </plugin>
       </plugins>
     </pluginManagement>
   </build>
@@ -483,12 +492,18 @@
       </properties>
     </profile>
     <profile>
-      <id>source-assembly</id>
+      <id>skip-assembly</id>
       <activation>
         <file>
-          <exists>src/main/assembly/source.xml</exists>
+          <missing>src/main/assembly/source.xml</missing>
         </file>
       </activation>
+      <properties>
+        <skip.assembly>true</skip.assembly>
+      </properties>
+    </profile>
+    <profile>
+      <id>release</id>
       <build>
         <plugins>
           <plugin>
@@ -511,17 +526,11 @@
                   <descriptors>
                     <descriptor>src/main/assembly/source.xml</descriptor>
                   </descriptors>
+                  <skipAssembly>${skip.assembly}</skipAssembly>
                 </configuration>
               </execution>
             </executions>
           </plugin>
-        </plugins>
-      </build>
-    </profile>
-    <profile>
-      <id>release</id>
-      <build>
-        <plugins>
           <plugin>
             <groupId>org.apache.maven.plugins</groupId>
             <artifactId>maven-gpg-plugin</artifactId>

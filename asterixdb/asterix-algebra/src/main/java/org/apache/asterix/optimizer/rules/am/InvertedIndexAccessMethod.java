@@ -27,7 +27,6 @@ import java.util.Map;
 
 import org.apache.asterix.common.annotations.SkipSecondaryIndexSearchExpressionAnnotation;
 import org.apache.asterix.common.config.DatasetConfig.IndexType;
-import org.apache.asterix.common.exceptions.AsterixException;
 import org.apache.asterix.common.exceptions.CompilationException;
 import org.apache.asterix.common.exceptions.ErrorCode;
 import org.apache.asterix.dataflow.data.common.ExpressionTypeComputer;
@@ -82,6 +81,7 @@ import org.apache.hyracks.algebricks.core.algebra.operators.logical.UnnestOperat
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.visitors.LogicalOperatorDeepCopyWithNewVariablesVisitor;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.visitors.VariableUtilities;
 import org.apache.hyracks.algebricks.core.algebra.util.OperatorManipulationUtil;
+import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.apache.hyracks.storage.am.lsm.invertedindex.api.IInvertedIndexSearchModifierFactory;
 import org.apache.hyracks.storage.am.lsm.invertedindex.search.ConjunctiveEditDistanceSearchModifierFactory;
 import org.apache.hyracks.storage.am.lsm.invertedindex.search.ConjunctiveListEditDistanceSearchModifierFactory;
@@ -698,7 +698,7 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
         // Create select ops for removing tuples that are filterable and not filterable, respectively.
         IVariableTypeEnvironment probeTypeEnv = context.getOutputTypeEnvironment(probeSubTree.getRoot());
         IAType inputSearchVarType;
-        if (chosenIndex.isEnforcingKeyFileds()) {
+        if (chosenIndex.isEnforcingKeyFields()) {
             inputSearchVarType = optFuncExpr.getFieldType(optFuncExpr.findLogicalVar(inputSearchVar));
         } else {
             inputSearchVarType = (IAType) probeTypeEnv.getVarType(inputSearchVar);
@@ -946,7 +946,7 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
     }
 
     private boolean isEditDistanceFuncJoinOptimizable(Index index, IOptimizableFuncExpr optFuncExpr) {
-        if (index.isEnforcingKeyFileds()) {
+        if (index.isEnforcingKeyFields()) {
             return isEditDistanceFuncCompatible(index.getKeyFieldTypes().get(0).getTypeTag(), index.getIndexType());
         } else {
             return isEditDistanceFuncCompatible(optFuncExpr.getFieldType(0).getTypeTag(), index.getIndexType());
@@ -989,7 +989,7 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
         // Apply type casting based on numeric types of the input to INTEGER type.
         try {
             edThresh = (AInt32) ATypeHierarchy.convertNumericTypeObject(intObj, ATypeTag.INTEGER);
-        } catch (AsterixException e) {
+        } catch (HyracksDataException e) {
             throw new AlgebricksException(e);
         }
         int mergeThreshold = 0;
@@ -1089,7 +1089,7 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
     }
 
     private boolean isFullTextContainsFuncJoinOptimizable(Index index, IOptimizableFuncExpr optFuncExpr) {
-        if (index.isEnforcingKeyFileds()) {
+        if (index.isEnforcingKeyFields()) {
             return isFullTextContainsFuncCompatible(index.getKeyFieldTypes().get(0).getTypeTag(), index.getIndexType());
         } else {
             return isFullTextContainsFuncCompatible(optFuncExpr.getFieldType(0).getTypeTag(), index.getIndexType());
@@ -1190,7 +1190,7 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
     }
 
     private boolean isContainsFuncJoinOptimizable(Index index, IOptimizableFuncExpr optFuncExpr) {
-        if (index.isEnforcingKeyFileds()) {
+        if (index.isEnforcingKeyFields()) {
             return isContainsFuncCompatible(index.getKeyFieldTypes().get(0).getTypeTag(), index.getIndexType());
         } else {
             return isContainsFuncCompatible(optFuncExpr.getFieldType(0).getTypeTag(), index.getIndexType());
@@ -1243,7 +1243,7 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
                 try {
                     edThresh = ((AInt32) ATypeHierarchy.convertNumericTypeObject(simThresh, ATypeTag.INTEGER))
                             .getIntegerValue();
-                } catch (AsterixException e) {
+                } catch (HyracksDataException e) {
                     throw new AlgebricksException(e);
                 }
 

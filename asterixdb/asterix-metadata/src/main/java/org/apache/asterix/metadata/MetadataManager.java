@@ -515,13 +515,17 @@ public class MetadataManager implements IMetadataManager {
     }
 
     @Override
-    public void dropNodegroup(MetadataTransactionContext ctx, String nodeGroupName) throws MetadataException {
+    public void dropNodegroup(MetadataTransactionContext ctx, String nodeGroupName, boolean failSilently)
+            throws MetadataException {
+        boolean dropped;
         try {
-            metadataNode.dropNodegroup(ctx.getJobId(), nodeGroupName);
+            dropped = metadataNode.dropNodegroup(ctx.getJobId(), nodeGroupName, failSilently);
         } catch (RemoteException e) {
             throw new MetadataException(e);
         }
-        ctx.dropNodeGroup(nodeGroupName);
+        if (dropped) {
+            ctx.dropNodeGroup(nodeGroupName);
+        }
     }
 
     @Override
@@ -555,6 +559,17 @@ public class MetadataManager implements IMetadataManager {
             ctx.addNodeGroup(nodeGroup);
         }
         return nodeGroup;
+    }
+
+    @Override
+    public void updateFunction(MetadataTransactionContext mdTxnCtx, Function function) throws MetadataException {
+        try {
+            metadataNode.updateFunction(mdTxnCtx.getJobId(), function);
+        } catch (RemoteException e) {
+            throw new MetadataException(e);
+        }
+        mdTxnCtx.dropFunction(function);
+        mdTxnCtx.addFunction(function);
     }
 
     @Override
@@ -946,7 +961,7 @@ public class MetadataManager implements IMetadataManager {
             throw new MetadataException(e);
         }
         // reflect the dataset into the cache
-        ctx.dropDataset(dataset);
+        ctx.dropDataset(dataset.getDataverseName(), dataset.getDatasetName());
         ctx.addDataset(dataset);
     }
 

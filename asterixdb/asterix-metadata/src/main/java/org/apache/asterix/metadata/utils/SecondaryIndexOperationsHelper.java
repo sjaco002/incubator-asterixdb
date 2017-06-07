@@ -19,19 +19,13 @@
 
 package org.apache.asterix.metadata.utils;
 
-import java.io.DataOutput;
 import java.util.List;
 import java.util.Map;
 
 import org.apache.asterix.common.config.DatasetConfig.DatasetType;
 import org.apache.asterix.common.config.DatasetConfig.ExternalFilePendingOp;
-import org.apache.asterix.common.context.ITransactionSubsystemProvider;
-import org.apache.asterix.common.context.TransactionSubsystemProvider;
-import org.apache.asterix.common.exceptions.AsterixException;
 import org.apache.asterix.common.exceptions.CompilationException;
 import org.apache.asterix.common.exceptions.ErrorCode;
-import org.apache.asterix.common.transactions.IRecoveryManager.ResourceType;
-import org.apache.asterix.common.transactions.JobId;
 import org.apache.asterix.external.indexing.ExternalFile;
 import org.apache.asterix.external.indexing.IndexingConstants;
 import org.apache.asterix.external.operators.ExternalIndexBulkLoadOperatorDescriptor;
@@ -52,9 +46,7 @@ import org.apache.asterix.runtime.evaluators.functions.AndDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.CastTypeDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.IsUnknownDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.NotDescriptor;
-import org.apache.asterix.runtime.job.listener.JobEventListenerFactory;
-import org.apache.asterix.transaction.management.opcallbacks.PrimaryIndexInstantSearchOperationCallbackFactory;
-import org.apache.asterix.transaction.management.service.transaction.JobIdFactory;
+import org.apache.commons.collections4.IteratorUtils;
 import org.apache.hyracks.algebricks.common.constraints.AlgebricksPartitionConstraint;
 import org.apache.hyracks.algebricks.common.constraints.AlgebricksPartitionConstraintHelper;
 import org.apache.hyracks.algebricks.common.exceptions.AlgebricksException;
@@ -71,21 +63,11 @@ import org.apache.hyracks.api.dataflow.value.IBinaryComparatorFactory;
 import org.apache.hyracks.api.dataflow.value.ISerializerDeserializer;
 import org.apache.hyracks.api.dataflow.value.ITypeTraits;
 import org.apache.hyracks.api.dataflow.value.RecordDescriptor;
-import org.apache.hyracks.api.exceptions.HyracksDataException;
-import org.apache.hyracks.api.job.IJobletEventListenerFactory;
 import org.apache.hyracks.api.job.JobSpecification;
-import org.apache.hyracks.dataflow.common.comm.io.ArrayTupleBuilder;
-import org.apache.hyracks.dataflow.common.data.marshalling.IntegerSerializerDeserializer;
-import org.apache.hyracks.dataflow.std.base.AbstractOperatorDescriptor;
 import org.apache.hyracks.dataflow.std.file.IFileSplitProvider;
-import org.apache.hyracks.dataflow.std.misc.ConstantTupleSourceOperatorDescriptor;
 import org.apache.hyracks.dataflow.std.sort.ExternalSortOperatorDescriptor;
-import org.apache.hyracks.storage.am.btree.dataflow.BTreeSearchOperatorDescriptor;
-import org.apache.hyracks.storage.am.common.api.ISearchOperationCallbackFactory;
 import org.apache.hyracks.storage.am.common.dataflow.IIndexDataflowHelperFactory;
-import org.apache.hyracks.storage.am.common.dataflow.IndexDataflowHelperFactory;
 import org.apache.hyracks.storage.am.common.dataflow.TreeIndexBulkLoadOperatorDescriptor;
-import org.apache.hyracks.storage.am.common.impls.NoOpOperationCallbackFactory;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMMergePolicyFactory;
 
 @SuppressWarnings("rawtypes")
@@ -133,37 +115,47 @@ public abstract class SecondaryIndexOperationsHelper {
 
     // Prevent public construction. Should be created via createIndexCreator().
     protected SecondaryIndexOperationsHelper(Dataset dataset, Index index, PhysicalOptimizationConfig physOptConf,
-            MetadataProvider metadataProvider, ARecordType recType, ARecordType metaType, ARecordType enforcedType,
-            ARecordType enforcedMetaType) {
+            MetadataProvider metadataProvider) throws AlgebricksException {
         this.dataset = dataset;
         this.index = index;
         this.physOptConf = physOptConf;
         this.metadataProvider = metadataProvider;
-        this.itemType = recType;
-        this.metaType = metaType;
-        this.enforcedItemType = enforcedType;
-        this.enforcedMetaType = enforcedMetaType;
+        this.itemType = (ARecordType) metadataProvider.findType(dataset.getItemTypeDataverseName(),
+                dataset.getItemTypeName());
+        this.metaType = DatasetUtil.getMetaType(metadataProvider, dataset);
+        Pair<ARecordType, ARecordType> enforcedTypes = getEnforcedType(index, itemType, metaType);
+        this.enforcedItemType = enforcedTypes.first;
+        this.enforcedMetaType = enforcedTypes.second;
+    }
+
+    private static Pair<ARecordType, ARecordType> getEnforcedType(Index index, ARecordType aRecordType,
+            ARecordType metaRecordType) throws AlgebricksException {
+        return index.isEnforcingKeyFields()
+                ? TypeUtil.createEnforcedType(aRecordType, metaRecordType,
+                        IteratorUtils.toList(IteratorUtils.singletonIterator(index)))
+                : new Pair<>(null, null);
+
     }
 
     public static SecondaryIndexOperationsHelper createIndexOperationsHelper(Dataset dataset, Index index,
-            MetadataProvider metadataProvider, PhysicalOptimizationConfig physOptConf, ARecordType recType,
-            ARecordType metaType, ARecordType enforcedType, ARecordType enforcedMetaType) throws AlgebricksException {
+            MetadataProvider metadataProvider, PhysicalOptimizationConfig physOptConf) throws AlgebricksException {
+
         SecondaryIndexOperationsHelper indexOperationsHelper;
         switch (index.getIndexType()) {
             case BTREE:
                 indexOperationsHelper = new SecondaryBTreeOperationsHelper(dataset, index, physOptConf,
-                        metadataProvider, recType, metaType, enforcedType, enforcedMetaType);
+                        metadataProvider);
                 break;
             case RTREE:
                 indexOperationsHelper = new SecondaryRTreeOperationsHelper(dataset, index, physOptConf,
-                        metadataProvider, recType, metaType, enforcedType, enforcedMetaType);
+                        metadataProvider);
                 break;
             case SINGLE_PARTITION_WORD_INVIX:
             case SINGLE_PARTITION_NGRAM_INVIX:
             case LENGTH_PARTITIONED_WORD_INVIX:
             case LENGTH_PARTITIONED_NGRAM_INVIX:
                 indexOperationsHelper = new SecondaryInvertedIndexOperationsHelper(dataset, index, physOptConf,
-                        metadataProvider, recType, metaType, enforcedType, enforcedMetaType);
+                        metadataProvider);
                 break;
             default:
                 throw new CompilationException(ErrorCode.COMPILATION_UNKNOWN_INDEX_TYPE, index.getIndexType());
@@ -262,59 +254,13 @@ public abstract class SecondaryIndexOperationsHelper {
         primaryTypeTraits[numPrimaryKeys] = TypeTraitProvider.INSTANCE.getTypeTrait(itemType);
         if (dataset.hasMetaPart()) {
             primaryRecFields[numPrimaryKeys + 1] = payloadSerde;
-            primaryTypeTraits[numPrimaryKeys + 1] = TypeTraitProvider.INSTANCE.getTypeTrait(itemType);
+            primaryTypeTraits[numPrimaryKeys + 1] = TypeTraitProvider.INSTANCE.getTypeTrait(metaType);
         }
         primaryRecDesc = new RecordDescriptor(primaryRecFields, primaryTypeTraits);
     }
 
     protected abstract void setSecondaryRecDescAndComparators() throws AlgebricksException;
 
-    protected AbstractOperatorDescriptor createDummyKeyProviderOp(JobSpecification spec) throws AlgebricksException {
-        // Build dummy tuple containing one field with a dummy value inside.
-        ArrayTupleBuilder tb = new ArrayTupleBuilder(1);
-        DataOutput dos = tb.getDataOutput();
-        tb.reset();
-        try {
-            // Serialize dummy value into a field.
-            IntegerSerializerDeserializer.INSTANCE.serialize(0, dos);
-        } catch (HyracksDataException e) {
-            throw new AsterixException(e);
-        }
-        // Add dummy field.
-        tb.addFieldEndOffset();
-        ISerializerDeserializer[] keyRecDescSers = { IntegerSerializerDeserializer.INSTANCE };
-        RecordDescriptor keyRecDesc = new RecordDescriptor(keyRecDescSers);
-        ConstantTupleSourceOperatorDescriptor keyProviderOp = new ConstantTupleSourceOperatorDescriptor(spec,
-                keyRecDesc, tb.getFieldEndOffsets(), tb.getByteArray(), tb.getSize());
-        AlgebricksPartitionConstraintHelper.setPartitionConstraintInJobSpec(spec, keyProviderOp,
-                primaryPartitionConstraint);
-        return keyProviderOp;
-    }
-
-    protected BTreeSearchOperatorDescriptor createPrimaryIndexScanOp(JobSpecification spec) throws AlgebricksException {
-        // -Infinity
-        int[] lowKeyFields = null;
-        // +Infinity
-        int[] highKeyFields = null;
-        ITransactionSubsystemProvider txnSubsystemProvider = TransactionSubsystemProvider.INSTANCE;
-        JobId jobId = JobIdFactory.generateJobId();
-        metadataProvider.setJobId(jobId);
-        boolean isWriteTransaction = metadataProvider.isWriteTransaction();
-        IJobletEventListenerFactory jobEventListenerFactory = new JobEventListenerFactory(jobId, isWriteTransaction);
-        spec.setJobletEventListenerFactory(jobEventListenerFactory);
-        boolean temp = dataset.getDatasetDetails().isTemp();
-        ISearchOperationCallbackFactory searchCallbackFactory = temp ? NoOpOperationCallbackFactory.INSTANCE
-                : new PrimaryIndexInstantSearchOperationCallbackFactory(jobId, dataset.getDatasetId(),
-                        primaryBloomFilterKeyFields, txnSubsystemProvider, ResourceType.LSM_BTREE);
-        IndexDataflowHelperFactory indexHelperFactory = new IndexDataflowHelperFactory(
-                metadataProvider.getStorageComponentProvider().getStorageManager(), primaryFileSplitProvider);
-        BTreeSearchOperatorDescriptor primarySearchOp =
-                new BTreeSearchOperatorDescriptor(spec, primaryRecDesc, lowKeyFields, highKeyFields, true, true,
-                        indexHelperFactory, false, false, null, searchCallbackFactory, null, null, false);
-        AlgebricksPartitionConstraintHelper.setPartitionConstraintInJobSpec(spec, primarySearchOp,
-                primaryPartitionConstraint);
-        return primarySearchOp;
-    }
 
     protected AlgebricksMetaOperatorDescriptor createAssignOp(JobSpecification spec, int numSecondaryKeyFields,
             RecordDescriptor secondaryRecDesc) throws AlgebricksException {
@@ -515,7 +461,7 @@ public abstract class SecondaryIndexOperationsHelper {
             }
         }
         ExternalIndexBulkModifyOperatorDescriptor treeIndexBulkLoadOp = new ExternalIndexBulkModifyOperatorDescriptor(
-                spec, dataflowHelperFactory, deletedFiles, fieldPermutation, fillFactor, false, numElementsHint, false);
+                spec, dataflowHelperFactory, deletedFiles, fieldPermutation, fillFactor, false, numElementsHint);
         AlgebricksPartitionConstraintHelper.setPartitionConstraintInJobSpec(spec, treeIndexBulkLoadOp,
                 secondaryPartitionConstraint);
         return treeIndexBulkLoadOp;

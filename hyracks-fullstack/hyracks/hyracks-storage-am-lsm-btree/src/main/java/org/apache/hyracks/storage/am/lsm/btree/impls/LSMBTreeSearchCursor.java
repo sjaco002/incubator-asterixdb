@@ -27,7 +27,6 @@ import org.apache.hyracks.storage.am.lsm.common.api.ILSMIndexOperationContext;
 import org.apache.hyracks.storage.common.ICursorInitialState;
 import org.apache.hyracks.storage.common.ISearchPredicate;
 import org.apache.hyracks.storage.common.buffercache.IBufferCache;
-import org.apache.hyracks.storage.common.buffercache.ICachedPage;
 
 public class LSMBTreeSearchCursor implements ITreeIndexCursor {
 
@@ -38,20 +37,28 @@ public class LSMBTreeSearchCursor implements ITreeIndexCursor {
 
     private final LSMBTreePointSearchCursor pointCursor;
     private final LSMBTreeRangeSearchCursor rangeCursor;
+    private final LSMBTreeDiskComponentScanCursor scanCursor;
     private ITreeIndexCursor currentCursor;
 
     public LSMBTreeSearchCursor(ILSMIndexOperationContext opCtx) {
         pointCursor = new LSMBTreePointSearchCursor(opCtx);
         rangeCursor = new LSMBTreeRangeSearchCursor(opCtx);
+        scanCursor = new LSMBTreeDiskComponentScanCursor(opCtx);
     }
 
     @Override
     public void open(ICursorInitialState initialState, ISearchPredicate searchPred) throws HyracksDataException {
         LSMBTreeCursorInitialState lsmInitialState = (LSMBTreeCursorInitialState) initialState;
         RangePredicate btreePred = (RangePredicate) searchPred;
+
         currentCursor =
                 btreePred.isPointPredicate(lsmInitialState.getOriginalKeyComparator()) ? pointCursor : rangeCursor;
         currentCursor.open(lsmInitialState, searchPred);
+    }
+
+    public void scan(ICursorInitialState initialState, ISearchPredicate searchPred) throws HyracksDataException {
+        currentCursor = scanCursor;
+        currentCursor.open(initialState, searchPred);
     }
 
     @Override
@@ -96,11 +103,6 @@ public class LSMBTreeSearchCursor implements ITreeIndexCursor {
     }
 
     @Override
-    public ICachedPage getPage() {
-        return currentCursor.getPage();
-    }
-
-    @Override
     public void setBufferCache(IBufferCache bufferCache) {
         currentCursor.setBufferCache(bufferCache);
     }
@@ -112,12 +114,8 @@ public class LSMBTreeSearchCursor implements ITreeIndexCursor {
     }
 
     @Override
-    public boolean exclusiveLatchNodes() {
-        return currentCursor.exclusiveLatchNodes();
+    public boolean isExclusiveLatchNodes() {
+        return currentCursor.isExclusiveLatchNodes();
     }
 
-    @Override
-    public void markCurrentTupleAsUpdated() throws HyracksDataException {
-        throw new HyracksDataException("Updating tuples is not supported with this cursor.");
-    }
 }

@@ -32,12 +32,15 @@ import java.util.Collection;
 import java.util.List;
 
 import org.apache.asterix.app.external.TestLibrarian;
+import org.apache.asterix.common.config.ClusterProperties;
 import org.apache.asterix.common.library.ILibraryManager;
 import org.apache.asterix.test.common.TestExecutor;
 import org.apache.asterix.testframework.context.TestCaseContext;
 import org.apache.commons.lang.SystemUtils;
 import org.apache.commons.lang3.StringUtils;
+import org.apache.hyracks.api.io.IODeviceHandle;
 import org.apache.hyracks.control.common.utils.ThreadDumpHelper;
+import org.apache.hyracks.control.nc.NodeControllerService;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 
@@ -48,8 +51,8 @@ import org.junit.runners.Parameterized;
 public class LangExecutionUtil {
 
     private static final String PATH_ACTUAL = "target" + File.separator + "rttest" + File.separator;
-    private static final String PATH_BASE = StringUtils.join(new String[] { "src", "test", "resources", "runtimets" },
-            File.separator);
+    private static final String PATH_BASE =
+            StringUtils.join(new String[] { "src", "test", "resources", "runtimets" }, File.separator);
 
     private static final boolean cleanupOnStart = true;
     private static final boolean cleanupOnStop = true;
@@ -123,11 +126,11 @@ public class LangExecutionUtil {
                     librarian.cleanup();
                 }
                 testExecutor.executeTest(PATH_ACTUAL, tcCtx, null, false, ExecutionTestUtil.FailedGroup);
+
                 try {
+                    checkStorageFiles();
+                } finally {
                     testExecutor.cleanup(tcCtx.toString(), badTestCases);
-                } catch (Throwable th) {
-                    th.printStackTrace();
-                    throw th;
                 }
             }
         } finally {
@@ -135,12 +138,66 @@ public class LangExecutionUtil {
         }
     }
 
+    // Checks whether data files are uniformly distributed among io devices.
+    private static void checkStorageFiles() throws Exception {
+        NodeControllerService[] ncs = ExecutionTestUtil.integrationUtil.ncs;
+        // Checks that dataset files are uniformly distributed across each io device.
+        for (NodeControllerService nc : ncs) {
+            checkNcStore(nc);
+        }
+    }
+
+    // For each NC, check whether data files are uniformly distributed among io devices.
+    private static void checkNcStore(NodeControllerService nc) throws Exception {
+        List<IODeviceHandle> ioDevices = nc.getIoManager().getIODevices();
+        int expectedPartitionNum = -1;
+        for (IODeviceHandle ioDevice : ioDevices) {
+            File[] dataDirs = ioDevice.getMount().listFiles();
+            for (File dataDir : dataDirs) {
+                String dirName = dataDir.getName();
+                if (!dirName.equals(ClusterProperties.DEFAULT_STORAGE_DIR_NAME)) {
+                    // Skips non-storage directories.
+                    continue;
+                }
+                int numPartitions = getNumResidentPartitions(dataDir.listFiles());
+                if (expectedPartitionNum < 0) {
+                    // Sets the expected number of partitions to the number of partitions on the first io device.
+                    expectedPartitionNum = numPartitions;
+                } else {
+                    // Checks whether the number of partitions of the current io device is expected.
+                    if (expectedPartitionNum != numPartitions) {
+                        throw new Exception("Non-uniform data distribution on io devices: " + dataDir.getAbsolutePath()
+                                + " number of partitions: " + numPartitions + " expected number of partitions: "
+                                + expectedPartitionNum);
+                    }
+                }
+            }
+        }
+    }
+
+    // Gets the number of partitions on each io device.
+    private static int getNumResidentPartitions(File[] partitions) {
+        int num = 0;
+        for (File partition : partitions) {
+            File[] dataverses = partition.listFiles();
+            for (File dv : dataverses) {
+                String dvName = dv.getName();
+                // If a partition only contains the Metadata dataverse, it's not counted.
+                if (!dvName.equals("Metadata")) {
+                    num++;
+                    break;
+                }
+            }
+        }
+        return num;
+    }
+
     private static void checkThreadLeaks() throws IOException {
         String threadDump = ThreadDumpHelper.takeDumpJSON(ManagementFactory.getThreadMXBean());
         // Currently we only do sanity check for threads used in the execution engine.
         // Later we should check if there are leaked storage threads as well.
-        if (threadDump.contains("Operator") || threadDump.contains("SuperActivity") || threadDump
-                .contains("PipelinedPartition")) {
+        if (threadDump.contains("Operator") || threadDump.contains("SuperActivity")
+                || threadDump.contains("PipelinedPartition")) {
             System.out.print(threadDump);
             throw new AssertionError("There are leaked threads in the execution engine.");
         }
@@ -156,8 +213,8 @@ public class LangExecutionUtil {
         String processId = processName.split("@")[0];
 
         // Checks whether there are leaked run files from operators.
-        Process process = Runtime.getRuntime()
-                .exec(new String[] { "bash", "-c", "lsof -p " + processId + "|grep waf|wc -l" });
+        Process process =
+                Runtime.getRuntime().exec(new String[] { "bash", "-c", "lsof -p " + processId + "|grep waf|wc -l" });
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
             int runFileCount = Integer.parseInt(reader.readLine().trim());
             if (runFileCount != 0) {
@@ -169,8 +226,8 @@ public class LangExecutionUtil {
     }
 
     private static void outputLeakedOpenFiles(String processId) throws IOException {
-        Process process = Runtime.getRuntime()
-                .exec(new String[] { "bash", "-c", "lsof -p " + processId + "|grep waf" });
+        Process process =
+                Runtime.getRuntime().exec(new String[] { "bash", "-c", "lsof -p " + processId + "|grep waf" });
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
             String line;
             while ((line = reader.readLine()) != null) {

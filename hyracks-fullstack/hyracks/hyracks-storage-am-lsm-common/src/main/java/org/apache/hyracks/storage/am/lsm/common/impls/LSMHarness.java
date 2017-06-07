@@ -26,12 +26,17 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+import org.apache.hyracks.api.exceptions.ErrorCode;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.apache.hyracks.api.replication.IReplicationJob.ReplicationOperation;
 import org.apache.hyracks.data.std.api.IValueReference;
+import org.apache.hyracks.dataflow.common.comm.io.FrameTupleAccessor;
+import org.apache.hyracks.dataflow.common.data.accessors.FrameTupleReference;
 import org.apache.hyracks.dataflow.common.data.accessors.ITupleReference;
 import org.apache.hyracks.storage.am.common.impls.NoOpOperationCallback;
 import org.apache.hyracks.storage.am.common.ophelpers.IndexOperation;
+import org.apache.hyracks.storage.am.lsm.common.api.IFrameOperationCallback;
+import org.apache.hyracks.storage.am.lsm.common.api.IFrameTupleProcessor;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMComponent;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMComponent.ComponentState;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMComponent.LSMComponentType;
@@ -450,6 +455,33 @@ public class LSMHarness implements ILSMHarness {
     }
 
     @Override
+    public void scanDiskComponents(ILSMIndexOperationContext ctx, IIndexCursor cursor) throws HyracksDataException {
+        if (!lsmIndex.isPrimaryIndex()) {
+            throw HyracksDataException.create(ErrorCode.DISK_COMPONENT_SCAN_NOT_ALLOWED_FOR_SECONDARY_INDEX);
+        }
+        LSMOperationType opType = LSMOperationType.DISK_COMPONENT_SCAN;
+        getAndEnterComponents(ctx, opType, false);
+        try {
+            ctx.getSearchOperationCallback().before(null);
+            lsmIndex.scanDiskComponents(ctx, cursor);
+        } catch (Exception e) {
+            exitComponents(ctx, opType, null, true);
+            throw e;
+        }
+    }
+
+    @Override
+    public void endScanDiskComponents(ILSMIndexOperationContext ctx) throws HyracksDataException {
+        if (ctx.getOperation() == IndexOperation.DISK_COMPONENT_SCAN) {
+            try {
+                exitComponents(ctx, LSMOperationType.DISK_COMPONENT_SCAN, null, false);
+            } catch (Exception e) {
+                throw HyracksDataException.create(e);
+            }
+        }
+    }
+
+    @Override
     public void scheduleFlush(ILSMIndexOperationContext ctx, ILSMIOOperationCallback callback)
             throws HyracksDataException {
         if (!getAndEnterComponents(ctx, LSMOperationType.FLUSH, true)) {
@@ -575,6 +607,57 @@ public class LSMHarness implements ILSMHarness {
     protected void validateOperationEnterComponentsState(ILSMIndexOperationContext ctx) throws HyracksDataException {
         if (ctx.isAccessingComponents()) {
             throw new HyracksDataException("Opeartion already has access to components of index " + lsmIndex);
+        }
+    }
+
+    @Override
+    public void updateFilter(ILSMIndexOperationContext ctx, ITupleReference tuple) throws HyracksDataException {
+        if (!lsmIndex.isMemoryComponentsAllocated()) {
+            lsmIndex.allocateMemoryComponents();
+        }
+        lsmIndex.updateFilter(ctx, tuple);
+    }
+
+    private void enter(ILSMIndexOperationContext ctx) throws HyracksDataException {
+        if (!lsmIndex.isMemoryComponentsAllocated()) {
+            lsmIndex.allocateMemoryComponents();
+        }
+        getAndEnterComponents(ctx, LSMOperationType.MODIFICATION, false);
+    }
+
+    private void exit(ILSMIndexOperationContext ctx) throws HyracksDataException {
+        getAndExitComponentsAndComplete(ctx, LSMOperationType.MODIFICATION);
+    }
+
+    private void getAndExitComponentsAndComplete(ILSMIndexOperationContext ctx, LSMOperationType op)
+            throws HyracksDataException {
+        validateOperationEnterComponentsState(ctx);
+        synchronized (opTracker) {
+            lsmIndex.getOperationalComponents(ctx);
+            ctx.setAccessingComponents(true);
+            exitAndComplete(ctx, op);
+        }
+    }
+
+    @Override
+    public void batchOperate(ILSMIndexOperationContext ctx, FrameTupleAccessor accessor, FrameTupleReference tuple,
+            IFrameTupleProcessor processor, IFrameOperationCallback frameOpCallback) throws HyracksDataException {
+        processor.start();
+        enter(ctx);
+        try {
+            int tupleCount = accessor.getTupleCount();
+            int i = 0;
+            while (i < tupleCount) {
+                tuple.reset(accessor, i);
+                processor.process(tuple, i);
+                i++;
+            }
+            frameOpCallback.frameCompleted();
+            processor.finish();
+        } catch (Exception e) {
+            throw HyracksDataException.create(e);
+        } finally {
+            exit(ctx);
         }
     }
 }

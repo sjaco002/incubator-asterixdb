@@ -170,6 +170,7 @@
             <exclude>src/test/resources/classad/**</exclude> <!-- HTCondor (license in LICENSE file) -->
             <exclude>src/test/resources/record.json</exclude> <!-- https://issues.apache.org/jira/browse/ASTERIXDB-1850 -->
             <exclude>src/test/resources/change_feed.csv</exclude>
+            <exclude>src/test/resources/test_tweets.txt</exclude>
           </excludes>
         </configuration>
       </plugin>
@@ -425,11 +426,6 @@
     <dependency>
       <groupId>com.fasterxml.jackson.core</groupId>
       <artifactId>jackson-databind</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>commons-lang</groupId>
-      <artifactId>commons-lang</artifactId>
-      <version>2.5</version>
     </dependency>
   </dependencies>
 </project>

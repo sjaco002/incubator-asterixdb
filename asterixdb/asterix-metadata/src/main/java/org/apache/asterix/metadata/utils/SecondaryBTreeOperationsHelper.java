@@ -22,6 +22,7 @@ import java.util.List;
 
 import org.apache.asterix.common.config.DatasetConfig.DatasetType;
 import org.apache.asterix.common.config.GlobalConfig;
+import org.apache.asterix.common.transactions.JobId;
 import org.apache.asterix.external.indexing.IndexingConstants;
 import org.apache.asterix.external.operators.ExternalScanOperatorDescriptor;
 import org.apache.asterix.metadata.declared.MetadataProvider;
@@ -51,7 +52,6 @@ import org.apache.hyracks.dataflow.std.base.AbstractOperatorDescriptor;
 import org.apache.hyracks.dataflow.std.base.AbstractSingleActivityOperatorDescriptor;
 import org.apache.hyracks.dataflow.std.connectors.OneToOneConnectorDescriptor;
 import org.apache.hyracks.dataflow.std.sort.ExternalSortOperatorDescriptor;
-import org.apache.hyracks.storage.am.btree.dataflow.BTreeSearchOperatorDescriptor;
 import org.apache.hyracks.storage.am.common.dataflow.IIndexDataflowHelperFactory;
 import org.apache.hyracks.storage.am.common.dataflow.IndexDataflowHelperFactory;
 import org.apache.hyracks.storage.am.common.dataflow.TreeIndexBulkLoadOperatorDescriptor;
@@ -59,15 +59,14 @@ import org.apache.hyracks.storage.am.common.dataflow.TreeIndexBulkLoadOperatorDe
 public class SecondaryBTreeOperationsHelper extends SecondaryTreeIndexOperationsHelper {
 
     protected SecondaryBTreeOperationsHelper(Dataset dataset, Index index, PhysicalOptimizationConfig physOptConf,
-            MetadataProvider metadataProvider, ARecordType recType, ARecordType metaType, ARecordType enforcedType,
-            ARecordType enforcedMetaType) {
-        super(dataset, index, physOptConf, metadataProvider, recType, metaType, enforcedType, enforcedMetaType);
+            MetadataProvider metadataProvider) throws AlgebricksException {
+        super(dataset, index, physOptConf, metadataProvider);
     }
 
     @Override
     public JobSpecification buildLoadingJobSpec() throws AlgebricksException {
         JobSpecification spec = RuntimeUtils.createJobSpecification(metadataProvider.getApplicationContext());
-        boolean isEnforcingKeyTypes = index.isEnforcingKeyFileds();
+        boolean isEnforcingKeyTypes = index.isEnforcingKeyFields();
         int[] fieldPermutation = createFieldPermutationForBulkLoadOp(index.getKeyFieldNames().size());
         IIndexDataflowHelperFactory dataflowHelperFactory = new IndexDataflowHelperFactory(
                 metadataProvider.getStorageComponentProvider().getStorageManager(), secondaryFileSplitProvider);
@@ -128,13 +127,16 @@ public class SecondaryBTreeOperationsHelper extends SecondaryTreeIndexOperations
             return spec;
         } else {
             // Create dummy key provider for feeding the primary index scan.
-            AbstractOperatorDescriptor keyProviderOp = createDummyKeyProviderOp(spec);
+            IOperatorDescriptor keyProviderOp = DatasetUtil.createDummyKeyProviderOp(spec, dataset,
+                    metadataProvider);
+            JobId jobId = IndexUtil.bindJobEventListener(spec, metadataProvider);
 
             // Create primary index scan op.
-            BTreeSearchOperatorDescriptor primaryScanOp = createPrimaryIndexScanOp(spec);
+            IOperatorDescriptor primaryScanOp = DatasetUtil.createPrimaryIndexScanOp(spec, metadataProvider, dataset,
+                    jobId);
 
             // Assign op.
-            AbstractOperatorDescriptor sourceOp = primaryScanOp;
+            IOperatorDescriptor sourceOp = primaryScanOp;
             if (isEnforcingKeyTypes && !enforcedItemType.equals(itemType)) {
                 sourceOp = createCastOp(spec, dataset.getDatasetType());
                 spec.connect(new OneToOneConnectorDescriptor(spec), primaryScanOp, 0, sourceOp, 0);
@@ -199,7 +201,7 @@ public class SecondaryBTreeOperationsHelper extends SecondaryTreeIndexOperations
                 metadataProvider.getFormat().getBinaryComparatorFactoryProvider();
         // Record column is 0 for external datasets, numPrimaryKeys for internal ones
         int recordColumn = dataset.getDatasetType() == DatasetType.INTERNAL ? numPrimaryKeys : 0;
-        boolean isEnforcingKeyTypes = index.isEnforcingKeyFileds();
+        boolean isEnforcingKeyTypes = index.isEnforcingKeyFields();
         for (int i = 0; i < numSecondaryKeys; i++) {
             ARecordType sourceType;
             int sourceColumn;

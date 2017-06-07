@@ -54,6 +54,7 @@
     <jdk.version>1.8</jdk.version>
     <jvm.extraargs />
     <sonar.jacoco.reportPath>${env.PWD}/target/jacoco-merged.exec</sonar.jacoco.reportPath>
+    <source-format.skip>false</source-format.skip>
 
     <!-- Definition of tests in various categories which may be excluded -->
     <hanging.pregelix.tests>**/pregelix/**/FailureRecovery*.java</hanging.pregelix.tests>
@@ -160,6 +161,11 @@
         <version>0.12</version>
       </dependency>
       <dependency>
+        <groupId>net.revelc.code.formatter</groupId>
+        <artifactId>formatter-maven-plugin</artifactId>
+        <version>2.0.1</version>
+      </dependency>
+      <dependency>
         <groupId>args4j</groupId>
         <artifactId>args4j</artifactId>
         <version>2.33</version>
@@ -233,7 +239,6 @@
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-surefire-plugin</artifactId>
-        <version>2.16</version>
         <configuration>
           <failIfNoTests>false</failIfNoTests>
           <forkCount>1</forkCount>
@@ -363,6 +368,11 @@
           <artifactId>apache-rat-plugin</artifactId>
           <version>0.12</version>
         </plugin>
+        <plugin>
+          <groupId>net.revelc.code.formatter</groupId>
+          <artifactId>formatter-maven-plugin</artifactId>
+          <version>2.0.1</version>
+        </plugin>
         <!--This plugin's configuration is used to store Eclipse m2e settings only. It has no influence on the Maven build itself.-->
         <plugin>
           <groupId>org.eclipse.m2e</groupId>
@@ -429,6 +439,16 @@
           <artifactId>appassembler-maven-plugin</artifactId>
           <version>2.0.0</version>
         </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-surefire-plugin</artifactId>
+          <version>2.20</version>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-failsafe-plugin</artifactId>
+          <version>2.20</version>
+        </plugin>
       </plugins>
     </pluginManagement>
   </build>
@@ -441,12 +461,46 @@
       </properties>
     </profile>
     <profile>
-      <id>source-assembly</id>
+      <id>source-format</id>
+      <activation>
+        <activeByDefault>false</activeByDefault>
+      </activation>
+      <properties>
+        <source-format.goal>format</source-format.goal>
+      </properties>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>net.revelc.code.formatter</groupId>
+            <artifactId>formatter-maven-plugin</artifactId>
+            <executions>
+              <execution>
+                <goals>
+                  <goal>${source-format.goal}</goal>
+                </goals>
+              </execution>
+            </executions>
+            <configuration>
+              <configFile>${root.dir}/AsterixCodeFormatProfile.xml</configFile>
+              <skipFormatting>${source-format.skip}</skipFormatting>
+            </configuration>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+    <profile>
+      <id>skip-assembly</id>
       <activation>
         <file>
-          <exists>src/main/assembly/source.xml</exists>
+          <missing>src/main/assembly/source.xml</missing>
         </file>
       </activation>
+      <properties>
+        <skip.assembly>true</skip.assembly>
+      </properties>
+    </profile>
+    <profile>
+      <id>release</id>
       <build>
         <plugins>
           <plugin>
@@ -469,17 +523,11 @@
                   <descriptors>
                     <descriptor>src/main/assembly/source.xml</descriptor>
                   </descriptors>
+                  <skipAssembly>${skip.assembly}</skipAssembly>
                 </configuration>
               </execution>
             </executions>
           </plugin>
-        </plugins>
-      </build>
-    </profile>
-    <profile>
-      <id>release</id>
-      <build>
-        <plugins>
           <plugin>
             <groupId>org.apache.maven.plugins</groupId>
             <artifactId>maven-gpg-plugin</artifactId>

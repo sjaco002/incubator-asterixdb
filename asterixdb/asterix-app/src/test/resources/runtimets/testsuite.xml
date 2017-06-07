@@ -273,6 +273,23 @@
         <output-dir compare="Text">record-reader-with-malformed-input-stream</output-dir>
       </compilation-unit>
     </test-case>
+    <test-case FilePath="feeds">
+      <compilation-unit name="feed-with-undefined-function">
+        <output-dir compare="Text">feed-with-undefined-function</output-dir>
+        <expected-error>Cannot find function</expected-error>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="feeds">
+      <compilation-unit name="drop-function-used-by-feed">
+        <output-dir compare="Text">drop-function-used-by-feed</output-dir>
+        <expected-error>Function experiments.test_func0@1 is being used. It cannot be dropped.</expected-error>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="feeds">
+      <compilation-unit name="drop-function-no-longer-used-by-feed">
+        <output-dir compare="Text">drop-function-used-by-feed</output-dir>
+      </compilation-unit>
+    </test-case>
   </test-group>
   <test-group name="upsert">
     <test-case FilePath="upsert">
@@ -4521,6 +4538,11 @@
       </compilation-unit>
     </test-case>
     <test-case FilePath="numeric">
+      <compilation-unit name="scientific">
+        <output-dir compare="Text">scientific</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="numeric">
       <compilation-unit name="subtract_double">
         <output-dir compare="Text">subtract_double</output-dir>
       </compilation-unit>
@@ -4856,7 +4878,7 @@
     <test-case FilePath="open-closed">
       <compilation-unit name="query-issue487"><!-- This test case is never run!!!! -->
         <output-dir compare="Text">query-issue487</output-dir>
-        <expected-error>org.apache.asterix.common.exceptions.AsterixException</expected-error>
+        <expected-error>type mismatch: missing a required closed field name: string</expected-error>
       </compilation-unit>
     </test-case>
     <test-case FilePath="open-closed">

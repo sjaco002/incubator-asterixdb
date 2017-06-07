@@ -58,6 +58,10 @@ public class ErrorCode {
     public static final int ROOT_LOCAL_RESOURCE_EXISTS = 15;
     public static final int ROOT_LOCAL_RESOURCE_COULD_NOT_BE_CREATED = 16;
     public static final int UNKNOWN_EXTERNAL_FILE_PENDING_OP = 17;
+    public static final int TYPE_CONVERT = 18;
+    public static final int TYPE_CONVERT_INTEGER_SOURCE = 19;
+    public static final int TYPE_CONVERT_INTEGER_TARGET = 20;
+    public static final int TYPE_CONVERT_OUT_OF_BOUND = 21;
     public static final int INSTANTIATION_ERROR = 100;
 
     // Compilation errors
@@ -98,6 +102,9 @@ public class ErrorCode {
     public static final int INCOMPATIBLE_SEARCH_MODIFIER = 1035;
     public static final int UNKNOWN_SEARCH_MODIFIER = 1036;
     public static final int COMPILATION_BAD_QUERY_PARAMETER_VALUE = 1037;
+    public static final int COMPILATION_ILLEGAL_STATE = 1038;
+    public static final int COMPILATION_TWO_PHASE_LOCKING_VIOLATION = 1039;
+    public static final int DATASET_ID_EXHAUSTED = 1040;
 
     // Feed errors
     public static final int DATAFLOW_ILLEGAL_STATE = 3001;
@@ -178,6 +185,14 @@ public class ErrorCode {
     public static final int FEED_METADATA_UTIL_UNEXPECTED_FEED_DATATYPE = 3080;
     public static final int FEED_METADATA_SOCKET_ADAPTOR_SOCKET_NOT_PROPERLY_CONFIGURED = 3081;
     public static final int FEED_METADATA_SOCKET_ADAPTOR_SOCKET_INVALID_HOST_NC = 3082;
+    public static final int PROVIDER_DATASOURCE_FACTORY_DUPLICATE_FORMAT_MAPPING = 3083;
+    public static final int PROVIDER_STREAM_RECORD_READER_DUPLICATE_FORMAT_MAPPING = 3084;
+    public static final int FEED_UNKNOWN_ADAPTER_NAME = 3085;
+    public static final int PROVIDER_STREAM_RECORD_READER_WRONG_CONFIGURATION = 3086;
+    public static final int FEED_CONNECT_FEED_APPLIED_INVALID_FUNCTION = 3087;
+
+    // Lifecycle management errors
+    public static final int DUPLICATE_PARTITION_ID = 4000;
 
     private ErrorCode() {
     }

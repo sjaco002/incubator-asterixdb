@@ -23,6 +23,7 @@ import java.util.List;
 import org.apache.asterix.common.config.DatasetConfig.DatasetType;
 import org.apache.asterix.common.config.GlobalConfig;
 import org.apache.asterix.common.exceptions.AsterixException;
+import org.apache.asterix.common.transactions.JobId;
 import org.apache.asterix.external.indexing.IndexingConstants;
 import org.apache.asterix.external.operators.ExternalScanOperatorDescriptor;
 import org.apache.asterix.formats.nontagged.BinaryComparatorFactoryProvider;
@@ -31,7 +32,6 @@ import org.apache.asterix.formats.nontagged.TypeTraitProvider;
 import org.apache.asterix.metadata.declared.MetadataProvider;
 import org.apache.asterix.metadata.entities.Dataset;
 import org.apache.asterix.metadata.entities.Index;
-import org.apache.asterix.om.types.ARecordType;
 import org.apache.asterix.om.types.ATypeTag;
 import org.apache.asterix.om.types.IAType;
 import org.apache.asterix.om.utils.NonTaggedFormatUtil;
@@ -53,7 +53,6 @@ import org.apache.hyracks.dataflow.std.base.AbstractOperatorDescriptor;
 import org.apache.hyracks.dataflow.std.base.AbstractSingleActivityOperatorDescriptor;
 import org.apache.hyracks.dataflow.std.connectors.OneToOneConnectorDescriptor;
 import org.apache.hyracks.dataflow.std.sort.ExternalSortOperatorDescriptor;
-import org.apache.hyracks.storage.am.btree.dataflow.BTreeSearchOperatorDescriptor;
 import org.apache.hyracks.storage.am.common.api.IPrimitiveValueProviderFactory;
 import org.apache.hyracks.storage.am.common.dataflow.IIndexDataflowHelperFactory;
 import org.apache.hyracks.storage.am.common.dataflow.IndexDataflowHelperFactory;
@@ -71,9 +70,8 @@ public class SecondaryRTreeOperationsHelper extends SecondaryTreeIndexOperations
     protected RecordDescriptor secondaryRecDescForPointMBR = null;
 
     protected SecondaryRTreeOperationsHelper(Dataset dataset, Index index, PhysicalOptimizationConfig physOptConf,
-            MetadataProvider metadataProvider, ARecordType recType, ARecordType metaType, ARecordType enforcedType,
-            ARecordType enforcedMetaType) {
-        super(dataset, index, physOptConf, metadataProvider, recType, metaType, enforcedType, enforcedMetaType);
+            MetadataProvider metadataProvider) throws AlgebricksException {
+        super(dataset, index, physOptConf, metadataProvider);
     }
 
     @Override
@@ -85,7 +83,7 @@ public class SecondaryRTreeOperationsHelper extends SecondaryTreeIndexOperations
     protected void setSecondaryRecDescAndComparators() throws AlgebricksException {
         List<List<String>> secondaryKeyFields = index.getKeyFieldNames();
         int numSecondaryKeys = secondaryKeyFields.size();
-        boolean isEnforcingKeyTypes = index.isEnforcingKeyFileds();
+        boolean isEnforcingKeyTypes = index.isEnforcingKeyFields();
         if (numSecondaryKeys != 1) {
             throw new AsterixException("Cannot use " + numSecondaryKeys + " fields as a key for the R-tree index. "
                     + "There can be only one field as a key for the R-tree index.");
@@ -197,18 +195,20 @@ public class SecondaryRTreeOperationsHelper extends SecondaryTreeIndexOperations
                 isPointMBR ? numNestedSecondaryKeyFields / 2 : numNestedSecondaryKeyFields;
         RecordDescriptor secondaryRecDescConsideringPointMBR =
                 isPointMBR ? secondaryRecDescForPointMBR : secondaryRecDesc;
-        boolean isEnforcingKeyTypes = index.isEnforcingKeyFileds();
+        boolean isEnforcingKeyTypes = index.isEnforcingKeyFields();
         IIndexDataflowHelperFactory indexDataflowHelperFactory = new IndexDataflowHelperFactory(
                 metadataProvider.getStorageComponentProvider().getStorageManager(), secondaryFileSplitProvider);
         if (dataset.getDatasetType() == DatasetType.INTERNAL) {
             // Create dummy key provider for feeding the primary index scan.
-            AbstractOperatorDescriptor keyProviderOp = createDummyKeyProviderOp(spec);
+            IOperatorDescriptor keyProviderOp = DatasetUtil.createDummyKeyProviderOp(spec, dataset, metadataProvider);
+            JobId jobId = IndexUtil.bindJobEventListener(spec, metadataProvider);
 
             // Create primary index scan op.
-            BTreeSearchOperatorDescriptor primaryScanOp = createPrimaryIndexScanOp(spec);
+            IOperatorDescriptor primaryScanOp = DatasetUtil.createPrimaryIndexScanOp(spec, metadataProvider, dataset,
+                    jobId);
 
             // Assign op.
-            AbstractOperatorDescriptor sourceOp = primaryScanOp;
+            IOperatorDescriptor sourceOp = primaryScanOp;
             if (isEnforcingKeyTypes && !enforcedItemType.equals(itemType)) {
                 sourceOp = createCastOp(spec, dataset.getDatasetType());
                 spec.connect(new OneToOneConnectorDescriptor(spec), primaryScanOp, 0, sourceOp, 0);
