@@ -183,7 +183,8 @@ public class ConstantFoldingRule implements IAlgebraicRewriteRule {
         public Pair<Boolean, ILogicalExpression> visitScalarFunctionCallExpression(ScalarFunctionCallExpression expr,
                 Void arg) throws AlgebricksException {
             boolean changed = changeRec(expr, arg);
-            if (!checkArgs(expr) || !expr.isFunctional()) {
+            if (!checkArgs(expr) || !expr.isFunctional()
+                    || expr.getFunctionIdentifier() == BuiltinFunctions.CURRENT_DATETIME) {
                 return new Pair<>(changed, expr);
             }
 

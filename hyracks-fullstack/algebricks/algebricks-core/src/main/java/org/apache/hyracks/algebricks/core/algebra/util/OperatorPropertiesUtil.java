@@ -293,7 +293,7 @@ public class OperatorPropertiesUtil {
             if (op.getOperatorTag() == LogicalOperatorTag.ASSIGN) {
                 AssignOperator assign = (AssignOperator) op;
                 for (Mutable<ILogicalExpression> expr : assign.getExpressions()) {
-                    if (containsNonpureCall(expr.getValue())) {
+                    if (notMovable(expr.getValue())) {
                         return false;
                     }
                 }
@@ -304,14 +304,14 @@ public class OperatorPropertiesUtil {
         return movable;
     }
 
-    private static boolean containsNonpureCall(ILogicalExpression expr) {
+    private static boolean notMovable(ILogicalExpression expr) {
         if (expr.getExpressionTag() == LogicalExpressionTag.FUNCTION_CALL) {
             AbstractFunctionCallExpression fExpr = (AbstractFunctionCallExpression) expr;
             if (!fExpr.getFunctionInfo().isFunctional()) {
                 return true;
             }
             for (Mutable<ILogicalExpression> subExpr : fExpr.getArguments()) {
-                if (containsNonpureCall(subExpr.getValue())) {
+                if (notMovable(subExpr.getValue())) {
                     return true;
                 }
             }

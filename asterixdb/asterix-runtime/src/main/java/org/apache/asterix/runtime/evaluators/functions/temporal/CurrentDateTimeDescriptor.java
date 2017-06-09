@@ -34,7 +34,9 @@ import org.apache.hyracks.algebricks.runtime.base.IScalarEvaluatorFactory;
 import org.apache.hyracks.api.context.IHyracksTaskContext;
 import org.apache.hyracks.api.dataflow.value.ISerializerDeserializer;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
+import org.apache.hyracks.api.exceptions.HyracksException;
 import org.apache.hyracks.data.std.api.IPointable;
+import org.apache.hyracks.data.std.primitive.UTF8StringPointable;
 import org.apache.hyracks.data.std.util.ArrayBackedValueStorage;
 import org.apache.hyracks.dataflow.common.data.accessors.IFrameTupleReference;
 
@@ -70,9 +72,24 @@ public class CurrentDateTimeDescriptor extends AbstractScalarFunctionDynamicDesc
                     private ISerializerDeserializer<ADateTime> datetimeSerde = SerializerDeserializerProvider.INSTANCE
                             .getSerializerDeserializer(BuiltinType.ADATETIME);
                     private AMutableDateTime aDateTime = new AMutableDateTime(0);
+                    
+                    ArrayBackedValueStorage abvsKey = new ArrayBackedValueStorage();
+                    DataOutput dosKey = abvsKey.getDataOutput();
+                    private byte[] resultBytes;
+                    UTF8StringPointable strPointable = UTF8StringPointable.generateUTF8Pointable("current_datetime");
 
                     @Override
                     public void evaluate(IFrameTupleReference tuple, IPointable result) throws HyracksDataException {
+                        try {
+                            resultBytes = ctx.getJobParameter(strPointable.getByteArray(),
+                                    strPointable.getStartOffset(), strPointable.getLength());
+                            if (resultBytes.length != 0) {
+                                result.set(resultBytes, 0, resultBytes.length);
+                                return;
+                            }
+                        } catch (HyracksException e) {
+
+                        }
                         resultStorage.reset();
                         aDateTime.setValue(System.currentTimeMillis());
                         datetimeSerde.serialize(aDateTime, out);

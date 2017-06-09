@@ -1146,9 +1146,9 @@ public class BuiltinFunctions {
         addFunction(INTERVAL_COVERED_BY, ABooleanTypeComputer.INSTANCE, true);
         addFunction(INTERVAL_ENDS, ABooleanTypeComputer.INSTANCE, true);
         addFunction(INTERVAL_ENDED_BY, ABooleanTypeComputer.INSTANCE, true);
-        addFunction(CURRENT_DATE, ADateTypeComputer.INSTANCE, false);
-        addFunction(CURRENT_TIME, ATimeTypeComputer.INSTANCE, false);
-        addFunction(CURRENT_DATETIME, ADateTimeTypeComputer.INSTANCE, false);
+        addFunction(CURRENT_DATE, ADateTypeComputer.INSTANCE, true);
+        addFunction(CURRENT_TIME, ATimeTypeComputer.INSTANCE, true);
+        addFunction(CURRENT_DATETIME, ADateTimeTypeComputer.INSTANCE, true);
         addPrivateFunction(DAY_TIME_DURATION_GREATER_THAN, ABooleanTypeComputer.INSTANCE, true);
         addPrivateFunction(DAY_TIME_DURATION_LESS_THAN, ABooleanTypeComputer.INSTANCE, true);
         addPrivateFunction(YEAR_MONTH_DURATION_GREATER_THAN, ABooleanTypeComputer.INSTANCE, true);
