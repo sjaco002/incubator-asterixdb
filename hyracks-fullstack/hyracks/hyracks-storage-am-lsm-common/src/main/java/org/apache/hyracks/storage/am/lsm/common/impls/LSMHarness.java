@@ -460,12 +460,8 @@ public class LSMHarness implements ILSMHarness {
 
     @Override
     public void flush(ILSMIndexOperationContext ctx, ILSMIOOperation operation) throws HyracksDataException {
-        if (LOGGER.isLoggable(Level.SEVERE)) {
-            LOGGER.severe(
-                    "Merge Policy Experiment started a flush operation at " + new Date() + " for index: " + lsmIndex);
-        }
         long start = System.nanoTime();
-
+        Date startDate = new Date();
 
         ILSMDiskComponent newComponent = null;
         try {
@@ -482,7 +478,8 @@ public class LSMHarness implements ILSMHarness {
         long end = System.nanoTime();
         long nonoSeconds = (end - start);
         if (LOGGER.isLoggable(Level.SEVERE)) {
-            LOGGER.severe("Merge Policy Experiment finished the flush operation after " + nonoSeconds + " for index: "
+            LOGGER.severe("Merge Policy Experiment finished the flush operation after " + nonoSeconds + " " + startDate
+                    + " " + new Date() + " for index: "
                     + lsmIndex);
         }
     }
@@ -513,11 +510,8 @@ public class LSMHarness implements ILSMHarness {
 
     @Override
     public void merge(ILSMIndexOperationContext ctx, ILSMIOOperation operation) throws HyracksDataException {
-        if (LOGGER.isLoggable(Level.SEVERE)) {
-            LOGGER.severe(
-                    "Merge Policy Experiment started a merge operation at " + new Date() + " for index: " + lsmIndex);
-        }
         long start = System.nanoTime();
+        Date startDate = new Date();
 
         ILSMDiskComponent newComponent = null;
         try {
@@ -534,7 +528,8 @@ public class LSMHarness implements ILSMHarness {
         long end = System.nanoTime();
         long nonoSeconds = (end - start);
         if (LOGGER.isLoggable(Level.SEVERE)) {
-            LOGGER.severe("Merge Policy Experiment finished the merge operation after " + nonoSeconds + " for index: "
+            LOGGER.severe("Merge Policy Experiment finished the merge operation after " + nonoSeconds + " " + startDate
+                    + " " + new Date() + " for index: "
                     + lsmIndex);
         }
     }
