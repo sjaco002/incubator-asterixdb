@@ -55,9 +55,9 @@ class ClientInterfaceIPCI implements IIPCI {
     private final JobIdFactory jobIdFactory;
     private long predistributedId = 0;
 
-    ClientInterfaceIPCI(ClusterControllerService ccs) {
+    ClientInterfaceIPCI(ClusterControllerService ccs, JobIdFactory jobIdFactory) {
         this.ccs = ccs;
-        jobIdFactory = new JobIdFactory();
+        this.jobIdFactory = jobIdFactory;
     }
 
     @Override

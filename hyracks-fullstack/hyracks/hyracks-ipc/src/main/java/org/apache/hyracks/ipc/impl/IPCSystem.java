@@ -59,7 +59,8 @@ public class IPCSystem {
     public void start() {
         cMgr.start();
     }
-    public void stop() throws IOException{
+
+    public void stop() {
         cMgr.stop();
     }
 
@@ -73,6 +74,7 @@ public class IPCSystem {
         } catch (IOException e) {
             throw new IPCException(e);
         } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
             throw new IPCException(e);
         }
     }

@@ -18,8 +18,6 @@
  */
 package org.apache.asterix.external.api;
 
-import java.io.Serializable;
-
 import org.apache.hyracks.api.comm.IFrameWriter;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
 
@@ -29,7 +27,8 @@ import org.apache.hyracks.api.exceptions.HyracksDataException;
  * to be implemented by each adapter irrespective of the the kind of
  * adapter(pull or push).
  */
-public interface IDataSourceAdapter extends Serializable {
+@FunctionalInterface
+public interface IDataSourceAdapter {
 
     public enum AdapterType {
         INTERNAL,
@@ -38,6 +37,7 @@ public interface IDataSourceAdapter extends Serializable {
 
     /**
      * Triggers the adapter to begin ingesting data from the external source.
+     *
      * @param partition
      *            The adapter could be running with a degree of parallelism.
      *            partition corresponds to the i'th parallel instance.

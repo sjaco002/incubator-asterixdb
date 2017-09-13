@@ -127,7 +127,7 @@ public class MetadataTransactionContext extends MetadataCache {
     }
 
     public void dropIndex(String dataverseName, String datasetName, String indexName) {
-        Index index = new Index(dataverseName, datasetName, indexName, null, null, null, null, false, false,
+        Index index = new Index(dataverseName, datasetName, indexName, null, null, null, null, false, false, false,
                 MetadataUtil.PENDING_NO_OP);
         droppedCache.addIndexIfNotExists(index);
         logAndApply(new MetadataLogicalOperation(index, false));
@@ -158,7 +158,7 @@ public class MetadataTransactionContext extends MetadataCache {
 
     public void dropFunction(FunctionSignature signature) {
         Function function = new Function(signature.getNamespace(), signature.getName(), signature.getArity(), null,
-                null, null, null, null, 0);
+                null, null, null, null);
         droppedCache.addFunctionIfNotExists(function);
         logAndApply(new MetadataLogicalOperation(function, false));
     }

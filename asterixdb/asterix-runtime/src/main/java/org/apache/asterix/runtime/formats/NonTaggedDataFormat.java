@@ -49,9 +49,7 @@ import org.apache.asterix.om.base.AString;
 import org.apache.asterix.om.base.IAObject;
 import org.apache.asterix.om.constants.AsterixConstantValue;
 import org.apache.asterix.om.functions.BuiltinFunctions;
-import org.apache.asterix.om.functions.FunctionManagerHolder;
 import org.apache.asterix.om.functions.IFunctionDescriptor;
-import org.apache.asterix.om.functions.IFunctionDescriptorFactory;
 import org.apache.asterix.om.functions.IFunctionManager;
 import org.apache.asterix.om.pointables.base.DefaultOpenFieldType;
 import org.apache.asterix.om.typecomputer.base.TypeCastUtils;
@@ -62,10 +60,7 @@ import org.apache.asterix.om.types.IAType;
 import org.apache.asterix.om.utils.ConstantExpressionUtil;
 import org.apache.asterix.om.utils.RecordUtil;
 import org.apache.asterix.runtime.evaluators.common.CreateMBREvalFactory;
-import org.apache.asterix.runtime.evaluators.common.FunctionManagerImpl;
-import org.apache.asterix.runtime.evaluators.functions.records.FieldAccessByIndexEvalFactory;
-import org.apache.asterix.runtime.evaluators.functions.records.FieldAccessByNameDescriptor;
-import org.apache.asterix.runtime.evaluators.functions.records.FieldAccessNestedEvalFactory;
+import org.apache.asterix.runtime.functions.FunctionManagerHolder;
 import org.apache.commons.lang3.mutable.Mutable;
 import org.apache.commons.lang3.mutable.MutableObject;
 import org.apache.hyracks.algebricks.common.exceptions.AlgebricksException;
@@ -108,8 +103,6 @@ import org.apache.hyracks.dataflow.common.data.parsers.UTF8StringParserFactory;
 
 public class NonTaggedDataFormat implements IDataFormat {
 
-    private static boolean registered = false;
-
     public static final NonTaggedDataFormat INSTANCE = new NonTaggedDataFormat();
 
     private static LogicalVariable METADATA_DUMMY_VAR = new LogicalVariable(-1);
@@ -118,7 +111,7 @@ public class NonTaggedDataFormat implements IDataFormat {
 
     public static final String NON_TAGGED_DATA_FORMAT = "org.apache.asterix.runtime.formats.NonTaggedDataFormat";
 
-    private Map<FunctionIdentifier, FunctionTypeInferer> functionTypeInferers = new HashMap<>();
+    private final Map<FunctionIdentifier, FunctionTypeInferer> functionTypeInferers = new HashMap<>();
 
     static {
         typeToValueParserFactMap.put(ATypeTag.INTEGER, IntegerParserFactory.INSTANCE);
@@ -129,26 +122,6 @@ public class NonTaggedDataFormat implements IDataFormat {
     }
 
     public NonTaggedDataFormat() {
-    }
-
-    @Override
-    public void registerRuntimeFunctions(List<IFunctionDescriptorFactory> funcDescriptors) throws AlgebricksException {
-
-        if (registered) {
-            return;
-        }
-        registered = true;
-
-        if (FunctionManagerHolder.getFunctionManager() != null) {
-            return;
-        }
-
-        IFunctionManager mgr = new FunctionManagerImpl();
-        for (IFunctionDescriptorFactory fdFactory : funcDescriptors) {
-            mgr.registerFunction(fdFactory);
-        }
-        FunctionManagerHolder.setFunctionManager(mgr);
-
         registerTypeInferers();
     }
 
@@ -181,17 +154,16 @@ public class NonTaggedDataFormat implements IDataFormat {
     @Override
     public IScalarEvaluatorFactory getFieldAccessEvaluatorFactory(ARecordType recType, List<String> fldName,
             int recordColumn) throws AlgebricksException {
-        String[] names = recType.getFieldNames();
-        int n = names.length;
-        boolean fieldFound = false;
         IScalarEvaluatorFactory recordEvalFactory = new ColumnAccessEvalFactory(recordColumn);
-        ArrayBackedValueStorage abvs = new ArrayBackedValueStorage();
-        DataOutput dos = abvs.getDataOutput();
-        IScalarEvaluatorFactory evalFactory = null;
+
         if (fldName.size() == 1) {
-            for (int i = 0; i < n; i++) {
-                if (names[i].equals(fldName.get(0))) {
-                    fieldFound = true;
+            String[] names = recType.getFieldNames();
+            ArrayBackedValueStorage abvs = new ArrayBackedValueStorage();
+            DataOutput dos = abvs.getDataOutput();
+
+            String fieldName = fldName.get(0);
+            for (int i = 0; i < names.length; i++) {
+                if (names[i].equals(fieldName)) {
                     try {
                         AInt32 ai = new AInt32(i);
                         SerializerDeserializerProvider.INSTANCE.getSerializerDeserializer(ai.getType()).serialize(ai,
@@ -201,42 +173,38 @@ public class NonTaggedDataFormat implements IDataFormat {
                     }
                     IScalarEvaluatorFactory fldIndexEvalFactory =
                             new ConstantEvalFactory(Arrays.copyOf(abvs.getByteArray(), abvs.getLength()));
+                    IFunctionDescriptor fDesc = FunctionManagerHolder.getFunctionManager()
+                            .lookupFunction(BuiltinFunctions.FIELD_ACCESS_BY_INDEX);
+                    fDesc.setImmutableStates(recType);
+                    return fDesc.createEvaluatorFactory(
+                            new IScalarEvaluatorFactory[] { recordEvalFactory, fldIndexEvalFactory });
+                }
+            }
 
-                    evalFactory = new FieldAccessByIndexEvalFactory(recordEvalFactory, fldIndexEvalFactory, recType);
-                    return evalFactory;
-                }
-            }
-        }
-        if (fldName.size() > 1 || (!fieldFound && recType.isOpen())) {
-            if (fldName.size() == 1) {
-                AString as = new AString(fldName.get(0));
+            if (recType.isOpen()) {
+                AString as = new AString(fieldName);
                 try {
-                    SerializerDeserializerProvider.INSTANCE.getSerializerDeserializer(as.getType()).serialize(as,
-                            dos);
+                    SerializerDeserializerProvider.INSTANCE.getSerializerDeserializer(as.getType()).serialize(as, dos);
                 } catch (HyracksDataException e) {
                     throw new AlgebricksException(e);
                 }
-            } else {
-                AOrderedList as = new AOrderedList(fldName);
-                try {
-                    SerializerDeserializerProvider.INSTANCE.getSerializerDeserializer(as.getType()).serialize(as,
-                            dos);
-                } catch (HyracksDataException e) {
-                    throw new AlgebricksException(e);
-                }
+                IScalarEvaluatorFactory fldNameEvalFactory =
+                        new ConstantEvalFactory(Arrays.copyOf(abvs.getByteArray(), abvs.getLength()));
+                IFunctionDescriptor fDesc = FunctionManagerHolder.getFunctionManager()
+                        .lookupFunction(BuiltinFunctions.FIELD_ACCESS_BY_NAME);
+                return fDesc.createEvaluatorFactory(
+                        new IScalarEvaluatorFactory[] { recordEvalFactory, fldNameEvalFactory });
             }
-            IScalarEvaluatorFactory[] factories = new IScalarEvaluatorFactory[2];
-            factories[0] = recordEvalFactory;
-            if (fldName.size() > 1) {
-                evalFactory = new FieldAccessNestedEvalFactory(recordEvalFactory, recType, fldName);
-            } else {
-                evalFactory = FieldAccessByNameDescriptor.FACTORY.createFunctionDescriptor()
-                        .createEvaluatorFactory(factories);
-            }
-            return evalFactory;
-        } else {
-            throw new AlgebricksException("Could not find field " + fldName + " in the schema.");
         }
+
+        if (fldName.size() > 1) {
+            IFunctionDescriptor fDesc =
+                    FunctionManagerHolder.getFunctionManager().lookupFunction(BuiltinFunctions.FIELD_ACCESS_NESTED);
+            fDesc.setImmutableStates(recType, fldName);
+            return fDesc.createEvaluatorFactory(new IScalarEvaluatorFactory[] { recordEvalFactory });
+        }
+
+        throw new AlgebricksException("Could not find field " + fldName + " in the schema.");
     }
 
     @SuppressWarnings("unchecked")
@@ -301,10 +269,13 @@ public class NonTaggedDataFormat implements IDataFormat {
                     }
                     IScalarEvaluatorFactory fldIndexEvalFactory =
                             new ConstantEvalFactory(Arrays.copyOf(abvs.getByteArray(), abvs.getLength()));
-                    IScalarEvaluatorFactory evalFactory =
-                            new FieldAccessByIndexEvalFactory(recordEvalFactory, fldIndexEvalFactory, recType);
-                    IFunctionInfo finfoAccess = BuiltinFunctions
-                            .getAsterixFunctionInfo(BuiltinFunctions.FIELD_ACCESS_BY_INDEX);
+                    IFunctionDescriptor fDesc = FunctionManagerHolder.getFunctionManager()
+                            .lookupFunction(BuiltinFunctions.FIELD_ACCESS_BY_INDEX);
+                    fDesc.setImmutableStates(recType);
+                    IScalarEvaluatorFactory evalFactory = fDesc.createEvaluatorFactory(
+                            new IScalarEvaluatorFactory[] { recordEvalFactory, fldIndexEvalFactory });
+                    IFunctionInfo finfoAccess =
+                            BuiltinFunctions.getAsterixFunctionInfo(BuiltinFunctions.FIELD_ACCESS_BY_INDEX);
 
                     ScalarFunctionCallExpression partitionFun = new ScalarFunctionCallExpression(finfoAccess,
                             new MutableObject<ILogicalExpression>(new VariableReferenceExpression(METADATA_DUMMY_VAR)),
@@ -325,9 +296,12 @@ public class NonTaggedDataFormat implements IDataFormat {
             } catch (HyracksDataException e) {
                 throw new AlgebricksException(e);
             }
-            IScalarEvaluatorFactory evalFactory = new FieldAccessNestedEvalFactory(recordEvalFactory, recType, fldName);
-            IFunctionInfo finfoAccess =
-                    BuiltinFunctions.getAsterixFunctionInfo(BuiltinFunctions.FIELD_ACCESS_NESTED);
+            IFunctionDescriptor fDesc =
+                    FunctionManagerHolder.getFunctionManager().lookupFunction(BuiltinFunctions.FIELD_ACCESS_NESTED);
+            fDesc.setImmutableStates(recType, fldName);
+            IScalarEvaluatorFactory evalFactory =
+                    fDesc.createEvaluatorFactory(new IScalarEvaluatorFactory[] { recordEvalFactory });
+            IFunctionInfo finfoAccess = BuiltinFunctions.getAsterixFunctionInfo(BuiltinFunctions.FIELD_ACCESS_NESTED);
 
             ScalarFunctionCallExpression partitionFun = new ScalarFunctionCallExpression(finfoAccess,
                     new MutableObject<ILogicalExpression>(new VariableReferenceExpression(METADATA_DUMMY_VAR)),
@@ -431,6 +405,16 @@ public class NonTaggedDataFormat implements IDataFormat {
             }
         });
         functionTypeInferers.put(BuiltinFunctions.CAST_TYPE, new FunctionTypeInferer() {
+            @Override
+            public void infer(ILogicalExpression expr, IFunctionDescriptor fd, IVariableTypeEnvironment context)
+                    throws AlgebricksException {
+                AbstractFunctionCallExpression funcExpr = (AbstractFunctionCallExpression) expr;
+                IAType rt = TypeCastUtils.getRequiredType(funcExpr);
+                IAType it = (IAType) context.getType(funcExpr.getArguments().get(0).getValue());
+                fd.setImmutableStates(rt, it);
+            }
+        });
+        functionTypeInferers.put(BuiltinFunctions.CAST_TYPE_LAX, new FunctionTypeInferer() {
             @Override
             public void infer(ILogicalExpression expr, IFunctionDescriptor fd, IVariableTypeEnvironment context)
                     throws AlgebricksException {

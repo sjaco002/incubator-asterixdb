@@ -25,10 +25,10 @@ import java.rmi.RemoteException;
 import java.util.List;
 
 import org.apache.asterix.common.exceptions.ACIDException;
+import org.apache.asterix.common.exceptions.MetadataException;
 import org.apache.asterix.common.functions.FunctionSignature;
 import org.apache.asterix.common.transactions.JobId;
 import org.apache.asterix.external.indexing.ExternalFile;
-import org.apache.asterix.metadata.MetadataException;
 import org.apache.asterix.metadata.entities.CompactionPolicy;
 import org.apache.asterix.metadata.entities.Dataset;
 import org.apache.asterix.metadata.entities.DatasourceAdapter;
@@ -403,6 +403,8 @@ public interface IMetadataNode extends Remote, Serializable {
      */
     Function getFunction(JobId jobId, FunctionSignature functionSignature) throws MetadataException, RemoteException;
 
+    List<Function> getFunctions(JobId jobId, String dataverseName) throws MetadataException, RemoteException;
+
     /**
      * Deletes a function, acquiring local locks on behalf of the given
      * transaction id.
@@ -429,8 +431,6 @@ public interface IMetadataNode extends Remote, Serializable {
      * @throws RemoteException
      */
     void addFunction(JobId jobId, Function function) throws MetadataException, RemoteException;
-
-    void updateFunction(JobId jobId, Function function) throws MetadataException, RemoteException;
 
     /**
      * @param ctx
@@ -538,6 +538,8 @@ public interface IMetadataNode extends Remote, Serializable {
      * @throws RemoteException
      */
     Feed getFeed(JobId jobId, String dataverse, String feedName) throws MetadataException, RemoteException;
+
+    List<Feed> getFeeds(JobId jobId, String dataverse) throws MetadataException, RemoteException;
 
     /**
      * @param jobId
@@ -749,6 +751,17 @@ public interface IMetadataNode extends Remote, Serializable {
             throws MetadataException, RemoteException;
 
     /**
+     * Upserts an extension entity under the ongoing transaction job id
+     *
+     * @param jobId
+     * @param entity
+     * @throws MetadataException
+     * @throws RemoteException
+     */
+    <T extends IExtensionMetadataEntity> void upsertEntity(JobId jobId, T entity)
+            throws MetadataException, RemoteException;
+
+    /**
      * Deletes an extension entity under the ongoing transaction job id
      *
      * @param jobId
@@ -781,4 +794,5 @@ public interface IMetadataNode extends Remote, Serializable {
 
     List<FeedConnection> getFeedConnections(JobId jobId, String dataverseName, String feedName)
             throws MetadataException, RemoteException;
+
 }

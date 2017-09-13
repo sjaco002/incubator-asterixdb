@@ -22,6 +22,7 @@ import java.io.File;
 import java.io.FilenameFilter;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.nio.channels.ClosedByInterruptException;
 import java.nio.channels.FileChannel;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -38,6 +39,7 @@ import org.apache.hyracks.api.io.IFileHandle;
 import org.apache.hyracks.api.io.IIOFuture;
 import org.apache.hyracks.api.io.IIOManager;
 import org.apache.hyracks.api.io.IODeviceHandle;
+import org.apache.hyracks.api.util.IoUtil;
 
 public class IOManager implements IIOManager {
     /*
@@ -130,8 +132,7 @@ public class IOManager implements IIOManager {
             while (remaining > 0) {
                 int len = ((FileHandle) fHandle).getFileChannel().write(data, offset);
                 if (len < 0) {
-                    throw new HyracksDataException(
-                            "Error writing to file: " + ((FileHandle) fHandle).getFileReference().toString());
+                    throw new HyracksDataException("Error writing to file: " + fHandle.getFileReference().toString());
                 }
                 remaining -= len;
                 offset += len;
@@ -164,8 +165,7 @@ public class IOManager implements IIOManager {
                     len = fileChannel.write(dataArray);
                 }
                 if (len < 0) {
-                    throw new HyracksDataException(
-                            "Error writing to file: " + ((FileHandle) fHandle).getFileReference().toString());
+                    throw new HyracksDataException("Error writing to file: " + fHandle.getFileReference().toString());
                 }
                 remaining -= len;
                 offset += len;
@@ -204,10 +204,13 @@ public class IOManager implements IIOManager {
                 n += len;
             }
             return n;
-        } catch (HyracksDataException e) {
-            throw e;
+        } catch (ClosedByInterruptException e) {
+            Thread.currentThread().interrupt();
+            // re-open the closed channel. The channel will be closed during the typical file lifecycle
+            ((FileHandle) fHandle).ensureOpen();
+            throw HyracksDataException.create(e);
         } catch (IOException e) {
-            throw new HyracksDataException(e);
+            throw HyracksDataException.create(e);
         }
     }
 
@@ -230,7 +233,7 @@ public class IOManager implements IIOManager {
         try {
             ((FileHandle) fHandle).close();
         } catch (IOException e) {
-            throw new HyracksDataException(e);
+            throw HyracksDataException.create(e);
         }
     }
 
@@ -243,7 +246,7 @@ public class IOManager implements IIOManager {
         try {
             waf = File.createTempFile(prefix, WORKSPACE_FILE_SUFFIX, new File(dev.getMount(), waPath));
         } catch (IOException e) {
-            throw new HyracksDataException(e);
+            throw HyracksDataException.create(e);
         }
         return dev.createFileRef(waPath + File.separator + waf.getName());
     }
@@ -333,17 +336,17 @@ public class IOManager implements IIOManager {
 
     @Override
     public long getSize(IFileHandle fileHandle) {
-        return ((FileHandle) fileHandle).getFileReference().getFile().length();
+        return fileHandle.getFileReference().getFile().length();
     }
 
     @Override
-    public void deleteWorkspaceFiles() {
+    public void deleteWorkspaceFiles() throws HyracksDataException {
         for (IODeviceHandle ioDevice : workspaces) {
             File workspaceFolder = new File(ioDevice.getMount(), ioDevice.getWorkspace());
             if (workspaceFolder.exists() && workspaceFolder.isDirectory()) {
                 File[] workspaceFiles = workspaceFolder.listFiles(WORKSPACE_FILES_FILTER);
                 for (File workspaceFile : workspaceFiles) {
-                    workspaceFile.delete();
+                    IoUtil.delete(workspaceFile);
                 }
             }
         }

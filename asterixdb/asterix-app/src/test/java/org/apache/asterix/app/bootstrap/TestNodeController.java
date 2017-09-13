@@ -205,7 +205,7 @@ public class TestNodeController {
                 NoOpOperationCallbackFactory.INSTANCE, filterFields, filterFields, false);
         BTreeSearchOperatorNodePushable searchOp =
                 searchOpDesc.createPushRuntime(ctx, primaryIndexInfo.getSearchRecordDescriptorProvider(), PARTITION, 1);
-        emptyTupleOp.setFrameWriter(0, searchOp,
+        emptyTupleOp.setOutputFrameWriter(0, searchOp,
                 primaryIndexInfo.getSearchRecordDescriptorProvider().getInputRecordDescriptor(null, 0));
         searchOp.setOutputFrameWriter(0, countOp, primaryIndexInfo.rDesc);
         return emptyTupleOp;
@@ -227,7 +227,7 @@ public class TestNodeController {
         Index index = primaryIndexInfo.getIndex();
         CcApplicationContext appCtx =
                 (CcApplicationContext) ExecutionTestUtil.integrationUtil.cc.getApplicationContext();
-        MetadataProvider mdProvider = new MetadataProvider(appCtx, dataverse, storageComponentProvider);
+        MetadataProvider mdProvider = new MetadataProvider(appCtx, dataverse);
         try {
             return dataset.getResourceFactory(mdProvider, index, primaryIndexInfo.recordType, primaryIndexInfo.metaType,
                     primaryIndexInfo.mergePolicyFactory, primaryIndexInfo.mergePolicyProperties);
@@ -246,8 +246,7 @@ public class TestNodeController {
         Dataverse dataverse = new Dataverse(dataset.getDataverseName(), NonTaggedDataFormat.class.getName(),
                 MetadataUtil.PENDING_NO_OP);
         MetadataProvider mdProvider = new MetadataProvider(
-                (ICcApplicationContext) ExecutionTestUtil.integrationUtil.cc.getApplicationContext(), dataverse,
-                storageComponentProvider);
+                (ICcApplicationContext) ExecutionTestUtil.integrationUtil.cc.getApplicationContext(), dataverse);
         try {
             IResourceFactory resourceFactory = dataset.getResourceFactory(mdProvider, primaryIndexInfo.index,
                     recordType, metaType, mergePolicyFactory, mergePolicyProperties);
@@ -312,7 +311,7 @@ public class TestNodeController {
     public IHyracksTaskContext createTestContext(boolean withMessaging) throws HyracksDataException {
         IHyracksTaskContext ctx = TestUtils.create(KB32);
         if (withMessaging) {
-            TaskUtil.putInSharedMap(HyracksConstants.KEY_MESSAGE, new VSizeFrame(ctx), ctx);
+            TaskUtil.put(HyracksConstants.KEY_MESSAGE, new VSizeFrame(ctx), ctx);
         }
         ctx = Mockito.spy(ctx);
         Mockito.when(ctx.getJobletContext()).thenReturn(jobletCtx);
@@ -403,10 +402,13 @@ public class TestNodeController {
                 keyFieldNames.add(Arrays.asList(fieldNames[primaryKeyIndexes[i]]));
             }
             index = new Index(dataset.getDataverseName(), dataset.getDatasetName(), dataset.getDatasetName(),
-                    IndexType.BTREE, keyFieldNames, keyFieldSourceIndicators, keyFieldTypes, false, true,
+                    IndexType.BTREE, keyFieldNames, keyFieldSourceIndicators, keyFieldTypes, false, false, true,
                     MetadataUtil.PENDING_NO_OP);
             List<String> nodes = Collections.singletonList(ExecutionTestUtil.integrationUtil.ncs[0].getId());
-            FileSplit[] splits = SplitsAndConstraintsUtil.getIndexSplits(dataset, index.getIndexName(), nodes);
+            FileSplit[] splits = SplitsAndConstraintsUtil.getIndexSplits(
+                    ((ICcApplicationContext) ExecutionTestUtil.integrationUtil.cc.getApplicationContext())
+                            .getClusterStateManager(),
+                    dataset, index.getIndexName(), nodes);
             fileSplitProvider = new ConstantFileSplitProvider(Arrays.copyOfRange(splits, 0, 1));
         }
 
@@ -447,7 +449,8 @@ public class TestNodeController {
 
     public IndexDataflowHelperFactory getPrimaryIndexDataflowHelperFactory(PrimaryIndexInfo primaryIndexInfo,
             IStorageComponentProvider storageComponentProvider) throws AlgebricksException {
-        return new IndexDataflowHelperFactory(storageComponentProvider.getStorageManager(), primaryIndexInfo.fileSplitProvider);
+        return new IndexDataflowHelperFactory(storageComponentProvider.getStorageManager(),
+                primaryIndexInfo.fileSplitProvider);
     }
 
     public IIndexDataflowHelper getPrimaryIndexDataflowHelper(Dataset dataset, IAType[] primaryKeyTypes,
@@ -459,6 +462,6 @@ public class TestNodeController {
                 mergePolicyFactory, mergePolicyProperties, filterFields, primaryKeyIndexes, primaryKeyIndicators,
                 storageComponentProvider);
         return getPrimaryIndexDataflowHelperFactory(primaryIndexInfo, storageComponentProvider)
-                .create(createTestContext(true), PARTITION);
+                .create(createTestContext(true).getJobletContext().getServiceContext(), PARTITION);
     }
 }

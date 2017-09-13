@@ -18,8 +18,8 @@
  */
 package org.apache.asterix.api.http.server;
 
-import static org.apache.asterix.api.http.servlet.ServletConstants.HYRACKS_CONNECTION_ATTR;
-import static org.apache.asterix.api.http.servlet.ServletConstants.HYRACKS_DATASET_ATTR;
+import static org.apache.asterix.api.http.server.ServletConstants.HYRACKS_CONNECTION_ATTR;
+import static org.apache.asterix.api.http.server.ServletConstants.HYRACKS_DATASET_ATTR;
 
 import java.awt.image.BufferedImage;
 import java.io.BufferedReader;
@@ -98,6 +98,10 @@ public class ApiServlet extends AbstractServlet {
         OutputFormat format;
         boolean csvAndHeader = false;
         String output = request.getParameter("output-format");
+        if ("CSV-Header".equals(output)) {
+            output = "CSV";
+            csvAndHeader = true;
+        }
         try {
             format = OutputFormat.valueOf(output);
         } catch (IllegalArgumentException e) {

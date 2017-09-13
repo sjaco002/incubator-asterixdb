@@ -83,7 +83,6 @@ public class CCNCFunctions {
         REGISTER_PARTITION_REQUEST,
         REGISTER_RESULT_PARTITION_LOCATION,
         REPORT_RESULT_PARTITION_WRITE_COMPLETION,
-        REPORT_RESULT_PARTITION_FAILURE,
 
         NODE_REGISTRATION_RESULT,
         START_TASKS,
@@ -625,39 +624,6 @@ public class CCNCFunctions {
         @Override
         public FunctionId getFunctionId() {
             return FunctionId.REPORT_RESULT_PARTITION_WRITE_COMPLETION;
-        }
-
-        public JobId getJobId() {
-            return jobId;
-        }
-
-        public ResultSetId getResultSetId() {
-            return rsId;
-        }
-
-        public int getPartition() {
-            return partition;
-        }
-    }
-
-    public static class ReportResultPartitionFailureFunction extends Function {
-        private static final long serialVersionUID = 1L;
-
-        private final JobId jobId;
-
-        private final ResultSetId rsId;
-
-        private final int partition;
-
-        public ReportResultPartitionFailureFunction(JobId jobId, ResultSetId rsId, int partition) {
-            this.jobId = jobId;
-            this.rsId = rsId;
-            this.partition = partition;
-        }
-
-        @Override
-        public FunctionId getFunctionId() {
-            return FunctionId.REPORT_RESULT_PARTITION_FAILURE;
         }
 
         public JobId getJobId() {
@@ -1444,7 +1410,8 @@ public class CCNCFunctions {
         int cdid = dis.readInt();
         int senderIndex = dis.readInt();
         int receiverIndex = dis.readInt();
-        PartitionId pid = new PartitionId(new JobId(jobId), new ConnectorDescriptorId(cdid), senderIndex, receiverIndex);
+        PartitionId pid = new PartitionId(new JobId(jobId), new ConnectorDescriptorId(cdid), senderIndex,
+                receiverIndex);
         return pid;
     }
 
@@ -1460,8 +1427,8 @@ public class CCNCFunctions {
         int aid = dis.readInt();
         int partition = dis.readInt();
         int attempt = dis.readInt();
-        TaskAttemptId taId = new TaskAttemptId(new TaskId(new ActivityId(new OperatorDescriptorId(odid), aid),
-                partition), attempt);
+        TaskAttemptId taId = new TaskAttemptId(
+                new TaskId(new ActivityId(new OperatorDescriptorId(odid), aid), partition), attempt);
         return taId;
     }
 

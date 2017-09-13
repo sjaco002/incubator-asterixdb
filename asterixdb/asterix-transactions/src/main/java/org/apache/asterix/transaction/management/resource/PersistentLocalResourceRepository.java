@@ -18,6 +18,8 @@
  */
 package org.apache.asterix.transaction.management.resource;
 
+import static org.apache.hyracks.api.exceptions.ErrorCode.CANNOT_CREATE_FILE;
+
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
@@ -57,6 +59,7 @@ import org.apache.hyracks.api.io.IODeviceHandle;
 import org.apache.hyracks.api.replication.IReplicationJob.ReplicationExecutionType;
 import org.apache.hyracks.api.replication.IReplicationJob.ReplicationJobType;
 import org.apache.hyracks.api.replication.IReplicationJob.ReplicationOperation;
+import org.apache.hyracks.api.util.IoUtil;
 import org.apache.hyracks.storage.am.common.api.ITreeIndexFrame;
 import org.apache.hyracks.storage.common.ILocalResourceRepository;
 import org.apache.hyracks.storage.common.LocalResource;
@@ -190,10 +193,12 @@ public class PersistentLocalResourceRepository implements ILocalResourceReposito
         FileReference resourceFile = ioManager.resolve(relativePath);
         if (resourceFile.getFile().exists()) {
             throw new HyracksDataException("Duplicate resource: " + resourceFile.getAbsolutePath());
-        } else {
-            resourceFile.getFile().getParentFile().mkdirs();
         }
-        resourceCache.put(resource.getPath(), resource);
+
+        final File parent = resourceFile.getFile().getParentFile();
+        if (!parent.exists() && !parent.mkdirs()) {
+            throw HyracksDataException.create(CANNOT_CREATE_FILE, parent.getAbsolutePath());
+        }
 
         try (FileOutputStream fos = new FileOutputStream(resourceFile.getFile());
                 ObjectOutputStream oosToFos = new ObjectOutputStream(fos)) {
@@ -202,6 +207,8 @@ public class PersistentLocalResourceRepository implements ILocalResourceReposito
         } catch (IOException e) {
             throw new HyracksDataException(e);
         }
+
+        resourceCache.put(resource.getPath(), resource);
 
         //if replication enabled, send resource metadata info to remote nodes
         if (isReplicationEnabled) {
@@ -213,13 +220,18 @@ public class PersistentLocalResourceRepository implements ILocalResourceReposito
     public synchronized void delete(String relativePath) throws HyracksDataException {
         FileReference resourceFile = getLocalResourceFileByName(ioManager, relativePath);
         if (resourceFile.getFile().exists()) {
-            resourceFile.delete();
-            resourceCache.invalidate(relativePath);
-
-            //if replication enabled, delete resource from remote replicas
-            if (isReplicationEnabled
-                    && !resourceFile.getFile().getName().startsWith(STORAGE_METADATA_FILE_NAME_PREFIX)) {
-                createReplicationJob(ReplicationOperation.DELETE, resourceFile);
+            try {
+                // Invalidate before deleting the file just in case file deletion throws some exception.
+                // Since it's just a cache invalidation, it should not affect correctness.
+                resourceCache.invalidate(relativePath);
+                IoUtil.delete(resourceFile);
+            } finally {
+                // Regardless of successfully deleted or not, the operation should be replicated.
+                //if replication enabled, delete resource from remote replicas
+                if (isReplicationEnabled
+                        && !resourceFile.getFile().getName().startsWith(STORAGE_METADATA_FILE_NAME_PREFIX)) {
+                    createReplicationJob(ReplicationOperation.DELETE, resourceFile);
+                }
             }
         } else {
             throw HyracksDataException.create(org.apache.hyracks.api.exceptions.ErrorCode.RESOURCE_DOES_NOT_EXIST,

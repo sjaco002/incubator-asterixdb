@@ -30,7 +30,8 @@ public interface IClusterManagementWork {
         PENDING,
         ACTIVE,
         UNUSABLE,
-        REBALANCING
+        REBALANCING,
+        SHUTTING_DOWN
     }
 
     public WorkType getClusterManagementWorkType();

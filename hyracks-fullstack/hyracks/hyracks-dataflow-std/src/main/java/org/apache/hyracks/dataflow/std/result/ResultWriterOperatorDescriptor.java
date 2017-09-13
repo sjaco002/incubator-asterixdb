@@ -21,7 +21,6 @@ package org.apache.hyracks.dataflow.std.result;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.nio.ByteBuffer;
-import java.util.logging.Logger;
 
 import org.apache.hyracks.api.comm.IFrame;
 import org.apache.hyracks.api.comm.IFrameWriter;
@@ -113,20 +112,24 @@ public class ResultWriterOperatorDescriptor extends AbstractSingleActivityOperat
             @Override
             public void fail() throws HyracksDataException {
                 failed = true;
-                datasetPartitionWriter.fail();
+                if (datasetPartitionWriter != null) {
+                    datasetPartitionWriter.fail();
+                }
             }
 
             @Override
             public void close() throws HyracksDataException {
-                try {
-                    if (!failed && frameOutputStream.getTupleCount() > 0) {
-                        frameOutputStream.flush(datasetPartitionWriter);
+                if (datasetPartitionWriter != null) {
+                    try {
+                        if (!failed && frameOutputStream.getTupleCount() > 0) {
+                            frameOutputStream.flush(datasetPartitionWriter);
+                        }
+                    } catch (Exception e) {
+                        datasetPartitionWriter.fail();
+                        throw e;
+                    } finally {
+                        datasetPartitionWriter.close();
                     }
-                } catch (Exception e) {
-                    datasetPartitionWriter.fail();
-                    throw e;
-                } finally {
-                    datasetPartitionWriter.close();
                 }
             }
 

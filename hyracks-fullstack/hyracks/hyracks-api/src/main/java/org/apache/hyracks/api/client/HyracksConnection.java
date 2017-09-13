@@ -102,8 +102,8 @@ public final class HyracksConnection implements IHyracksClientConnection {
 
     @Override
     public JobId startJob(JobSpecification jobSpec, EnumSet<JobFlag> jobFlags) throws Exception {
-        JobSpecificationActivityClusterGraphGeneratorFactory jsacggf = new JobSpecificationActivityClusterGraphGeneratorFactory(
-                jobSpec);
+        IActivityClusterGraphGeneratorFactory jsacggf =
+                new JobSpecificationActivityClusterGraphGeneratorFactory(jobSpec);
         return startJob(jsacggf, jobFlags);
     }
 
@@ -138,7 +138,13 @@ public final class HyracksConnection implements IHyracksClientConnection {
 
     @Override
     public void waitForCompletion(JobId jobId) throws Exception {
-        hci.waitForCompletion(jobId);
+        try {
+            hci.waitForCompletion(jobId);
+        } catch (InterruptedException e) {
+            // Cancels an on-going job if the current thread gets interrupted.
+            hci.cancelJob(jobId);
+            throw e;
+        }
     }
 
     @Override
@@ -206,15 +212,14 @@ public final class HyracksConnection implements IHyracksClientConnection {
     @Override
     public JobId startJob(DeploymentId deploymentId, JobSpecification jobSpec, EnumSet<JobFlag> jobFlags)
             throws Exception {
-        JobSpecificationActivityClusterGraphGeneratorFactory jsacggf = new JobSpecificationActivityClusterGraphGeneratorFactory(
-                jobSpec);
+        IActivityClusterGraphGeneratorFactory jsacggf =
+                new JobSpecificationActivityClusterGraphGeneratorFactory(jobSpec);
         return startJob(deploymentId, jsacggf, jobFlags);
     }
 
     @Override
     public JobId startJob(DeploymentId deploymentId, IActivityClusterGraphGeneratorFactory acggf,
-            EnumSet<JobFlag> jobFlags)
-            throws Exception {
+            EnumSet<JobFlag> jobFlags) throws Exception {
         return hci.startJob(deploymentId, JavaSerializationUtils.serialize(acggf), jobFlags);
     }
 

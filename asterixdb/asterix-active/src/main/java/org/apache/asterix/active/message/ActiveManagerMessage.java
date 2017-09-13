@@ -26,16 +26,17 @@ import org.apache.asterix.common.messaging.api.INcAddressedMessage;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
 
 public class ActiveManagerMessage implements INcAddressedMessage {
-    public static final byte STOP_ACTIVITY = 0x00;
+    public enum Kind {
+        STOP_ACTIVITY,
+        REQUEST_STATS
+    }
 
     private static final long serialVersionUID = 1L;
-    private final byte kind;
-    private final String src;
+    private final Kind kind;
     private final Serializable payload;
 
-    public ActiveManagerMessage(byte kind, String src, Serializable payload) {
+    public ActiveManagerMessage(Kind kind, Serializable payload) {
         this.kind = kind;
-        this.src = src;
         this.payload = payload;
     }
 
@@ -43,12 +44,8 @@ public class ActiveManagerMessage implements INcAddressedMessage {
         return payload;
     }
 
-    public byte getKind() {
+    public Kind getKind() {
         return kind;
-    }
-
-    public String getSrc() {
-        return src;
     }
 
     @Override

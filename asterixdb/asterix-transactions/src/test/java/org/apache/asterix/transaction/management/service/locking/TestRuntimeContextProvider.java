@@ -20,11 +20,11 @@ package org.apache.asterix.transaction.management.service.locking;
 
 import static org.mockito.Mockito.mock;
 
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-import org.apache.asterix.common.api.ThreadExecutor;
-import org.apache.asterix.common.api.INcApplicationContext;
 import org.apache.asterix.common.api.IDatasetLifecycleManager;
+import org.apache.asterix.common.api.INcApplicationContext;
 import org.apache.asterix.common.transactions.IAppRuntimeContextProvider;
 import org.apache.asterix.common.transactions.ITransactionSubsystem;
 import org.apache.hyracks.api.io.IIOManager;
@@ -32,25 +32,19 @@ import org.apache.hyracks.storage.am.lsm.common.api.ILSMIOOperationScheduler;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMOperationTracker;
 import org.apache.hyracks.storage.common.ILocalResourceRepository;
 import org.apache.hyracks.storage.common.buffercache.IBufferCache;
-import org.apache.hyracks.storage.common.file.IFileMapProvider;
 
 class TestRuntimeContextProvider implements IAppRuntimeContextProvider {
 
-    ThreadExecutor ate = new ThreadExecutor(Executors.defaultThreadFactory());
+    ExecutorService ate = Executors.newCachedThreadPool(Executors.defaultThreadFactory());
     IDatasetLifecycleManager dlcm = mock(IDatasetLifecycleManager.class);
 
     @Override
-    public ThreadExecutor getThreadExecutor() {
+    public ExecutorService getThreadExecutor() {
         return ate;
     }
 
     @Override
     public IBufferCache getBufferCache() {
-        throw new UnsupportedOperationException();
-    }
-
-    @Override
-    public IFileMapProvider getFileMapManager() {
         throw new UnsupportedOperationException();
     }
 

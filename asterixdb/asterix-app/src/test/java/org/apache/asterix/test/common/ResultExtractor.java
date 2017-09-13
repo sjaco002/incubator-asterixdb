@@ -36,7 +36,7 @@ import com.google.common.collect.Iterators;
 /**
  * extracts results from the response of the QueryServiceServlet.
  * As the response is not necessarily valid JSON, non-JSON content has to be extracted in some cases.
- * The current implementation creates a toomany copies of the data to be usable for larger results.
+ * The current implementation creates a too many copies of the data to be usable for larger results.
  */
 public class ResultExtractor {
 
@@ -74,6 +74,9 @@ public class ResultExtractor {
                     break;
                 case "errors":
                     JsonNode errors = result.get(field).get(0).get("msg");
+                    if (!result.get("metrics").has("errorCount")) {
+                        throw new AsterixException("Request reported error but not an errorCount");
+                    };
                     throw new AsterixException(errors.asText());
                 case "results":
                     if (result.get(field).size() <= 1) {

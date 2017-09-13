@@ -21,6 +21,8 @@ package org.apache.asterix.runtime.utils;
 import java.io.IOException;
 import java.util.function.Supplier;
 
+import org.apache.asterix.common.api.IMetadataLockManager;
+import org.apache.asterix.common.cluster.IClusterStateManager;
 import org.apache.asterix.common.cluster.IGlobalRecoveryManager;
 import org.apache.asterix.common.config.ActiveProperties;
 import org.apache.asterix.common.config.BuildProperties;
@@ -41,6 +43,7 @@ import org.apache.asterix.common.library.ILibraryManager;
 import org.apache.asterix.common.metadata.IMetadataBootstrap;
 import org.apache.asterix.common.replication.IFaultToleranceStrategy;
 import org.apache.asterix.common.transactions.IResourceIdManager;
+import org.apache.asterix.runtime.transaction.ResourceIdManager;
 import org.apache.hyracks.api.application.ICCServiceContext;
 import org.apache.hyracks.api.client.IHyracksClientConnection;
 import org.apache.hyracks.api.job.IJobLifecycleListener;
@@ -74,17 +77,17 @@ public class CcApplicationContext implements ICcApplicationContext {
     private Object extensionManager;
     private IFaultToleranceStrategy ftStrategy;
     private IJobLifecycleListener activeLifeCycleListener;
+    private IMetadataLockManager mdLockManager;
+    private IClusterStateManager clusterStateManager;
 
     public CcApplicationContext(ICCServiceContext ccServiceCtx, IHyracksClientConnection hcc,
-            ILibraryManager libraryManager, IResourceIdManager resourceIdManager,
-            Supplier<IMetadataBootstrap> metadataBootstrapSupplier, IGlobalRecoveryManager globalRecoveryManager,
-            IFaultToleranceStrategy ftStrategy, IJobLifecycleListener activeLifeCycleListener,
-            IStorageComponentProvider storageComponentProvider)
-            throws AsterixException, IOException {
+            ILibraryManager libraryManager, Supplier<IMetadataBootstrap> metadataBootstrapSupplier,
+            IGlobalRecoveryManager globalRecoveryManager, IFaultToleranceStrategy ftStrategy,
+            IJobLifecycleListener activeLifeCycleListener, IStorageComponentProvider storageComponentProvider,
+            IMetadataLockManager mdLockManager) throws AsterixException, IOException {
         this.ccServiceCtx = ccServiceCtx;
         this.hcc = hcc;
         this.libraryManager = libraryManager;
-        this.resourceIdManager = resourceIdManager;
         this.activeLifeCycleListener = activeLifeCycleListener;
         // Determine whether to use old-style asterix-configuration.xml or new-style configuration.
         // QQQ strip this out eventually
@@ -105,6 +108,10 @@ public class CcApplicationContext implements ICcApplicationContext {
         this.metadataBootstrapSupplier = metadataBootstrapSupplier;
         this.globalRecoveryManager = globalRecoveryManager;
         this.storageComponentProvider = storageComponentProvider;
+        this.mdLockManager = mdLockManager;
+        clusterStateManager = new ClusterStateManager();
+        clusterStateManager.setCcAppCtx(this);
+        this.resourceIdManager = new ResourceIdManager(clusterStateManager);
     }
 
     @Override
@@ -200,21 +207,33 @@ public class CcApplicationContext implements ICcApplicationContext {
         return resourceIdManager;
     }
 
+    @Override
     public IMetadataBootstrap getMetadataBootstrap() {
         return metadataBootstrapSupplier.get();
     }
 
+    @Override
     public IFaultToleranceStrategy getFaultToleranceStrategy() {
         return ftStrategy;
     }
 
     @Override
-    public IJobLifecycleListener getActiveLifecycleListener() {
+    public IJobLifecycleListener getActiveNotificationHandler() {
         return activeLifeCycleListener;
     }
 
     @Override
     public IStorageComponentProvider getStorageComponentProvider() {
         return storageComponentProvider;
+    }
+
+    @Override
+    public IMetadataLockManager getMetadataLockManager() {
+        return mdLockManager;
+    }
+
+    @Override
+    public IClusterStateManager getClusterStateManager() {
+        return clusterStateManager;
     }
 }

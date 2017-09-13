@@ -25,7 +25,6 @@ import java.io.File;
 import java.io.IOException;
 import java.net.Inet4Address;
 import java.util.ArrayList;
-import java.util.EnumSet;
 import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -33,18 +32,15 @@ import java.util.logging.Logger;
 import org.apache.asterix.common.api.IClusterManagementWork.ClusterState;
 import org.apache.asterix.common.config.GlobalConfig;
 import org.apache.asterix.common.config.PropertiesAccessor;
+import org.apache.asterix.common.dataflow.ICcApplicationContext;
 import org.apache.asterix.common.exceptions.AsterixException;
 import org.apache.asterix.hyracks.bootstrap.CCApplication;
 import org.apache.asterix.hyracks.bootstrap.NCApplication;
-import org.apache.asterix.runtime.utils.ClusterStateManager;
 import org.apache.commons.io.FileUtils;
 import org.apache.hyracks.api.application.ICCApplication;
 import org.apache.hyracks.api.application.INCApplication;
 import org.apache.hyracks.api.client.HyracksConnection;
 import org.apache.hyracks.api.client.IHyracksClientConnection;
-import org.apache.hyracks.api.job.JobFlag;
-import org.apache.hyracks.api.job.JobId;
-import org.apache.hyracks.api.job.JobSpecification;
 import org.apache.hyracks.control.cc.ClusterControllerService;
 import org.apache.hyracks.control.common.config.ConfigManager;
 import org.apache.hyracks.control.common.controllers.CCConfig;
@@ -68,6 +64,8 @@ public class AsterixHyracksIntegrationUtil {
     public NodeControllerService[] ncs = new NodeControllerService[0];
     public IHyracksClientConnection hcc;
 
+    private static final String DEFAULT_STORAGE_PATH = joinPath("target", "io", "dir");
+    private static String storagePath = DEFAULT_STORAGE_PATH;
     private ConfigManager configManager;
     private List<String> nodeNames;
 
@@ -86,7 +84,7 @@ public class AsterixHyracksIntegrationUtil {
         final List<NodeControllerService> nodeControllers = new ArrayList<>();
         for (String nodeId : nodeNames) {
             // mark this NC as virtual in the CC's config manager, so he doesn't try to contact NCService...
-            configManager.set(nodeId, NCConfig.Option.VIRTUAL_NC, true);
+            configManager.set(nodeId, NCConfig.Option.NCSERVICE_PORT, NCConfig.NCSERVICE_PORT_DISABLED);
             final INCApplication ncApplication = createNCApplication();
             ConfigManager ncConfigManager = new ConfigManager();
             ncApplication.registerConfig(ncConfigManager);
@@ -118,7 +116,7 @@ public class AsterixHyracksIntegrationUtil {
             thread.join();
         }
         // Wait until cluster becomes active
-        ClusterStateManager.INSTANCE.waitForState(ClusterState.ACTIVE);
+        ((ICcApplicationContext) cc.getApplicationContext()).getClusterStateManager().waitForState(ClusterState.ACTIVE);
         hcc = new HyracksConnection(cc.getConfig().getClientListenAddress(), cc.getConfig().getClientListenPort());
         this.ncs = nodeControllers.toArray(new NodeControllerService[nodeControllers.size()]);
     }
@@ -131,6 +129,7 @@ public class AsterixHyracksIntegrationUtil {
         ccConfig.setClusterListenPort(DEFAULT_HYRACKS_CC_CLUSTER_PORT);
         ccConfig.setResultTTL(120000L);
         ccConfig.setResultSweepThreshold(1000L);
+        ccConfig.setEnforceFrameWriterProtocol(true);
         configManager.set(ControllerConfig.Option.DEFAULT_DIR, joinPath(getDefaultStoragePath(), "asterixdb"));
         return ccConfig;
     }
@@ -149,7 +148,7 @@ public class AsterixHyracksIntegrationUtil {
         ncConfig.setMessagingListenAddress(Inet4Address.getLoopbackAddress().getHostAddress());
         ncConfig.setResultTTL(120000L);
         ncConfig.setResultSweepThreshold(1000L);
-        ncConfig.setVirtualNC(true);
+        ncConfig.setVirtualNC();
         configManager.set(ControllerConfig.Option.DEFAULT_DIR, joinPath(getDefaultStoragePath(), "asterixdb", ncName));
         return ncConfig;
     }
@@ -205,9 +204,7 @@ public class AsterixHyracksIntegrationUtil {
             stopNcTheard.join();
         }
 
-        if (cc != null) {
-            cc.stop();
-        }
+        stopCC(false);
 
         if (deleteOldInstanceData) {
             deleteTransactionLogs();
@@ -215,15 +212,23 @@ public class AsterixHyracksIntegrationUtil {
         }
     }
 
-    public void runJob(JobSpecification spec) throws Exception {
-        GlobalConfig.ASTERIX_LOGGER.info(spec.toJSON().toString());
-        JobId jobId = hcc.startJob(spec, EnumSet.of(JobFlag.PROFILE_RUNTIME));
-        GlobalConfig.ASTERIX_LOGGER.info(jobId.toString());
-        hcc.waitForCompletion(jobId);
+    public void stopCC(boolean terminateNCService) throws Exception {
+        if (cc != null) {
+            cc.stop(terminateNCService);
+            cc = null;
+        }
+    }
+
+    public static void setStoragePath(String path) {
+        storagePath = path;
+    }
+
+    public static void restoreDefaultStoragePath() {
+        storagePath = DEFAULT_STORAGE_PATH;
     }
 
     protected String getDefaultStoragePath() {
-        return joinPath("target", "io", "dir");
+        return storagePath;
     }
 
     public void removeTestStorageFiles() {

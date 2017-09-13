@@ -36,8 +36,10 @@ public class HyracksDataException extends HyracksException {
     public static HyracksDataException create(Throwable cause) {
         if (cause instanceof HyracksDataException || cause == null) {
             return (HyracksDataException) cause;
-        }
-        if (cause instanceof InterruptedException && !Thread.currentThread().isInterrupted()) {
+        } else if (cause instanceof Error) {
+            // don't wrap errors, allow them to propagate
+            throw (Error)cause;
+        } else if (cause instanceof InterruptedException && !Thread.currentThread().isInterrupted()) {
             LOGGER.log(Level.WARNING,
                     "Wrapping an InterruptedException in HyracksDataException and current thread is not interrupted",
                     cause);
@@ -51,11 +53,6 @@ public class HyracksDataException extends HyracksException {
 
     public static HyracksDataException create(int code, Throwable cause, Serializable... params) {
         return new HyracksDataException(ErrorCode.HYRACKS, code, ErrorCode.getErrorMessage(code), cause, params);
-    }
-
-    public static HyracksDataException create(HyracksDataException e, String nodeId) {
-        return new HyracksDataException(e.getComponent(), e.getErrorCode(), e.getMessage(), e.getCause(), nodeId,
-                e.getParams());
     }
 
     public static HyracksDataException suppress(HyracksDataException root, Throwable th) {
@@ -124,7 +121,7 @@ public class HyracksDataException extends HyracksException {
     }
 
     public HyracksDataException(String component, int errorCode, Throwable cause, Serializable... params) {
-        super(component, errorCode, cause.getMessage(), cause, null, params);
+        super(component, errorCode, cause, params);
     }
 
     public HyracksDataException(String component, int errorCode, String message, Throwable cause,
@@ -132,4 +129,8 @@ public class HyracksDataException extends HyracksException {
         super(component, errorCode, message, cause, null, params);
     }
 
+    public static HyracksDataException create(HyracksDataException e, String nodeId) {
+        return new HyracksDataException(e.getComponent(), e.getErrorCode(), e.getMessage(), e.getCause(), nodeId,
+                e.getParams());
+    }
 }

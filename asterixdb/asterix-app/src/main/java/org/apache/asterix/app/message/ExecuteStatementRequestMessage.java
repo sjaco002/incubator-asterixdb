@@ -22,6 +22,7 @@ package org.apache.asterix.app.message;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -29,6 +30,7 @@ import org.apache.asterix.algebra.base.ILangExtension;
 import org.apache.asterix.api.http.server.ResultUtil;
 import org.apache.asterix.app.cc.CCExtensionManager;
 import org.apache.asterix.common.api.IClusterManagementWork;
+import org.apache.asterix.common.cluster.IClusterStateManager;
 import org.apache.asterix.common.config.GlobalConfig;
 import org.apache.asterix.common.context.IStorageComponentProvider;
 import org.apache.asterix.common.dataflow.ICcApplicationContext;
@@ -40,7 +42,6 @@ import org.apache.asterix.lang.common.base.IParser;
 import org.apache.asterix.lang.common.base.Statement;
 import org.apache.asterix.messaging.CCMessageBroker;
 import org.apache.asterix.metadata.MetadataManager;
-import org.apache.asterix.runtime.utils.ClusterStateManager;
 import org.apache.asterix.translator.IStatementExecutor;
 import org.apache.asterix.translator.IStatementExecutorContext;
 import org.apache.asterix.translator.IStatementExecutorFactory;
@@ -54,23 +55,18 @@ import org.apache.hyracks.control.cc.ClusterControllerService;
 
 public final class ExecuteStatementRequestMessage implements ICcAddressedMessage {
     private static final long serialVersionUID = 1L;
-
     private static final Logger LOGGER = Logger.getLogger(ExecuteStatementRequestMessage.class.getName());
-
+    //TODO: Make configurable: https://issues.apache.org/jira/browse/ASTERIXDB-2062
+    public static final long DEFAULT_NC_TIMEOUT_MILLIS = TimeUnit.MINUTES.toMillis(5);
+    //TODO: Make configurable: https://issues.apache.org/jira/browse/ASTERIXDB-2063
+    public static final long DEFAULT_QUERY_CANCELLATION_TIMEOUT_MILLIS = TimeUnit.MINUTES.toMillis(1);
     private final String requestNodeId;
-
     private final long requestMessageId;
-
     private final ILangExtension.Language lang;
-
     private final String statementsText;
-
     private final SessionConfig sessionConfig;
-
     private final IStatementExecutor.ResultDelivery delivery;
-
     private final String clientContextID;
-
     private final String handleUrl;
 
     public ExecuteStatementRequestMessage(String requestNodeId, long requestMessageId, ILangExtension.Language lang,
@@ -92,60 +88,74 @@ public final class ExecuteStatementRequestMessage implements ICcAddressedMessage
         ClusterControllerService ccSrv = (ClusterControllerService) ccSrvContext.getControllerService();
         CCApplication ccApp = (CCApplication) ccSrv.getApplication();
         CCMessageBroker messageBroker = (CCMessageBroker) ccSrvContext.getMessageBroker();
+        final String rejectionReason = getRejectionReason(ccSrv);
+        if (rejectionReason != null) {
+            sendRejection(rejectionReason, messageBroker);
+            return;
+        }
         CCExtensionManager ccExtMgr = (CCExtensionManager) ccAppCtx.getExtensionManager();
         ILangCompilationProvider compilationProvider = ccExtMgr.getCompilationProvider(lang);
         IStorageComponentProvider storageComponentProvider = ccAppCtx.getStorageComponentProvider();
         IStatementExecutorFactory statementExecutorFactory = ccApp.getStatementExecutorFactory();
         IStatementExecutorContext statementExecutorContext = ccApp.getStatementExecutorContext();
+        ExecuteStatementResponseMessage responseMsg = new ExecuteStatementResponseMessage(requestMessageId);
+        try {
+            IParser parser = compilationProvider.getParserFactory().createParser(statementsText);
+            List<Statement> statements = parser.parse();
+            StringWriter outWriter = new StringWriter(256);
+            PrintWriter outPrinter = new PrintWriter(outWriter);
+            SessionOutput.ResultDecorator resultPrefix = ResultUtil.createPreResultDecorator();
+            SessionOutput.ResultDecorator resultPostfix = ResultUtil.createPostResultDecorator();
+            SessionOutput.ResultAppender appendHandle = ResultUtil.createResultHandleAppender(handleUrl);
+            SessionOutput.ResultAppender appendStatus = ResultUtil.createResultStatusAppender();
+            SessionOutput sessionOutput = new SessionOutput(sessionConfig, outPrinter, resultPrefix, resultPostfix,
+                    appendHandle, appendStatus);
+            IStatementExecutor.ResultMetadata outMetadata = new IStatementExecutor.ResultMetadata();
+            MetadataManager.INSTANCE.init();
+            IStatementExecutor translator = statementExecutorFactory.create(ccAppCtx, statements, sessionOutput,
+                    compilationProvider, storageComponentProvider);
+            translator.compileAndExecute(ccAppCtx.getHcc(), null, delivery, outMetadata, new IStatementExecutor.Stats(),
+                    clientContextID, statementExecutorContext);
+            outPrinter.close();
+            responseMsg.setResult(outWriter.toString());
+            responseMsg.setMetadata(outMetadata);
+        } catch (AlgebricksException | HyracksException | TokenMgrError
+                | org.apache.asterix.aqlplus.parser.TokenMgrError pe) {
+            // we trust that "our" exceptions are serializable and have a comprehensible error message
+            GlobalConfig.ASTERIX_LOGGER.log(Level.WARNING, pe.getMessage(), pe);
+            responseMsg.setError(pe);
+        } catch (Exception e) {
+            GlobalConfig.ASTERIX_LOGGER.log(Level.SEVERE, "Unexpected exception", e);
+            responseMsg.setError(new Exception(e.toString()));
+        }
+        try {
+            messageBroker.sendApplicationMessageToNC(responseMsg, requestNodeId);
+        } catch (Exception e) {
+            LOGGER.log(Level.WARNING, e.toString(), e);
+        }
+    }
 
-        ccSrv.getExecutor().submit(() -> {
-            ExecuteStatementResponseMessage responseMsg = new ExecuteStatementResponseMessage(requestMessageId);
+    private String getRejectionReason(ClusterControllerService ccSrv) {
+        if (ccSrv.getNodeManager().getNodeControllerState(requestNodeId) == null) {
+            return "Node is not registerted with the CC";
+        }
+        ICcApplicationContext appCtx = (ICcApplicationContext) ccSrv.getApplicationContext();
+        IClusterStateManager csm = appCtx.getClusterStateManager();
+        final IClusterManagementWork.ClusterState clusterState = csm.getState();
+        if (clusterState != IClusterManagementWork.ClusterState.ACTIVE) {
+            return "Cannot execute request, cluster is " + clusterState;
+        }
+        return null;
+    }
 
-            try {
-                final IClusterManagementWork.ClusterState clusterState = ClusterStateManager.INSTANCE.getState();
-                if (clusterState != IClusterManagementWork.ClusterState.ACTIVE) {
-                    throw new IllegalStateException("Cannot execute request, cluster is " + clusterState);
-                }
-
-                IParser parser = compilationProvider.getParserFactory().createParser(statementsText);
-                List<Statement> statements = parser.parse();
-
-                StringWriter outWriter = new StringWriter(256);
-                PrintWriter outPrinter = new PrintWriter(outWriter);
-                SessionOutput.ResultDecorator resultPrefix = ResultUtil.createPreResultDecorator();
-                SessionOutput.ResultDecorator resultPostfix = ResultUtil.createPostResultDecorator();
-                SessionOutput.ResultAppender appendHandle = ResultUtil.createResultHandleAppender(handleUrl);
-                SessionOutput.ResultAppender appendStatus = ResultUtil.createResultStatusAppender();
-                SessionOutput sessionOutput = new SessionOutput(sessionConfig, outPrinter, resultPrefix, resultPostfix,
-                        appendHandle, appendStatus);
-
-                IStatementExecutor.ResultMetadata outMetadata = new IStatementExecutor.ResultMetadata();
-
-                MetadataManager.INSTANCE.init();
-                IStatementExecutor translator = statementExecutorFactory.create(ccAppCtx, statements, sessionOutput,
-                        compilationProvider, storageComponentProvider);
-                translator.compileAndExecute(ccAppCtx.getHcc(), null, delivery, outMetadata,
-                        new IStatementExecutor.Stats(), clientContextID, statementExecutorContext);
-
-                outPrinter.close();
-                responseMsg.setResult(outWriter.toString());
-                responseMsg.setMetadata(outMetadata);
-            } catch (AlgebricksException | HyracksException | TokenMgrError
-                    | org.apache.asterix.aqlplus.parser.TokenMgrError pe) {
-                // we trust that "our" exceptions are serializable and have a comprehensible error message
-                GlobalConfig.ASTERIX_LOGGER.log(Level.WARNING, pe.getMessage(), pe);
-                responseMsg.setError(pe);
-            } catch (Exception e) {
-                GlobalConfig.ASTERIX_LOGGER.log(Level.SEVERE, "Unexpected exception", e);
-                responseMsg.setError(new Exception(e.toString()));
-            }
-
-            try {
-                messageBroker.sendApplicationMessageToNC(responseMsg, requestNodeId);
-            } catch (Exception e) {
-                LOGGER.log(Level.WARNING, e.toString(), e);
-            }
-        });
+    private void sendRejection(String reason, CCMessageBroker messageBroker) {
+        ExecuteStatementResponseMessage responseMsg = new ExecuteStatementResponseMessage(requestMessageId);
+        responseMsg.setError(new Exception(reason));
+        try {
+            messageBroker.sendApplicationMessageToNC(responseMsg, requestNodeId);
+        } catch (Exception e) {
+            LOGGER.log(Level.WARNING, e.toString(), e);
+        }
     }
 
     @Override

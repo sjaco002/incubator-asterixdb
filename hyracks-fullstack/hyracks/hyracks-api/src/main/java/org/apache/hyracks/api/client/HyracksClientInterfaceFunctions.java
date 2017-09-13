@@ -20,6 +20,7 @@ package org.apache.hyracks.api.client;
 
 import java.io.Serializable;
 import java.net.URL;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -131,6 +132,9 @@ public class HyracksClientInterfaceFunctions {
 
         public CancelJobFunction(JobId jobId) {
             this.jobId = jobId;
+            if (jobId == null) {
+                throw new IllegalArgumentException("jobId");
+            }
         }
 
         @Override
@@ -181,7 +185,7 @@ public class HyracksClientInterfaceFunctions {
         }
 
         public StartJobFunction(long jobId, Map<byte[], byte[]> jobParameters) {
-            this(null, null, null, jobId, jobParameters);
+            this(null, null, EnumSet.noneOf(JobFlag.class), jobId, jobParameters);
         }
 
         public StartJobFunction(byte[] acggfBytes, Set<JobFlag> jobFlags) {

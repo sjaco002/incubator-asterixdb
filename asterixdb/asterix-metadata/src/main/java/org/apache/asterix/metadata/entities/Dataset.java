@@ -27,9 +27,10 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.stream.IntStream;
 
-import org.apache.asterix.active.ActiveLifecycleListener;
 import org.apache.asterix.active.IActiveEntityEventsListener;
+import org.apache.asterix.active.IActiveNotificationHandler;
 import org.apache.asterix.common.config.DatasetConfig.DatasetType;
+import org.apache.asterix.common.context.CorrelatedPrefixMergePolicyFactory;
 import org.apache.asterix.common.context.IStorageComponentProvider;
 import org.apache.asterix.common.dataflow.NoOpFrameOperationCallbackFactory;
 import org.apache.asterix.common.exceptions.CompilationException;
@@ -56,7 +57,6 @@ import org.apache.asterix.metadata.api.IMetadataEntity;
 import org.apache.asterix.metadata.declared.BTreeResourceFactoryProvider;
 import org.apache.asterix.metadata.declared.MetadataProvider;
 import org.apache.asterix.metadata.lock.ExternalDatasetsRegistry;
-import org.apache.asterix.metadata.lock.MetadataLockManager;
 import org.apache.asterix.metadata.utils.DatasetUtil;
 import org.apache.asterix.metadata.utils.ExternalIndexingOperations;
 import org.apache.asterix.metadata.utils.IndexUtil;
@@ -175,15 +175,6 @@ public class Dataset implements IMetadataEntity<Dataset>, IDataset {
                 dataset.hints, dataset.datasetType, dataset.datasetId, dataset.pendingOp, dataset.rebalanceCount);
     }
 
-    public Dataset(Dataset dataset, boolean forRebalance, String targetNodeGroupName) {
-        this(dataset.dataverseName, dataset.datasetName, dataset.recordTypeDataverseName, dataset.recordTypeName,
-                dataset.metaTypeDataverseName, dataset.metaTypeName, targetNodeGroupName,
-                dataset.compactionPolicyFactory,
-                dataset.compactionPolicyProperties, dataset.datasetDetails, dataset.hints, dataset.datasetType,
-                forRebalance ? DatasetIdFactory.generateAlternatingDatasetId(dataset.datasetId) : dataset.datasetId,
-                dataset.pendingOp, forRebalance ? dataset.rebalanceCount + 1 : dataset.rebalanceCount);
-    }
-
     public Dataset(String dataverseName, String datasetName, String itemTypeDataverseName, String itemTypeName,
             String metaItemTypeDataverseName, String metaItemTypeName, String nodeGroupName, String compactionPolicy,
             Map<String, String> compactionPolicyProperties, IDatasetDetails datasetDetails, Map<String, String> hints,
@@ -205,10 +196,12 @@ public class Dataset implements IMetadataEntity<Dataset>, IDataset {
         this.rebalanceCount = rebalanceCount;
     }
 
+    @Override
     public String getDataverseName() {
         return dataverseName;
     }
 
+    @Override
     public String getDatasetName() {
         return datasetName;
     }
@@ -324,9 +317,9 @@ public class Dataset implements IMetadataEntity<Dataset>, IDataset {
         Map<FeedConnectionId, Pair<JobSpecification, Boolean>> disconnectJobList = new HashMap<>();
         if (getDatasetType() == DatasetType.INTERNAL) {
             // prepare job spec(s) that would disconnect any active feeds involving the dataset.
-            ActiveLifecycleListener activeListener =
-                    (ActiveLifecycleListener) metadataProvider.getApplicationContext().getActiveLifecycleListener();
-            IActiveEntityEventsListener[] activeListeners = activeListener.getNotificationHandler().getEventListeners();
+            IActiveNotificationHandler activeListener = (IActiveNotificationHandler) metadataProvider
+                    .getApplicationContext().getActiveNotificationHandler();
+            IActiveEntityEventsListener[] activeListeners = activeListener.getEventListeners();
             for (IActiveEntityEventsListener listener : activeListeners) {
                 if (listener.isEntityUsingDataset(this)) {
                     throw new CompilationException(ErrorCode.COMPILATION_CANT_DROP_ACTIVE_DATASET,
@@ -411,7 +404,8 @@ public class Dataset implements IMetadataEntity<Dataset>, IDataset {
 
         // Drops the associated nodegroup if it is no longer used by any other dataset.
         if (dropCorrespondingNodeGroup) {
-            MetadataLockManager.INSTANCE.acquireNodeGroupWriteLock(metadataProvider.getLocks(), nodeGroupName);
+            metadataProvider.getApplicationContext().getMetadataLockManager()
+                    .acquireNodeGroupWriteLock(metadataProvider.getLocks(), nodeGroupName);
             MetadataManager.INSTANCE.dropNodegroup(mdTxnCtx.getValue(), nodeGroupName, true);
         }
     }
@@ -657,6 +651,10 @@ public class Dataset implements IMetadataEntity<Dataset>, IDataset {
         return getDatasetDetails().isTemp();
     }
 
+    public boolean isCorrelated() {
+        return CorrelatedPrefixMergePolicyFactory.NAME.equals(compactionPolicyFactory);
+    }
+
     @Override
     public List<List<String>> getPrimaryKeys() {
         if (getDatasetType() == DatasetType.EXTERNAL) {
@@ -701,8 +699,8 @@ public class Dataset implements IMetadataEntity<Dataset>, IDataset {
     public RecordDescriptor getPrimaryRecordDescriptor(MetadataProvider metadataProvider) throws AlgebricksException {
         List<List<String>> partitioningKeys = getPrimaryKeys();
         int numPrimaryKeys = partitioningKeys.size();
-        ISerializerDeserializer[] primaryRecFields = new ISerializerDeserializer[numPrimaryKeys + 1
-                + (hasMetaPart() ? 1 : 0)];
+        ISerializerDeserializer[] primaryRecFields =
+                new ISerializerDeserializer[numPrimaryKeys + 1 + (hasMetaPart() ? 1 : 0)];
         ITypeTraits[] primaryTypeTraits = new ITypeTraits[numPrimaryKeys + 1 + (hasMetaPart() ? 1 : 0)];
         ISerializerDeserializerProvider serdeProvider = metadataProvider.getFormat().getSerdeProvider();
         List<Integer> indicators = null;
@@ -714,9 +712,9 @@ public class Dataset implements IMetadataEntity<Dataset>, IDataset {
 
         // Set the serde/traits for primary keys
         for (int i = 0; i < numPrimaryKeys; i++) {
-            IAType keyType = (indicators == null || indicators.get(i) == 0)
-                    ? itemType.getSubFieldType(partitioningKeys.get(i))
-                    : metaType.getSubFieldType(partitioningKeys.get(i));
+            IAType keyType =
+                    (indicators == null || indicators.get(i) == 0) ? itemType.getSubFieldType(partitioningKeys.get(i))
+                            : metaType.getSubFieldType(partitioningKeys.get(i));
             primaryRecFields[i] = serdeProvider.getSerializerDeserializer(keyType);
             primaryTypeTraits[i] = TypeTraitProvider.INSTANCE.getTypeTrait(keyType);
         }
@@ -726,8 +724,8 @@ public class Dataset implements IMetadataEntity<Dataset>, IDataset {
         primaryTypeTraits[numPrimaryKeys] = TypeTraitProvider.INSTANCE.getTypeTrait(itemType);
         if (hasMetaPart()) {
             // Set the serde and traits for the meta record field
-            primaryRecFields[numPrimaryKeys + 1] = SerializerDeserializerProvider.INSTANCE
-                    .getSerializerDeserializer(metaType);
+            primaryRecFields[numPrimaryKeys + 1] =
+                    SerializerDeserializerProvider.INSTANCE.getSerializerDeserializer(metaType);
             primaryTypeTraits[numPrimaryKeys + 1] = TypeTraitProvider.INSTANCE.getTypeTrait(itemType);
         }
         return new RecordDescriptor(primaryRecFields, primaryTypeTraits);
@@ -753,9 +751,9 @@ public class Dataset implements IMetadataEntity<Dataset>, IDataset {
             indicators = ((InternalDatasetDetails) getDatasetDetails()).getKeySourceIndicator();
         }
         for (int i = 0; i < numPrimaryKeys; i++) {
-            IAType keyType = (indicators == null || indicators.get(i) == 0)
-                    ? recordType.getSubFieldType(partitioningKeys.get(i))
-                    : metaType.getSubFieldType(partitioningKeys.get(i));
+            IAType keyType =
+                    (indicators == null || indicators.get(i) == 0) ? recordType.getSubFieldType(partitioningKeys.get(i))
+                            : metaType.getSubFieldType(partitioningKeys.get(i));
             cmpFactories[i] = cmpFactoryProvider.getBinaryComparatorFactory(keyType, true);
         }
         return cmpFactories;
@@ -796,10 +794,18 @@ public class Dataset implements IMetadataEntity<Dataset>, IDataset {
         return IntStream.range(0, numPrimaryKeys).toArray();
     }
 
+    // Gets the target dataset for the purpose of rebalance.
+    public Dataset getTargetDatasetForRebalance(String targetNodeGroupName) {
+        return new Dataset(this.dataverseName, this.datasetName, this.recordTypeDataverseName, this.recordTypeName,
+                this.metaTypeDataverseName, this.metaTypeName, targetNodeGroupName, this.compactionPolicyFactory,
+                this.compactionPolicyProperties, this.datasetDetails, this.hints, this.datasetType,
+                DatasetIdFactory.generateAlternatingDatasetId(this.datasetId), this.pendingOp, this.rebalanceCount + 1);
+    }
+
     // Gets an array of partition numbers for this dataset.
     protected int[] getDatasetPartitions(MetadataProvider metadataProvider) throws AlgebricksException {
-        FileSplit[] splitsForDataset = metadataProvider.splitsForIndex(metadataProvider.getMetadataTxnContext(), this,
-                getDatasetName());
+        FileSplit[] splitsForDataset =
+                metadataProvider.splitsForIndex(metadataProvider.getMetadataTxnContext(), this, getDatasetName());
         return IntStream.range(0, splitsForDataset.length).toArray();
     }
 }

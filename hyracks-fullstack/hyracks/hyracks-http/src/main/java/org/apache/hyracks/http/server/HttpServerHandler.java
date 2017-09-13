@@ -72,13 +72,13 @@ public class HttpServerHandler<T extends HttpServer> extends SimpleChannelInboun
             }
         } catch (Exception e) {
             LOGGER.log(Level.SEVERE, "Failure Submitting HTTP Request", e);
-            respond(ctx, request.protocolVersion(), HttpResponseStatus.INTERNAL_SERVER_ERROR);
+            respond(ctx, request.protocolVersion(), new HttpResponseStatus(500, e.getMessage()));
         }
     }
 
     protected void respond(ChannelHandlerContext ctx, HttpVersion httpVersion, HttpResponseStatus status) {
         DefaultHttpResponse response = new DefaultHttpResponse(httpVersion, status);
-        ctx.write(response).addListener(ChannelFutureListener.CLOSE);
+        ctx.writeAndFlush(response).addListener(ChannelFutureListener.CLOSE);
     }
 
     private void submit(ChannelHandlerContext ctx, IServlet servlet, FullHttpRequest request) throws IOException {

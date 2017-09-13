@@ -61,7 +61,8 @@ public class ExternalLookupOperatorDescriptor extends AbstractSingleActivityOper
             throws HyracksDataException {
         // Create a file index accessor to be used for files lookup operations
         final ExternalFileIndexAccessor snapshotAccessor = new ExternalFileIndexAccessor(
-                dataflowHelperFactory.create(ctx, partition), searchOpCallbackFactory, version);
+                dataflowHelperFactory.create(ctx.getJobletContext().getServiceContext(), partition),
+                searchOpCallbackFactory, version);
         return new AbstractUnaryInputUnaryOutputOperatorNodePushable() {
             // The adapter that uses the file index along with the coming tuples to access files in HDFS
             private LookupAdapter<?> adapter;
@@ -88,17 +89,20 @@ public class ExternalLookupOperatorDescriptor extends AbstractSingleActivityOper
                     try {
                         snapshotAccessor.close();
                     } catch (Throwable th) {
-                        hde = new HyracksDataException(th);
+                        hde = HyracksDataException.create(th);
                     }
                     try {
                         adapter.close();
                     } catch (Throwable th) {
                         if (hde == null) {
-                            hde = new HyracksDataException(th);
+                            hde = HyracksDataException.create(th);
                         } else {
                             hde.addSuppressed(th);
                         }
                     }
+                }
+                if (hde != null) {
+                    throw hde;
                 }
             }
 

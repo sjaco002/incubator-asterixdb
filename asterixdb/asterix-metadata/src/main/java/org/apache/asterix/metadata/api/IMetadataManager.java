@@ -23,10 +23,10 @@ import java.rmi.RemoteException;
 import java.util.List;
 
 import org.apache.asterix.common.exceptions.ACIDException;
+import org.apache.asterix.common.exceptions.MetadataException;
 import org.apache.asterix.common.functions.FunctionSignature;
 import org.apache.asterix.common.metadata.IMetadataBootstrap;
 import org.apache.asterix.external.indexing.ExternalFile;
-import org.apache.asterix.metadata.MetadataException;
 import org.apache.asterix.metadata.MetadataTransactionContext;
 import org.apache.asterix.metadata.entities.CompactionPolicy;
 import org.apache.asterix.metadata.entities.Dataset;
@@ -391,6 +391,8 @@ public interface IMetadataManager extends IMetadataBootstrap {
 
     Function getFunction(MetadataTransactionContext ctx, FunctionSignature functionSignature) throws MetadataException;
 
+    List<Function> getFunctions(MetadataTransactionContext ctx, String dataverseName) throws MetadataException;
+
     /**
      * @param ctx
      *            MetadataTransactionContext of an active metadata transaction.
@@ -399,8 +401,6 @@ public interface IMetadataManager extends IMetadataBootstrap {
      * @throws MetadataException
      */
     void dropFunction(MetadataTransactionContext ctx, FunctionSignature functionSignature) throws MetadataException;
-
-    void updateFunction(MetadataTransactionContext ctx, Function function) throws MetadataException;
 
     /**
      * @param mdTxnCtx
@@ -487,6 +487,8 @@ public interface IMetadataManager extends IMetadataBootstrap {
      * @throws MetadataException
      */
     Feed getFeed(MetadataTransactionContext ctx, String dataverse, String feedName) throws MetadataException;
+
+    List<Feed> getFeeds(MetadataTransactionContext ctx, String dataverse) throws MetadataException;
 
     /**
      * @param ctx
@@ -668,6 +670,16 @@ public interface IMetadataManager extends IMetadataBootstrap {
      * @throws MetadataException
      */
     <T extends IExtensionMetadataEntity> void addEntity(MetadataTransactionContext mdTxnCtx, T entity)
+            throws MetadataException;
+
+    /**
+     * Upsert an extension entity to its extension dataset under the ongoing metadata transaction
+     *
+     * @param mdTxnCtx
+     * @param entity
+     * @throws MetadataException
+     */
+    <T extends IExtensionMetadataEntity> void upsertEntity(MetadataTransactionContext mdTxnCtx, T entity)
             throws MetadataException;
 
     /**

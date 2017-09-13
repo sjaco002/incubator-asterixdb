@@ -19,6 +19,7 @@
 package org.apache.hyracks.api.context;
 
 import java.io.Serializable;
+import java.util.Set;
 import java.util.concurrent.ExecutorService;
 
 import org.apache.hyracks.api.dataflow.TaskAttemptId;
@@ -27,6 +28,7 @@ import org.apache.hyracks.api.deployment.DeploymentId;
 import org.apache.hyracks.api.exceptions.HyracksException;
 import org.apache.hyracks.api.io.IWorkspaceFileFactory;
 import org.apache.hyracks.api.job.IOperatorEnvironment;
+import org.apache.hyracks.api.job.JobFlag;
 import org.apache.hyracks.api.job.profiling.counters.ICounterContext;
 import org.apache.hyracks.api.resources.IDeallocatableRegistry;
 
@@ -51,4 +53,6 @@ public interface IHyracksTaskContext
     Object getSharedObject();
 
     public byte[] getJobParameter(byte[] name, int start, int length) throws HyracksException;
+
+    Set<JobFlag> getJobFlags();
 }

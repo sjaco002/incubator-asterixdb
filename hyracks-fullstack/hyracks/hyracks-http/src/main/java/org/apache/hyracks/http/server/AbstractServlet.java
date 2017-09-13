@@ -88,13 +88,33 @@ public abstract class AbstractServlet implements IServlet {
         } catch (Exception e) {
             LOGGER.log(Level.WARNING, "Unhandled exception", e);
             response.setStatus(HttpResponseStatus.INTERNAL_SERVER_ERROR);
+        } catch (Throwable th) { //NOSONAR Just logging and then throwing again
+            try {
+                LOGGER.log(Level.WARNING, "Unhandled throwable", th);
+            } catch (Throwable loggingFailure) {// NOSONAR... swallow logging failure
+            }
+            throw th;
         }
     }
 
-    protected void notAllowed(HttpMethod method, IServletResponse response) throws IOException {
-        response.setStatus(HttpResponseStatus.METHOD_NOT_ALLOWED);
+    protected void sendError(IServletResponse response, HttpResponseStatus status, String message) throws IOException {
+        response.setStatus(status);
         HttpUtil.setContentType(response, HttpUtil.ContentType.TEXT_PLAIN, HttpUtil.Encoding.UTF8);
-        response.writer().write("Method " + method + " not allowed for the requested resource.\n");
+        if (message != null) {
+            response.writer().println(message);
+        }
+        if (LOGGER.isLoggable(Level.INFO)) {
+            LOGGER.info("sendError: status=" + status + ", message=" + message);
+        }
+    }
+
+    protected void sendError(IServletResponse response, HttpResponseStatus status) throws IOException {
+        sendError(response, status, null);
+    }
+
+    protected void notAllowed(HttpMethod method, IServletResponse response) throws IOException {
+        sendError(response, HttpResponseStatus.METHOD_NOT_ALLOWED,
+                "Method " + method + " not allowed for the requested resource.");
     }
 
     @SuppressWarnings("squid:S1172")
@@ -139,7 +159,8 @@ public abstract class AbstractServlet implements IServlet {
 
     public String localPath(IServletRequest request) {
         final String uri = request.getHttpRequest().uri();
-        return uri.substring(trim(uri));
+        int queryStart = uri.indexOf('?');
+        return queryStart == -1 ? uri.substring(trim(uri)) : uri.substring(trim(uri), queryStart);
     }
 
     public String servletPath(IServletRequest request) {
@@ -167,4 +188,5 @@ public abstract class AbstractServlet implements IServlet {
     public String toString() {
         return this.getClass().getSimpleName() + Arrays.toString(paths);
     }
+
 }

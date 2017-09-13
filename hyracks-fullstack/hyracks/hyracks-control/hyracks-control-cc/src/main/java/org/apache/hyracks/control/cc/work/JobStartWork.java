@@ -72,7 +72,7 @@ public class JobStartWork extends SynchronizableWork {
                 run = new JobRun(ccs, deploymentId, jobId, acggf, acgg, jobFlags);
             } else {
                 //ActivityClusterGraph has already been distributed
-                run = new JobRun(ccs, deploymentId, jobId,
+                run = new JobRun(ccs, deploymentId, jobId, jobFlags,
                         ccs.getPreDistributedJobStore().getDistributedJobDescriptor(predestributedId), jobParameters,
                         predestributedId);
             }

@@ -69,7 +69,6 @@ import org.apache.hyracks.storage.common.IModificationOperationCallback;
 import org.apache.hyracks.storage.common.ISearchOperationCallback;
 import org.apache.hyracks.storage.common.ISearchPredicate;
 import org.apache.hyracks.storage.common.MultiComparator;
-import org.apache.hyracks.storage.common.file.IFileMapProvider;
 
 public class LSMRTreeWithAntiMatterTuples extends AbstractLSMRTree {
     private static final ICursorFactory cursorFactory = opCtx -> new LSMRTreeWithAntiMatterTuplesSearchCursor(opCtx);
@@ -83,19 +82,18 @@ public class LSMRTreeWithAntiMatterTuples extends AbstractLSMRTree {
             ITreeIndexFrameFactory btreeInteriorFrameFactory, ITreeIndexFrameFactory btreeLeafFrameFactory,
             ILSMIndexFileManager fileManager, TreeIndexFactory<RTree> diskRTreeFactory,
             TreeIndexFactory<RTree> bulkLoadRTreeFactory, IComponentFilterHelper filterHelper,
-            ILSMComponentFilterFrameFactory filterFrameFactory, LSMComponentFilterManager filterManager,
-            IFileMapProvider diskFileMapProvider, int fieldCount, IBinaryComparatorFactory[] rtreeCmpFactories,
-            IBinaryComparatorFactory[] btreeComparatorFactories, ILinearizeComparatorFactory linearizer,
-            int[] comparatorFields, IBinaryComparatorFactory[] linearizerArray, ILSMMergePolicy mergePolicy,
-            ILSMOperationTracker opTracker, ILSMIOOperationScheduler ioScheduler, ILSMIOOperationCallback ioOpCallback,
-            int[] rtreeFields, int[] filterFields, boolean durable, boolean isPointMBR) throws HyracksDataException {
+            ILSMComponentFilterFrameFactory filterFrameFactory, LSMComponentFilterManager filterManager, int fieldCount,
+            IBinaryComparatorFactory[] rtreeCmpFactories, IBinaryComparatorFactory[] btreeComparatorFactories,
+            ILinearizeComparatorFactory linearizer, int[] comparatorFields, IBinaryComparatorFactory[] linearizerArray,
+            ILSMMergePolicy mergePolicy, ILSMOperationTracker opTracker, ILSMIOOperationScheduler ioScheduler,
+            ILSMIOOperationCallback ioOpCallback, int[] rtreeFields, int[] filterFields, boolean durable,
+            boolean isPointMBR) throws HyracksDataException {
         super(ioManager, virtualBufferCaches, rtreeInteriorFrameFactory, rtreeLeafFrameFactory,
                 btreeInteriorFrameFactory, btreeLeafFrameFactory, fileManager,
-                new LSMRTreeWithAntiMatterTuplesDiskComponentFactory(diskRTreeFactory, filterHelper),
-                diskFileMapProvider, fieldCount, rtreeCmpFactories, btreeComparatorFactories, linearizer,
-                comparatorFields, linearizerArray, 0, mergePolicy, opTracker, ioScheduler, ioOpCallback, filterHelper,
-                filterFrameFactory, filterManager, rtreeFields, filterFields, durable, isPointMBR,
-                diskRTreeFactory.getBufferCache());
+                new LSMRTreeWithAntiMatterTuplesDiskComponentFactory(diskRTreeFactory, filterHelper), fieldCount,
+                rtreeCmpFactories, btreeComparatorFactories, linearizer, comparatorFields, linearizerArray, 0,
+                mergePolicy, opTracker, ioScheduler, ioOpCallback, filterHelper, filterFrameFactory, filterManager,
+                rtreeFields, filterFields, durable, isPointMBR, diskRTreeFactory.getBufferCache());
         bulkLoaComponentFactory =
                 new LSMRTreeWithAntiMatterTuplesDiskComponentFactory(bulkLoadRTreeFactory, filterHelper);
     }
@@ -108,7 +106,8 @@ public class LSMRTreeWithAntiMatterTuples extends AbstractLSMRTree {
     @Override
     protected void deactivateDiskComponent(ILSMDiskComponent c) throws HyracksDataException {
         RTree rtree = ((LSMRTreeDiskComponent) c).getRTree();
-        rtree.deactivateCloseHandle();
+        rtree.deactivate();
+        rtree.purge();
     }
 
     @Override
@@ -137,7 +136,7 @@ public class LSMRTreeWithAntiMatterTuples extends AbstractLSMRTree {
         memRTreeAccessor.search(rtreeScanCursor, rtreeNullPredicate);
         LSMRTreeDiskComponent component = createDiskComponent(componentFactory, flushOp.getTarget(), null, null, true);
         ILSMDiskComponentBulkLoader componentBulkLoader =
-                createComponentBulkLoader(component, 1.0f, false, 0L, false, false);
+                createComponentBulkLoader(component, 1.0f, false, 0L, false, false, false);
 
         // Since the LSM-RTree is used as a secondary assumption, the
         // primary key will be the last comparator in the BTree comparators
@@ -224,7 +223,7 @@ public class LSMRTreeWithAntiMatterTuples extends AbstractLSMRTree {
         LSMRTreeDiskComponent component = createDiskComponent(componentFactory, mergeOp.getTarget(), null, null, true);
 
         ILSMDiskComponentBulkLoader componentBulkLoader =
-                createComponentBulkLoader(component, 1.0f, false, 0L, false, false);
+                createComponentBulkLoader(component, 1.0f, false, 0L, false, false, false);
         try {
             while (cursor.hasNext()) {
                 cursor.next();
@@ -258,15 +257,16 @@ public class LSMRTreeWithAntiMatterTuples extends AbstractLSMRTree {
 
     @Override
     public ILSMDiskComponentBulkLoader createComponentBulkLoader(ILSMDiskComponent component, float fillFactor,
-            boolean verifyInput, long numElementsHint, boolean checkIfEmptyIndex, boolean withFilter)
-            throws HyracksDataException {
+            boolean verifyInput, long numElementsHint, boolean checkIfEmptyIndex, boolean withFilter,
+            boolean cleanupEmptyComponent) throws HyracksDataException {
         if (withFilter && filterFields != null) {
             return new LSMRTreeWithAntiMatterTuplesDiskComponentBulkLoader((LSMRTreeDiskComponent) component, null,
-                    fillFactor, verifyInput, numElementsHint, checkIfEmptyIndex, filterManager, treeFields,
-                    filterFields, MultiComparator.create(component.getLSMComponentFilter().getFilterCmpFactories()));
+                    fillFactor, verifyInput, numElementsHint, checkIfEmptyIndex, cleanupEmptyComponent, filterManager,
+                    treeFields, filterFields,
+                    MultiComparator.create(component.getLSMComponentFilter().getFilterCmpFactories()));
         } else {
             return new LSMRTreeWithAntiMatterTuplesDiskComponentBulkLoader((LSMRTreeDiskComponent) component, null,
-                    fillFactor, verifyInput, numElementsHint, checkIfEmptyIndex);
+                    fillFactor, verifyInput, numElementsHint, checkIfEmptyIndex, cleanupEmptyComponent);
         }
     }
 
@@ -285,7 +285,7 @@ public class LSMRTreeWithAntiMatterTuples extends AbstractLSMRTree {
             component = createBulkLoadTarget();
 
             componentBulkLoader =
-                    createComponentBulkLoader(component, fillFactor, verifyInput, numElementsHint, false, true);
+                    createComponentBulkLoader(component, fillFactor, verifyInput, numElementsHint, false, true, true);
         }
 
         @Override
@@ -310,12 +310,13 @@ public class LSMRTreeWithAntiMatterTuples extends AbstractLSMRTree {
             }
         }
 
-        private ILSMDiskComponent createBulkLoadTarget() throws HyracksDataException {
-            LSMComponentFileReferences relFlushFileRefs = fileManager.getRelFlushFileReference();
-            return createDiskComponent(bulkLoaComponentFactory, relFlushFileRefs.getInsertIndexFileReference(), null,
-                    null, true);
-        }
+    }
 
+    @Override
+    public ILSMDiskComponent createBulkLoadTarget() throws HyracksDataException {
+        LSMComponentFileReferences relFlushFileRefs = fileManager.getRelFlushFileReference();
+        return createDiskComponent(bulkLoaComponentFactory, relFlushFileRefs.getInsertIndexFileReference(), null, null,
+                true);
     }
 
     @Override
@@ -338,7 +339,7 @@ public class LSMRTreeWithAntiMatterTuples extends AbstractLSMRTree {
             ILSMIOOperationCallback callback) throws HyracksDataException {
         ILSMIndexAccessor accessor = new LSMTreeIndexAccessor(getLsmHarness(), opCtx, cursorFactory);
         return new LSMRTreeFlushOperation(accessor, flushingComponent, componentFileRefs.getInsertIndexFileReference(),
-                null, null, callback, fileManager.getBaseDir());
+                null, null, callback, fileManager.getBaseDir().getAbsolutePath());
     }
 
     @Override
@@ -352,6 +353,6 @@ public class LSMRTreeWithAntiMatterTuples extends AbstractLSMRTree {
         ITreeIndexCursor cursor = new LSMRTreeWithAntiMatterTuplesSearchCursor(opCtx, returnDeletedTuples);
         ILSMIndexAccessor accessor = new LSMTreeIndexAccessor(getLsmHarness(), opCtx, cursorFactory);
         return new MergeOperation(accessor, mergeFileRefs.getInsertIndexFileReference(), callback,
-                fileManager.getBaseDir(), mergingComponents, cursor);
+                fileManager.getBaseDir().getAbsolutePath(), mergingComponents, cursor);
     }
 }

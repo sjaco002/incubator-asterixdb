@@ -29,6 +29,7 @@ import java.lang.management.RuntimeMXBean;
 import java.lang.management.ThreadMXBean;
 import java.lang.reflect.Field;
 import java.net.InetSocketAddress;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Hashtable;
 import java.util.List;
@@ -38,6 +39,7 @@ import java.util.TimerTask;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -67,6 +69,7 @@ import org.apache.hyracks.control.common.heartbeat.HeartbeatData;
 import org.apache.hyracks.control.common.heartbeat.HeartbeatSchema;
 import org.apache.hyracks.control.common.ipc.CCNCFunctions;
 import org.apache.hyracks.control.common.ipc.ClusterControllerRemoteProxy;
+import org.apache.hyracks.control.common.ipc.IControllerRemoteProxyIPCEventListener;
 import org.apache.hyracks.control.common.job.profiling.om.JobProfile;
 import org.apache.hyracks.control.common.utils.PidHelper;
 import org.apache.hyracks.control.common.work.FutureValue;
@@ -84,9 +87,11 @@ import org.apache.hyracks.control.nc.resources.memory.MemoryManager;
 import org.apache.hyracks.control.nc.work.BuildJobProfilesWork;
 import org.apache.hyracks.ipc.api.IIPCHandle;
 import org.apache.hyracks.ipc.api.IPCPerformanceCounters;
+import org.apache.hyracks.ipc.exceptions.IPCException;
 import org.apache.hyracks.ipc.impl.IPCSystem;
 import org.apache.hyracks.net.protocols.muxdemux.FullFrameChannelInterfaceFactory;
 import org.apache.hyracks.net.protocols.muxdemux.MuxDemuxPerformanceCounters;
+import org.apache.hyracks.util.ExitUtil;
 import org.kohsuke.args4j.CmdLineException;
 
 public class NodeControllerService implements IControllerService {
@@ -154,7 +159,7 @@ public class NodeControllerService implements IControllerService {
 
     private final MemoryManager memoryManager;
 
-    private boolean shuttedDown = false;
+    private StackTraceElement[] shutdownCallStack;
 
     private IIOCounter ioCounter;
 
@@ -162,27 +167,40 @@ public class NodeControllerService implements IControllerService {
 
     private final ConfigManager configManager;
 
+    private NodeRegistration nodeRegistration;
+
+    private final AtomicLong maxJobId = new AtomicLong(-1);
+
+    static {
+        ExitUtil.init();
+    }
+
     public NodeControllerService(NCConfig config) throws Exception {
         this(config, getApplication(config));
     }
 
     public NodeControllerService(NCConfig config, INCApplication application) throws IOException, CmdLineException {
-        this.ncConfig = config;
-        this.configManager = ncConfig.getConfigManager();
+        ncConfig = config;
+        configManager = ncConfig.getConfigManager();
         if (application == null) {
             throw new IllegalArgumentException("INCApplication cannot be null");
         }
         configManager.processConfig();
         this.application = application;
         id = ncConfig.getNodeId();
-
-        ioManager = new IOManager(IODeviceHandle.getDevices(ncConfig.getIODevices()),
-                application.getFileDeviceResolver());
         if (id == null) {
             throw new HyracksException("id not set");
         }
-
         lccm = new LifeCycleComponentManager();
+        if (LOGGER.isLoggable(Level.INFO)) {
+            LOGGER.info("Setting uncaught exception handler " + getLifeCycleComponentManager());
+        }
+        // Set shutdown hook before so it doesn't have the same uncaught exception handler
+        Runtime.getRuntime().addShutdownHook(new NCShutdownHook(this));
+        Thread.currentThread().setUncaughtExceptionHandler(getLifeCycleComponentManager());
+        ioManager =
+                new IOManager(IODeviceHandle.getDevices(ncConfig.getIODevices()), application.getFileDeviceResolver());
+
         workQueue = new WorkQueue(id, Thread.NORM_PRIORITY); // Reserves MAX_PRIORITY of the heartbeat thread.
         jobletMap = new Hashtable<>();
         preDistributedJobActivityClusterGraphMap = new Hashtable<>();
@@ -194,7 +212,6 @@ public class NodeControllerService implements IControllerService {
         threadMXBean = ManagementFactory.getThreadMXBean();
         runtimeMXBean = ManagementFactory.getRuntimeMXBean();
         osMXBean = ManagementFactory.getOperatingSystemMXBean();
-        registrationPending = true;
         getNodeControllerInfosAcceptor = new MutableObject<>();
         memoryManager = new MemoryManager((long) (memoryMXBean.getHeapMemoryUsage().getMax() * MEMORY_FUDGE_FACTOR));
         ioCounter = new IOCounterFactory().getIOCounter();
@@ -261,59 +278,35 @@ public class NodeControllerService implements IControllerService {
     @Override
     public void start() throws Exception {
         LOGGER.log(Level.INFO, "Starting NodeControllerService");
-        if (LOGGER.isLoggable(Level.INFO)) {
-            LOGGER.info("Setting uncaught exception handler " + getLifeCycleComponentManager());
-        }
-        Thread.currentThread().setUncaughtExceptionHandler(getLifeCycleComponentManager());
-        Runtime.getRuntime().addShutdownHook(new NCShutdownHook(this));
         ipc = new IPCSystem(new InetSocketAddress(ncConfig.getClusterListenAddress(), ncConfig.getClusterListenPort()),
                 new NodeControllerIPCI(this), new CCNCFunctions.SerializerDeserializer());
         ipc.start();
         partitionManager = new PartitionManager(this);
         netManager = new NetworkManager(ncConfig.getDataListenAddress(), ncConfig.getDataListenPort(), partitionManager,
                 ncConfig.getNetThreadCount(), ncConfig.getNetBufferCount(), ncConfig.getDataPublicAddress(),
-                ncConfig.getDataPublicPort(),
-                FullFrameChannelInterfaceFactory.INSTANCE);
+                ncConfig.getDataPublicPort(), FullFrameChannelInterfaceFactory.INSTANCE);
         netManager.start();
-
         startApplication();
         init();
-
         datasetNetworkManager.start();
         if (messagingNetManager != null) {
             messagingNetManager.start();
         }
-        IIPCHandle ccIPCHandle = ipc.getHandle(
+        this.ccs = new ClusterControllerRemoteProxy(ipc,
                 new InetSocketAddress(ncConfig.getClusterAddress(), ncConfig.getClusterPort()),
-                ncConfig.getClusterConnectRetries());
-        this.ccs = new ClusterControllerRemoteProxy(ccIPCHandle);
-        HeartbeatSchema.GarbageCollectorInfo[] gcInfos = new HeartbeatSchema.GarbageCollectorInfo[gcMXBeans.size()];
-        for (int i = 0; i < gcInfos.length; ++i) {
-            gcInfos[i] = new HeartbeatSchema.GarbageCollectorInfo(gcMXBeans.get(i).getName());
-        }
-        HeartbeatSchema hbSchema = new HeartbeatSchema(gcInfos);
-        // Use "public" versions of network addresses and ports
-        NetworkAddress datasetAddress = datasetNetworkManager.getPublicNetworkAddress();
-        NetworkAddress netAddress = netManager.getPublicNetworkAddress();
-        NetworkAddress meesagingPort = messagingNetManager != null ? messagingNetManager.getPublicNetworkAddress()
-                : null;
-        int allCores = osMXBean.getAvailableProcessors();
-        ccs.registerNode(new NodeRegistration(ipc.getSocketAddress(), id, ncConfig, netAddress, datasetAddress,
-                osMXBean.getName(), osMXBean.getArch(), osMXBean.getVersion(), allCores,
-                runtimeMXBean.getVmName(), runtimeMXBean.getVmVersion(), runtimeMXBean.getVmVendor(),
-                runtimeMXBean.getClassPath(), runtimeMXBean.getLibraryPath(), runtimeMXBean.getBootClassPath(),
-                runtimeMXBean.getInputArguments(), runtimeMXBean.getSystemProperties(), hbSchema, meesagingPort,
-                application.getCapacity(), PidHelper.getPid()));
-
-        synchronized (this) {
-            while (registrationPending) {
-                wait();
-            }
-        }
-        if (registrationException != null) {
-            throw registrationException;
-        }
-        serviceCtx.setDistributedState(nodeParameters.getDistributedState());
+                ncConfig.getClusterConnectRetries(), new IControllerRemoteProxyIPCEventListener() {
+                    @Override
+                    public void ipcHandleRestored(IIPCHandle handle) throws IPCException {
+                        // we need to re-register in case of NC -> CC connection reset
+                        try {
+                            registerNode();
+                        } catch (Exception e) {
+                            LOGGER.log(Level.WARNING, "Failed Registering with cc", e);
+                            throw new IPCException(e);
+                        }
+                    }
+                });
+        registerNode();
 
         workQueue.start();
 
@@ -336,15 +329,58 @@ public class NodeControllerService implements IControllerService {
         application.startupCompleted();
     }
 
+    public void registerNode() throws Exception {
+        LOGGER.info("Registering with Cluster Controller");
+        registrationPending = true;
+        HeartbeatSchema.GarbageCollectorInfo[] gcInfos = new HeartbeatSchema.GarbageCollectorInfo[gcMXBeans.size()];
+        for (int i = 0; i < gcInfos.length; ++i) {
+            gcInfos[i] = new HeartbeatSchema.GarbageCollectorInfo(gcMXBeans.get(i).getName());
+        }
+        HeartbeatSchema hbSchema = new HeartbeatSchema(gcInfos);
+        // Use "public" versions of network addresses and ports
+        NetworkAddress datasetAddress = datasetNetworkManager.getPublicNetworkAddress();
+        NetworkAddress netAddress = netManager.getPublicNetworkAddress();
+        NetworkAddress meesagingPort =
+                messagingNetManager != null ? messagingNetManager.getPublicNetworkAddress() : null;
+        int allCores = osMXBean.getAvailableProcessors();
+        nodeRegistration = new NodeRegistration(ipc.getSocketAddress(), id, ncConfig, netAddress, datasetAddress,
+                osMXBean.getName(), osMXBean.getArch(), osMXBean.getVersion(), allCores, runtimeMXBean.getVmName(),
+                runtimeMXBean.getVmVersion(), runtimeMXBean.getVmVendor(), runtimeMXBean.getClassPath(),
+                runtimeMXBean.getLibraryPath(), runtimeMXBean.getBootClassPath(), runtimeMXBean.getInputArguments(),
+                runtimeMXBean.getSystemProperties(), hbSchema, meesagingPort, application.getCapacity(),
+                PidHelper.getPid(), maxJobId.get());
+
+        ccs.registerNode(nodeRegistration);
+
+        synchronized (this) {
+            while (registrationPending) {
+                wait();
+            }
+        }
+        if (registrationException != null) {
+            LOGGER.log(Level.WARNING, "Registering with Cluster Controller failed with exception",
+                    registrationException);
+            throw registrationException;
+        }
+        serviceCtx.setDistributedState(nodeParameters.getDistributedState());
+        application.onRegisterNode();
+        LOGGER.info("Registering with Cluster Controller complete");
+    }
+
     private void startApplication() throws Exception {
         serviceCtx = new NCServiceContext(this, serverCtx, ioManager, id, memoryManager, lccm, ncConfig.getAppConfig());
         application.start(serviceCtx, ncConfig.getAppArgsArray());
         executor = Executors.newCachedThreadPool(serviceCtx.getThreadFactory());
     }
 
+    public void updateMaxJobId(JobId jobId) {
+        maxJobId.getAndUpdate(currentMaxId -> Math.max(currentMaxId, jobId.getId()));
+    }
+
     @Override
     public synchronized void stop() throws Exception {
-        if (!shuttedDown) {
+        if (shutdownCallStack == null) {
+            shutdownCallStack = new Throwable().getStackTrace();
             LOGGER.log(Level.INFO, "Stopping NodeControllerService");
             application.preStop();
             executor.shutdownNow();
@@ -366,7 +402,9 @@ public class NodeControllerService implements IControllerService {
              */
             heartbeatTask.cancel();
             LOGGER.log(Level.INFO, "Stopped NodeControllerService");
-            shuttedDown = true;
+        } else {
+            LOGGER.log(Level.SEVERE, "Duplicate shutdown call; original: " + Arrays.toString(shutdownCallStack),
+                    new Exception("Duplicate shutdown call"));
         }
     }
 
@@ -559,12 +597,12 @@ public class NodeControllerService implements IControllerService {
 
     private static INCApplication getApplication(NCConfig config)
             throws ClassNotFoundException, IllegalAccessException, InstantiationException {
-            if (config.getAppClass() != null) {
-                Class<?> c = Class.forName(config.getAppClass());
-                return (INCApplication) c.newInstance();
-            } else {
-                return BaseNCApplication.INSTANCE;
-            }
+        if (config.getAppClass() != null) {
+            Class<?> c = Class.forName(config.getAppClass());
+            return (INCApplication) c.newInstance();
+        } else {
+            return BaseNCApplication.INSTANCE;
+        }
     }
 
     @Override

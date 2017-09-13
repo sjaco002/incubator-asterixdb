@@ -54,8 +54,9 @@ public class RegisterNodeWork extends SynchronizableWork {
         CCNCFunctions.NodeRegistrationResult result;
         Map<IOption, Object> ncConfiguration = new HashMap<>();
         try {
-            INodeController nodeController = new NodeControllerRemoteProxy(ncIPCHandle);
-            NodeControllerState state = new NodeControllerState(nodeController, reg);
+            LOGGER.log(Level.WARNING, "Registering INodeController: id = " + id);
+            INodeController nc = new NodeControllerRemoteProxy(ccs.getClusterIPC(), reg.getNodeControllerAddress());
+            NodeControllerState state = new NodeControllerState(nc, reg);
             INodeManager nodeManager = ccs.getNodeManager();
             nodeManager.addNode(id, state);
             IApplicationConfig cfg = state.getNCConfig().getConfigManager().getNodeEffectiveConfig(id);
@@ -69,10 +70,14 @@ public class RegisterNodeWork extends SynchronizableWork {
             params.setHeartbeatPeriod(ccs.getCCConfig().getHeartbeatPeriod());
             params.setProfileDumpPeriod(ccs.getCCConfig().getProfileDumpPeriod());
             result = new CCNCFunctions.NodeRegistrationResult(params, null);
+            ccs.getJobIdFactory().ensureMinimumId(reg.getMaxJobId() + 1);
         } catch (Exception e) {
+            LOGGER.log(Level.WARNING, "Node registration failed", e);
             result = new CCNCFunctions.NodeRegistrationResult(null, e);
         }
+        LOGGER.warning("sending registration response to node");
         ncIPCHandle.send(-1, result, null);
+        LOGGER.warning("notifying node join");
         ccs.getContext().notifyNodeJoin(id, ncConfiguration);
     }
 }

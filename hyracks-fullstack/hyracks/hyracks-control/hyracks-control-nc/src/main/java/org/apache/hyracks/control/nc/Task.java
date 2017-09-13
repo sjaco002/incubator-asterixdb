@@ -18,17 +18,21 @@
  */
 package org.apache.hyracks.control.nc;
 
+import static org.apache.hyracks.api.exceptions.ErrorCode.TASK_ABORTED;
+
 import java.io.Serializable;
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Hashtable;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Semaphore;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 import org.apache.hyracks.api.comm.IFrameReader;
 import org.apache.hyracks.api.comm.IFrameWriter;
@@ -48,6 +52,7 @@ import org.apache.hyracks.api.io.FileReference;
 import org.apache.hyracks.api.io.IIOManager;
 import org.apache.hyracks.api.io.IWorkspaceFileFactory;
 import org.apache.hyracks.api.job.IOperatorEnvironment;
+import org.apache.hyracks.api.job.JobFlag;
 import org.apache.hyracks.api.job.profiling.counters.ICounter;
 import org.apache.hyracks.api.job.profiling.counters.ICounterContext;
 import org.apache.hyracks.api.partitions.PartitionId;
@@ -64,6 +69,8 @@ import org.apache.hyracks.control.nc.work.NotifyTaskCompleteWork;
 import org.apache.hyracks.control.nc.work.NotifyTaskFailureWork;
 
 public class Task implements IHyracksTaskContext, ICounterContext, Runnable {
+    private static final Logger LOGGER = Logger.getLogger(Task.class.getName());
+
     private final Joblet joblet;
 
     private final TaskAttemptId taskAttemptId;
@@ -98,9 +105,13 @@ public class Task implements IHyracksTaskContext, ICounterContext, Runnable {
 
     private Object sharedObject;
 
-    public Task(Joblet joblet, TaskAttemptId taskId, String displayName, ExecutorService executor,
-            NodeControllerService ncs, List<List<PartitionChannel>> inputChannelsFromConnectors) {
+    private final Set<JobFlag> jobFlags;
+
+    public Task(Joblet joblet, Set<JobFlag> jobFlags, TaskAttemptId taskId, String displayName,
+            ExecutorService executor, NodeControllerService ncs,
+            List<List<PartitionChannel>> inputChannelsFromConnectors) {
         this.joblet = joblet;
+        this.jobFlags = jobFlags;
         this.taskAttemptId = taskId;
         this.displayName = displayName;
         this.executorService = executor;
@@ -110,7 +121,7 @@ public class Task implements IHyracksTaskContext, ICounterContext, Runnable {
         opEnv = joblet.getEnvironment();
         partitionSendProfile = new Hashtable<>();
         pendingThreads = new LinkedHashSet<>();
-        exceptions = new ArrayList<>();
+        exceptions = new CopyOnWriteArrayList<>(); // Multiple threads could add exceptions to this list.
         this.ncs = ncs;
         this.inputChannelsFromConnectors = inputChannelsFromConnectors;
     }
@@ -262,13 +273,15 @@ public class Task implements IHyracksTaskContext, ICounterContext, Runnable {
         // Calls synchronized addPendingThread(..) to make sure that in the abort() method,
         // the thread is not escaped from interruption.
         if (!addPendingThread(ct)) {
-            exceptions.add(new InterruptedException("Task " + getTaskAttemptId() + " was aborted!"));
+            exceptions.add(HyracksDataException.create(TASK_ABORTED, getTaskAttemptId()));
             ExceptionUtils.setNodeIds(exceptions, ncs.getId());
-            ncs.getWorkQueue().schedule(new NotifyTaskFailureWork(ncs, this, exceptions));
+            ncs.getWorkQueue()
+                    .schedule(new NotifyTaskFailureWork(ncs, this, exceptions, joblet.getJobId(), taskAttemptId));
             return;
         }
         ct.setName(displayName + ":" + taskAttemptId + ":" + 0);
         try {
+            Exception operatorException = null;
             try {
                 operator.initialize();
                 if (collectors.length > 0) {
@@ -278,29 +291,26 @@ public class Task implements IHyracksTaskContext, ICounterContext, Runnable {
                         final IFrameWriter writer = operator.getInputFrameWriter(i);
                         sem.acquire();
                         final int cIdx = i;
-                        executorService.execute(new Runnable() {
-                            @Override
-                            public void run() {
-                                Thread thread = Thread.currentThread();
-                                // Calls synchronized addPendingThread(..) to make sure that in the abort() method,
-                                // the thread is not escaped from interruption.
-                                if (!addPendingThread(thread)) {
-                                    return;
+                        executorService.execute(() -> {
+                            Thread thread = Thread.currentThread();
+                            // Calls synchronized addPendingThread(..) to make sure that in the abort() method,
+                            // the thread is not escaped from interruption.
+                            if (!addPendingThread(thread)) {
+                                return;
+                            }
+                            String oldName = thread.getName();
+                            thread.setName(displayName + ":" + taskAttemptId + ":" + cIdx);
+                            thread.setPriority(Thread.MIN_PRIORITY);
+                            try {
+                                pushFrames(collector, inputChannelsFromConnectors.get(cIdx), writer);
+                            } catch (HyracksDataException e) {
+                                synchronized (Task.this) {
+                                    exceptions.add(e);
                                 }
-                                String oldName = thread.getName();
-                                thread.setName(displayName + ":" + taskAttemptId + ":" + cIdx);
-                                thread.setPriority(Thread.MIN_PRIORITY);
-                                try {
-                                    pushFrames(collector, inputChannelsFromConnectors.get(cIdx), writer);
-                                } catch (HyracksDataException e) {
-                                    synchronized (Task.this) {
-                                        exceptions.add(e);
-                                    }
-                                } finally {
-                                    thread.setName(oldName);
-                                    sem.release();
-                                    removePendingThread(thread);
-                                }
+                            } finally {
+                                thread.setName(oldName);
+                                sem.release();
+                                removePendingThread(thread);
                             }
                         });
                     }
@@ -310,11 +320,28 @@ public class Task implements IHyracksTaskContext, ICounterContext, Runnable {
                         sem.acquire(collectors.length - 1);
                     }
                 }
+            } catch (Exception e) {
+                // Store the operator exception
+                operatorException = e;
+                throw e;
             } finally {
-                operator.deinitialize();
+                try {
+                    operator.deinitialize();
+                } catch (Exception e) {
+                    if (operatorException != null) {
+                        // Add deinitialize exception to the operator exception to keep track of both
+                        operatorException.addSuppressed(e);
+                    } else {
+                        operatorException = e;
+                    }
+                    throw operatorException;
+                }
             }
             NodeControllerService ncs = joblet.getNodeController();
             ncs.getWorkQueue().schedule(new NotifyTaskCompleteWork(ncs, this));
+        } catch (InterruptedException e) {
+            exceptions.add(e);
+            Thread.currentThread().interrupt();
         } catch (Exception e) {
             exceptions.add(e);
         } finally {
@@ -323,12 +350,18 @@ public class Task implements IHyracksTaskContext, ICounterContext, Runnable {
             removePendingThread(ct);
         }
         if (!exceptions.isEmpty()) {
-            for (Exception e : exceptions) {
-                e.printStackTrace();
+            if (LOGGER.isLoggable(Level.WARNING)) {
+                for (int i = 0; i < exceptions.size(); i++) {
+                    LOGGER.log(Level.WARNING,
+                            "Task " + taskAttemptId + " failed with exception"
+                                    + (exceptions.size() > 1 ? "s (" + (i + 1) + "/" + exceptions.size() + ")" : ""),
+                            exceptions.get(i));
+                }
             }
             NodeControllerService ncs = joblet.getNodeController();
             ExceptionUtils.setNodeIds(exceptions, ncs.getId());
-            ncs.getWorkQueue().schedule(new NotifyTaskFailureWork(ncs, this, exceptions));
+            ncs.getWorkQueue()
+                    .schedule(new NotifyTaskFailureWork(ncs, this, exceptions, joblet.getJobId(), taskAttemptId));
         }
     }
 
@@ -340,7 +373,7 @@ public class Task implements IHyracksTaskContext, ICounterContext, Runnable {
         try {
             collector.open();
             try {
-                if (inputChannels.size() <= 0) {
+                if (inputChannels.isEmpty()) {
                     joblet.advertisePartitionRequest(taskAttemptId, collector.getRequiredPartitionIds(), collector,
                             PartitionState.STARTED);
                 } else {
@@ -349,8 +382,8 @@ public class Task implements IHyracksTaskContext, ICounterContext, Runnable {
                 IFrameReader reader = collector.getReader();
                 reader.open();
                 try {
-                    writer.open();
                     try {
+                        writer.open();
                         VSizeFrame frame = new VSizeFrame(this);
                         while (reader.nextFrame(frame)) {
                             if (aborted) {
@@ -361,7 +394,11 @@ public class Task implements IHyracksTaskContext, ICounterContext, Runnable {
                             buffer.compact();
                         }
                     } catch (Exception e) {
-                        writer.fail();
+                        try {
+                            writer.fail();
+                        } catch (HyracksDataException e1) {
+                            e.addSuppressed(e1);
+                        }
                         throw e;
                     } finally {
                         writer.close();
@@ -415,5 +452,8 @@ public class Task implements IHyracksTaskContext, ICounterContext, Runnable {
     @Override
     public byte[] getJobParameter(byte[] name, int start, int length) throws HyracksException {
         return ncs.createOrGetJobParameterByteStore(joblet.getJobId()).getParameterValue(name, start, length);
+    }
+    public Set<JobFlag> getJobFlags() {
+        return jobFlags;
     }
 }

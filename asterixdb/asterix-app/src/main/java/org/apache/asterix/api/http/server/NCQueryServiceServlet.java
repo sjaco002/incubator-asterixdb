@@ -19,13 +19,21 @@
 
 package org.apache.asterix.api.http.server;
 
+import java.util.UUID;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.TimeoutException;
+import java.util.logging.Level;
 
 import org.apache.asterix.algebra.base.ILangExtension;
+import org.apache.asterix.app.message.CancelQueryRequest;
 import org.apache.asterix.app.message.ExecuteStatementRequestMessage;
 import org.apache.asterix.app.message.ExecuteStatementResponseMessage;
 import org.apache.asterix.app.result.ResultReader;
+import org.apache.asterix.common.api.Duration;
 import org.apache.asterix.common.api.IApplicationContext;
+import org.apache.asterix.common.config.GlobalConfig;
+import org.apache.asterix.common.exceptions.ErrorCode;
+import org.apache.asterix.common.exceptions.RuntimeDataException;
 import org.apache.asterix.common.messaging.api.INCMessageBroker;
 import org.apache.asterix.common.messaging.api.MessageFuture;
 import org.apache.asterix.om.types.ARecordType;
@@ -35,12 +43,16 @@ import org.apache.commons.lang3.tuple.Triple;
 import org.apache.hyracks.api.application.INCServiceContext;
 import org.apache.hyracks.api.dataset.ResultSetId;
 import org.apache.hyracks.api.job.JobId;
+import org.apache.hyracks.ipc.exceptions.IPCException;
+
+import io.netty.handler.codec.http.HttpResponseStatus;
 
 /**
  * Query service servlet that can run on NC nodes.
  * Delegates query execution to CC, then serves the result.
  */
 public class NCQueryServiceServlet extends QueryServiceServlet {
+
     public NCQueryServiceServlet(ConcurrentMap<String, Object> ctx, String[] paths, IApplicationContext appCtx,
             ILangExtension.Language queryLanguage) {
         super(ctx, paths, appCtx, queryLanguage, null, null, null);
@@ -58,13 +70,28 @@ public class NCQueryServiceServlet extends QueryServiceServlet {
         ExecuteStatementResponseMessage responseMsg;
         MessageFuture responseFuture = ncMb.registerMessageFuture();
         try {
+            if (param.clientContextID == null) {
+                param.clientContextID = UUID.randomUUID().toString();
+            }
+            long timeout = ExecuteStatementRequestMessage.DEFAULT_NC_TIMEOUT_MILLIS;
+            if (param.timeout != null) {
+                timeout = java.util.concurrent.TimeUnit.NANOSECONDS
+                        .toMillis(Duration.parseDurationStringToNanos(param.timeout));
+            }
             ExecuteStatementRequestMessage requestMsg =
                     new ExecuteStatementRequestMessage(ncCtx.getNodeId(), responseFuture.getFutureId(), queryLanguage,
                             statementsText, sessionOutput.config(), ccDelivery, param.clientContextID, handleUrl);
             outExecStartEnd[0] = System.nanoTime();
             ncMb.sendMessageToCC(requestMsg);
-            responseMsg = (ExecuteStatementResponseMessage) responseFuture.get(
-                    ExecuteStatementResponseMessage.DEFAULT_TIMEOUT_MILLIS, java.util.concurrent.TimeUnit.MILLISECONDS);
+            try {
+                responseMsg = (ExecuteStatementResponseMessage) responseFuture.get(timeout,
+                        java.util.concurrent.TimeUnit.MILLISECONDS);
+            } catch (InterruptedException | TimeoutException exception) {
+                RuntimeDataException hde = new RuntimeDataException(ErrorCode.QUERY_TIMEOUT, exception);
+                // cancel query
+                cancelQuery(ncMb, ncCtx.getNodeId(), param.clientContextID, hde);
+                throw hde;
+            }
             outExecStartEnd[1] = System.nanoTime();
         } finally {
             ncMb.deregisterMessageFuture(responseFuture.getFutureId());
@@ -89,6 +116,32 @@ public class NCQueryServiceServlet extends QueryServiceServlet {
             }
         } else {
             sessionOutput.out().append(responseMsg.getResult());
+        }
+    }
+
+    private void cancelQuery(INCMessageBroker messageBroker, String nodeId, String clientContextID,
+            Exception exception) {
+        MessageFuture cancelQueryFuture = messageBroker.registerMessageFuture();
+        try {
+            CancelQueryRequest cancelQueryMessage =
+                    new CancelQueryRequest(nodeId, cancelQueryFuture.getFutureId(), clientContextID);
+            messageBroker.sendMessageToCC(cancelQueryMessage);
+            cancelQueryFuture.get(ExecuteStatementRequestMessage.DEFAULT_QUERY_CANCELLATION_TIMEOUT_MILLIS,
+                    java.util.concurrent.TimeUnit.MILLISECONDS);
+        } catch (Exception e) {
+            exception.addSuppressed(e);
+        } finally {
+            messageBroker.deregisterMessageFuture(cancelQueryFuture.getFutureId());
+        }
+    }
+
+    @Override
+    protected HttpResponseStatus handleExecuteStatementException(Throwable t) {
+        if (t instanceof IPCException || t instanceof TimeoutException) {
+            GlobalConfig.ASTERIX_LOGGER.log(Level.WARNING, t.toString(), t);
+            return HttpResponseStatus.SERVICE_UNAVAILABLE;
+        } else {
+            return super.handleExecuteStatementException(t);
         }
     }
 }

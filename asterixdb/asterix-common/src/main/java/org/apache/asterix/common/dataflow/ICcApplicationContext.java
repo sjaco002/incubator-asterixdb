@@ -19,8 +19,12 @@
 package org.apache.asterix.common.dataflow;
 
 import org.apache.asterix.common.api.IApplicationContext;
+import org.apache.asterix.common.api.IMetadataLockManager;
+import org.apache.asterix.common.cluster.IClusterStateManager;
 import org.apache.asterix.common.cluster.IGlobalRecoveryManager;
 import org.apache.asterix.common.context.IStorageComponentProvider;
+import org.apache.asterix.common.metadata.IMetadataBootstrap;
+import org.apache.asterix.common.replication.IFaultToleranceStrategy;
 import org.apache.asterix.common.transactions.IResourceIdManager;
 import org.apache.hyracks.api.application.ICCServiceContext;
 import org.apache.hyracks.api.client.IHyracksClientConnection;
@@ -57,9 +61,14 @@ public interface ICcApplicationContext extends IApplicationContext {
     IGlobalRecoveryManager getGlobalRecoveryManager();
 
     /**
-     * @return the active lifecycle listener at Cluster controller
+     * @return the fault tolerance strategy in use for the cluster
      */
-    IJobLifecycleListener getActiveLifecycleListener();
+    IFaultToleranceStrategy getFaultToleranceStrategy();
+
+    /**
+     * @return the active notification handler at Cluster controller
+     */
+    IJobLifecycleListener getActiveNotificationHandler();
 
     /**
      * @return a new instance of {@link IHyracksClientConnection}
@@ -84,4 +93,19 @@ public interface ICcApplicationContext extends IApplicationContext {
      * @return the extension manager instance
      */
     Object getExtensionManager();
+
+    /**
+     * @return the metadata lock manager
+     */
+    IMetadataLockManager getMetadataLockManager();
+
+    /**
+     * @return the metadata bootstrap
+     */
+    IMetadataBootstrap getMetadataBootstrap();
+
+    /**
+     * @return the cluster state manager
+     */
+    IClusterStateManager getClusterStateManager();
 }

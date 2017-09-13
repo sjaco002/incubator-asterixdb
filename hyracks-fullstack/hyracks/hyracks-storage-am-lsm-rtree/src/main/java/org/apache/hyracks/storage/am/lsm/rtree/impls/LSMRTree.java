@@ -73,7 +73,6 @@ import org.apache.hyracks.storage.common.IModificationOperationCallback;
 import org.apache.hyracks.storage.common.ISearchOperationCallback;
 import org.apache.hyracks.storage.common.ISearchPredicate;
 import org.apache.hyracks.storage.common.MultiComparator;
-import org.apache.hyracks.storage.common.file.IFileMapProvider;
 
 public class LSMRTree extends AbstractLSMRTree {
     protected final int[] buddyBTreeFields;
@@ -84,19 +83,18 @@ public class LSMRTree extends AbstractLSMRTree {
             ILSMIndexFileManager fileNameManager, TreeIndexFactory<RTree> diskRTreeFactory,
             TreeIndexFactory<BTree> diskBTreeFactory, BloomFilterFactory bloomFilterFactory,
             IComponentFilterHelper filterHelper, ILSMComponentFilterFrameFactory filterFrameFactory,
-            LSMComponentFilterManager filterManager, double bloomFilterFalsePositiveRate,
-            IFileMapProvider diskFileMapProvider, int fieldCount, IBinaryComparatorFactory[] rtreeCmpFactories,
-            IBinaryComparatorFactory[] btreeCmpFactories, ILinearizeComparatorFactory linearizer,
-            int[] comparatorFields, IBinaryComparatorFactory[] linearizerArray, ILSMMergePolicy mergePolicy,
-            ILSMOperationTracker opTracker, ILSMIOOperationScheduler ioScheduler, ILSMIOOperationCallback ioOpCallback,
-            int[] rtreeFields, int[] buddyBTreeFields, int[] filterFields, boolean durable, boolean isPointMBR)
-            throws HyracksDataException {
+            LSMComponentFilterManager filterManager, double bloomFilterFalsePositiveRate, int fieldCount,
+            IBinaryComparatorFactory[] rtreeCmpFactories, IBinaryComparatorFactory[] btreeCmpFactories,
+            ILinearizeComparatorFactory linearizer, int[] comparatorFields, IBinaryComparatorFactory[] linearizerArray,
+            ILSMMergePolicy mergePolicy, ILSMOperationTracker opTracker, ILSMIOOperationScheduler ioScheduler,
+            ILSMIOOperationCallback ioOpCallback, int[] rtreeFields, int[] buddyBTreeFields, int[] filterFields,
+            boolean durable, boolean isPointMBR) throws HyracksDataException {
         super(ioManager, virtualBufferCaches, rtreeInteriorFrameFactory, rtreeLeafFrameFactory,
                 btreeInteriorFrameFactory, btreeLeafFrameFactory, fileNameManager,
                 new LSMRTreeDiskComponentFactory(diskRTreeFactory, diskBTreeFactory, bloomFilterFactory, filterHelper),
-                diskFileMapProvider, fieldCount, rtreeCmpFactories, btreeCmpFactories, linearizer, comparatorFields,
-                linearizerArray, bloomFilterFalsePositiveRate, mergePolicy, opTracker, ioScheduler, ioOpCallback,
-                filterHelper, filterFrameFactory, filterManager, rtreeFields, filterFields, durable, isPointMBR,
+                fieldCount, rtreeCmpFactories, btreeCmpFactories, linearizer, comparatorFields, linearizerArray,
+                bloomFilterFalsePositiveRate, mergePolicy, opTracker, ioScheduler, ioOpCallback, filterHelper,
+                filterFrameFactory, filterManager, rtreeFields, filterFields, durable, isPointMBR,
                 diskRTreeFactory.getBufferCache());
         this.buddyBTreeFields = buddyBTreeFields;
     }
@@ -109,17 +107,16 @@ public class LSMRTree extends AbstractLSMRTree {
             ITreeIndexFrameFactory btreeLeafFrameFactory, ILSMIndexFileManager fileNameManager,
             TreeIndexFactory<RTree> diskRTreeFactory, TreeIndexFactory<BTree> diskBTreeFactory,
             BloomFilterFactory bloomFilterFactory, double bloomFilterFalsePositiveRate,
-            IFileMapProvider diskFileMapProvider, IBinaryComparatorFactory[] rtreeCmpFactories,
-            IBinaryComparatorFactory[] btreeCmpFactories, ILinearizeComparatorFactory linearizer,
-            int[] comparatorFields, IBinaryComparatorFactory[] linearizerArray, ILSMMergePolicy mergePolicy,
-            ILSMOperationTracker opTracker, ILSMIOOperationScheduler ioScheduler, ILSMIOOperationCallback ioOpCallback,
-            int[] buddyBTreeFields, boolean durable, boolean isPointMBR) {
+            IBinaryComparatorFactory[] rtreeCmpFactories, IBinaryComparatorFactory[] btreeCmpFactories,
+            ILinearizeComparatorFactory linearizer, int[] comparatorFields, IBinaryComparatorFactory[] linearizerArray,
+            ILSMMergePolicy mergePolicy, ILSMOperationTracker opTracker, ILSMIOOperationScheduler ioScheduler,
+            ILSMIOOperationCallback ioOpCallback, int[] buddyBTreeFields, boolean durable, boolean isPointMBR) {
         super(ioManager, rtreeInteriorFrameFactory, rtreeLeafFrameFactory, btreeInteriorFrameFactory,
                 btreeLeafFrameFactory, fileNameManager,
                 new LSMRTreeDiskComponentFactory(diskRTreeFactory, diskBTreeFactory, bloomFilterFactory, null),
-                diskFileMapProvider, rtreeCmpFactories, btreeCmpFactories, linearizer, comparatorFields,
-                linearizerArray, bloomFilterFalsePositiveRate, mergePolicy, opTracker, ioScheduler, ioOpCallback,
-                durable, isPointMBR, diskRTreeFactory.getBufferCache());
+                rtreeCmpFactories, btreeCmpFactories, linearizer, comparatorFields, linearizerArray,
+                bloomFilterFalsePositiveRate, mergePolicy, opTracker, ioScheduler, ioOpCallback, durable, isPointMBR,
+                diskRTreeFactory.getBufferCache());
         this.buddyBTreeFields = buddyBTreeFields;
     }
 
@@ -137,9 +134,12 @@ public class LSMRTree extends AbstractLSMRTree {
         RTree rtree = component.getRTree();
         BTree btree = component.getBTree();
         BloomFilter bloomFilter = component.getBloomFilter();
-        rtree.deactivateCloseHandle();
-        btree.deactivateCloseHandle();
+        rtree.deactivate();
+        btree.deactivate();
         bloomFilter.deactivate();
+        rtree.purge();
+        btree.purge();
+        bloomFilter.purge();
     }
 
     @Override
@@ -197,7 +197,7 @@ public class LSMRTree extends AbstractLSMRTree {
         }
 
         ILSMDiskComponentBulkLoader componentBulkLoader =
-                createComponentBulkLoader(component, 1.0f, false, numBTreeTuples, false, false);
+                createComponentBulkLoader(component, 1.0f, false, numBTreeTuples, false, false, false);
 
         ITreeIndexCursor cursor;
         IBinaryComparatorFactory[] linearizerArray = { linearizer };
@@ -286,7 +286,8 @@ public class LSMRTree extends AbstractLSMRTree {
                 numElements += ((LSMRTreeDiskComponent) mergeOp.getMergingComponents().get(i)).getBloomFilter()
                         .getNumElements();
             }
-            componentBulkLoader = createComponentBulkLoader(mergedComponent, 1.0f, false, numElements, false, false);
+            componentBulkLoader =
+                    createComponentBulkLoader(mergedComponent, 1.0f, false, numElements, false, false, false);
 
             LSMRTreeDeletedKeysBTreeMergeCursor btreeCursor = new LSMRTreeDeletedKeysBTreeMergeCursor(opCtx);
             search(opCtx, btreeCursor, rtreeSearchPred);
@@ -301,7 +302,7 @@ public class LSMRTree extends AbstractLSMRTree {
             }
         } else {
             //no buddy-btree needed
-            componentBulkLoader = createComponentBulkLoader(mergedComponent, 1.0f, false, 0L, false, false);
+            componentBulkLoader = createComponentBulkLoader(mergedComponent, 1.0f, false, 0L, false, false, false);
         }
 
         //search old rtree components
@@ -337,7 +338,8 @@ public class LSMRTree extends AbstractLSMRTree {
                 buddyBTreeFields);
     }
 
-    protected ILSMDiskComponent createBulkLoadTarget() throws HyracksDataException {
+    @Override
+    public ILSMDiskComponent createBulkLoadTarget() throws HyracksDataException {
         LSMComponentFileReferences componentFileRefs = fileManager.getRelFlushFileReference();
         return createDiskComponent(componentFactory, componentFileRefs.getInsertIndexFileReference(),
                 componentFileRefs.getDeleteIndexFileReference(), componentFileRefs.getBloomFilterFileReference(), true);
@@ -345,8 +347,8 @@ public class LSMRTree extends AbstractLSMRTree {
 
     @Override
     public ILSMDiskComponentBulkLoader createComponentBulkLoader(ILSMDiskComponent component, float fillFactor,
-            boolean verifyInput, long numElementsHint, boolean checkIfEmptyIndex, boolean withFilter)
-            throws HyracksDataException {
+            boolean verifyInput, long numElementsHint, boolean checkIfEmptyIndex, boolean withFilter,
+            boolean cleanupEmptyComponent) throws HyracksDataException {
         BloomFilterSpecification bloomFilterSpec = null;
         if (numElementsHint > 0) {
             int maxBucketsPerElement = BloomCalculations.maxBucketsPerElement(numElementsHint);
@@ -354,11 +356,11 @@ public class LSMRTree extends AbstractLSMRTree {
         }
         if (withFilter && filterFields != null) {
             return new LSMRTreeDiskComponentBulkLoader((LSMRTreeDiskComponent) component, bloomFilterSpec, fillFactor,
-                    verifyInput, numElementsHint, checkIfEmptyIndex, filterManager, treeFields, filterFields,
-                    MultiComparator.create(component.getLSMComponentFilter().getFilterCmpFactories()));
+                    verifyInput, numElementsHint, checkIfEmptyIndex, cleanupEmptyComponent, filterManager, treeFields,
+                    filterFields, MultiComparator.create(component.getLSMComponentFilter().getFilterCmpFactories()));
         } else {
             return new LSMRTreeDiskComponentBulkLoader((LSMRTreeDiskComponent) component, bloomFilterSpec, fillFactor,
-                    verifyInput, numElementsHint, checkIfEmptyIndex);
+                    verifyInput, numElementsHint, checkIfEmptyIndex, cleanupEmptyComponent);
         }
     }
 
@@ -380,6 +382,7 @@ public class LSMRTree extends AbstractLSMRTree {
         if (ctx.getIndexTuple() != null) {
             ctx.getIndexTuple().reset(tuple);
             indexTuple = ctx.getIndexTuple();
+            ctx.getCurrentMutableRTreeAccessor().getOpContext().resetNonIndexFieldsTuple(tuple);
         } else {
             indexTuple = tuple;
         }
@@ -429,7 +432,7 @@ public class LSMRTree extends AbstractLSMRTree {
         LSMRTreeAccessor accessor = new LSMRTreeAccessor(getLsmHarness(), opCtx, buddyBTreeFields);
         return new LSMRTreeFlushOperation(accessor, flushingComponent, componentFileRefs.getInsertIndexFileReference(),
                 componentFileRefs.getDeleteIndexFileReference(), componentFileRefs.getBloomFilterFileReference(),
-                callback, fileManager.getBaseDir());
+                callback, fileManager.getBaseDir().getAbsolutePath());
     }
 
     @Override
@@ -440,6 +443,6 @@ public class LSMRTree extends AbstractLSMRTree {
         ILSMIndexAccessor accessor = new LSMRTreeAccessor(getLsmHarness(), opCtx, buddyBTreeFields);
         return new LSMRTreeMergeOperation(accessor, mergingComponents, cursor,
                 mergeFileRefs.getInsertIndexFileReference(), mergeFileRefs.getDeleteIndexFileReference(),
-                mergeFileRefs.getBloomFilterFileReference(), callback, fileManager.getBaseDir());
+                mergeFileRefs.getBloomFilterFileReference(), callback, fileManager.getBaseDir().getAbsolutePath());
     }
 }

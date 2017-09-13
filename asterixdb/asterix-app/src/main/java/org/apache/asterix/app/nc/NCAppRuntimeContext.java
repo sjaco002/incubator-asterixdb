@@ -24,6 +24,8 @@ import java.rmi.server.UnicastRemoteObject;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -31,7 +33,6 @@ import org.apache.asterix.active.ActiveManager;
 import org.apache.asterix.api.common.AppRuntimeContextProviderForRecovery;
 import org.apache.asterix.common.api.IDatasetLifecycleManager;
 import org.apache.asterix.common.api.INcApplicationContext;
-import org.apache.asterix.common.api.ThreadExecutor;
 import org.apache.asterix.common.cluster.ClusterPartition;
 import org.apache.asterix.common.config.ActiveProperties;
 import org.apache.asterix.common.config.AsterixExtension;
@@ -47,7 +48,6 @@ import org.apache.asterix.common.config.ReplicationProperties;
 import org.apache.asterix.common.config.StorageProperties;
 import org.apache.asterix.common.config.TransactionProperties;
 import org.apache.asterix.common.context.DatasetLifecycleManager;
-import org.apache.asterix.common.context.FileMapManager;
 import org.apache.asterix.common.context.IStorageComponentProvider;
 import org.apache.asterix.common.exceptions.ACIDException;
 import org.apache.asterix.common.exceptions.AsterixException;
@@ -94,8 +94,7 @@ import org.apache.hyracks.storage.common.buffercache.IBufferCache;
 import org.apache.hyracks.storage.common.buffercache.ICacheMemoryAllocator;
 import org.apache.hyracks.storage.common.buffercache.IPageCleanerPolicy;
 import org.apache.hyracks.storage.common.buffercache.IPageReplacementStrategy;
-import org.apache.hyracks.storage.common.file.IFileMapManager;
-import org.apache.hyracks.storage.common.file.IFileMapProvider;
+import org.apache.hyracks.storage.common.file.FileMapManager;
 import org.apache.hyracks.storage.common.file.ILocalResourceRepositoryFactory;
 import org.apache.hyracks.storage.common.file.IResourceIdFactory;
 
@@ -115,11 +114,11 @@ public class NCAppRuntimeContext implements INcApplicationContext {
     private ReplicationProperties replicationProperties;
     private MessagingProperties messagingProperties;
     private final NodeProperties nodeProperties;
-    private ThreadExecutor threadExecutor;
+    private ExecutorService threadExecutor;
     private IDatasetLifecycleManager datasetLifecycleManager;
-    private IFileMapManager fileMapManager;
     private IBufferCache bufferCache;
     private ITransactionSubsystem txnSubsystem;
+    private IMetadataNode metadataNodeStub;
 
     private ILSMIOOperationScheduler lsmIOScheduler;
     private PersistentLocalResourceRepository localResourceRepository;
@@ -132,7 +131,6 @@ public class NCAppRuntimeContext implements INcApplicationContext {
     private IReplicationManager replicationManager;
     private IRemoteRecoveryManager remoteRecoveryManager;
     private IReplicaResourcesManager replicaResourcesManager;
-
     private final ILibraryManager libraryManager;
     private final NCExtensionManager ncExtensionManager;
     private final IStorageComponentProvider componentProvider;
@@ -166,8 +164,7 @@ public class NCAppRuntimeContext implements INcApplicationContext {
     @Override
     public void initialize(boolean initialRun) throws IOException, ACIDException {
         ioManager = getServiceContext().getIoManager();
-        threadExecutor = new ThreadExecutor(getServiceContext().getThreadFactory());
-        fileMapManager = new FileMapManager(ioManager);
+        threadExecutor = Executors.newCachedThreadPool(getServiceContext().getThreadFactory());
         ICacheMemoryAllocator allocator = new HeapBufferAllocator();
         IPageCleanerPolicy pcp = new DelayPageCleanerPolicy(600000);
         IPageReplacementStrategy prs = new ClockPageReplacementStrategy(allocator,
@@ -203,7 +200,8 @@ public class NCAppRuntimeContext implements INcApplicationContext {
         isShuttingdown = false;
 
         activeManager = new ActiveManager(threadExecutor, getServiceContext().getNodeId(),
-                activeProperties.getMemoryComponentGlobalBudget(), compilerProperties.getFrameSize());
+                activeProperties.getMemoryComponentGlobalBudget(), compilerProperties.getFrameSize(),
+                this.ncServiceContext);
 
         if (replicationProperties.isParticipant(getServiceContext().getNodeId())) {
             String nodeId = getServiceContext().getNodeId();
@@ -235,16 +233,15 @@ public class NCAppRuntimeContext implements INcApplicationContext {
 
             //initialize replication channel
             replicationChannel = new ReplicationChannel(nodeId, replicationProperties, txnSubsystem.getLogManager(),
-                    replicaResourcesManager, replicationManager, getServiceContext(),
-                    asterixAppRuntimeContextProvider);
+                    replicaResourcesManager, replicationManager, getServiceContext(), asterixAppRuntimeContextProvider);
 
             remoteRecoveryManager = new RemoteRecoveryManager(replicationManager, this, replicationProperties);
 
-            bufferCache = new BufferCache(ioManager, prs, pcp, fileMapManager,
+            bufferCache = new BufferCache(ioManager, prs, pcp, new FileMapManager(),
                     storageProperties.getBufferCacheMaxOpenFiles(), getServiceContext().getThreadFactory(),
                     replicationManager);
         } else {
-            bufferCache = new BufferCache(ioManager, prs, pcp, fileMapManager,
+            bufferCache = new BufferCache(ioManager, prs, pcp, new FileMapManager(),
                     storageProperties.getBufferCacheMaxOpenFiles(), getServiceContext().getThreadFactory());
         }
 
@@ -298,11 +295,6 @@ public class NCAppRuntimeContext implements INcApplicationContext {
     @Override
     public IBufferCache getBufferCache() {
         return bufferCache;
-    }
-
-    @Override
-    public IFileMapProvider getFileMapManager() {
-        return fileMapManager;
     }
 
     @Override
@@ -391,7 +383,7 @@ public class NCAppRuntimeContext implements INcApplicationContext {
     }
 
     @Override
-    public ThreadExecutor getThreadExecutor() {
+    public ExecutorService getThreadExecutor() {
         return threadExecutor;
     }
 
@@ -464,9 +456,11 @@ public class NCAppRuntimeContext implements INcApplicationContext {
 
     @Override
     public void exportMetadataNodeStub() throws RemoteException {
-        IMetadataNode stub = (IMetadataNode) UnicastRemoteObject.exportObject(MetadataNode.INSTANCE,
-                getMetadataProperties().getMetadataPort());
-        ((IAsterixStateProxy) getServiceContext().getDistributedState()).setMetadataNode(stub);
+        if (metadataNodeStub == null) {
+            metadataNodeStub = (IMetadataNode) UnicastRemoteObject.exportObject(MetadataNode.INSTANCE,
+                    getMetadataProperties().getMetadataPort());
+        }
+        ((IAsterixStateProxy) getServiceContext().getDistributedState()).setMetadataNode(metadataNodeStub);
     }
 
     @Override

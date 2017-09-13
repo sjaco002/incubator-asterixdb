@@ -18,7 +18,8 @@
  */
 package org.apache.asterix.api.http.server;
 
-import static org.apache.asterix.api.http.servlet.ServletConstants.HYRACKS_CONNECTION_ATTR;
+import static org.apache.asterix.api.http.server.ServletConstants.HYRACKS_CONNECTION_ATTR;
+import static org.apache.asterix.common.api.IClusterManagementWork.ClusterState.SHUTTING_DOWN;
 
 import java.io.IOException;
 import java.io.PrintWriter;
@@ -27,8 +28,9 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+import org.apache.asterix.common.cluster.IClusterStateManager;
 import org.apache.asterix.common.config.GlobalConfig;
-import org.apache.asterix.runtime.utils.ClusterStateManager;
+import org.apache.asterix.common.dataflow.ICcApplicationContext;
 import org.apache.hyracks.api.client.IHyracksClientConnection;
 import org.apache.hyracks.http.api.IServletRequest;
 import org.apache.hyracks.http.api.IServletResponse;
@@ -48,14 +50,17 @@ public class ShutdownApiServlet extends AbstractServlet {
     public static final String NCSERVICE_PID = "ncservice_pid";
     public static final String INI = "ini";
     public static final String PID = "pid";
+    private final ICcApplicationContext appCtx;
 
-    public ShutdownApiServlet(ConcurrentMap<String, Object> ctx, String[] paths) {
+    public ShutdownApiServlet(ICcApplicationContext appCtx, ConcurrentMap<String, Object> ctx, String[] paths) {
         super(ctx, paths);
+        this.appCtx = appCtx;
     }
 
     @Override
     protected void post(IServletRequest request, IServletResponse response) {
         IHyracksClientConnection hcc = (IHyracksClientConnection) ctx.get(HYRACKS_CONNECTION_ATTR);
+        IClusterStateManager csm = appCtx.getClusterStateManager();
         boolean terminateNCServices = "true".equalsIgnoreCase(request.getParameter("all"));
         Thread t = new Thread(() -> {
             try {
@@ -78,7 +83,7 @@ public class ShutdownApiServlet extends AbstractServlet {
         try {
             jsonObject.put("status", "SHUTTING_DOWN");
             jsonObject.put("date", new Date().toString());
-            ObjectNode clusterState = ClusterStateManager.INSTANCE.getClusterStateDescription();
+            ObjectNode clusterState = csm.getClusterStateDescription();
             ArrayNode ncs = (ArrayNode) clusterState.get("ncs");
             for (int i = 0; i < ncs.size(); i++) {
                 ObjectNode nc = (ObjectNode) ncs.get(i);
@@ -92,6 +97,8 @@ public class ShutdownApiServlet extends AbstractServlet {
             jsonObject.set("cluster", clusterState);
             final PrintWriter writer = response.writer();
             writer.print(JSONUtil.convertNode(jsonObject));
+            // accept no further queries once this servlet returns
+            csm.setState(SHUTTING_DOWN);
             writer.close();
         } catch (Exception e) {
             GlobalConfig.ASTERIX_LOGGER.log(Level.INFO, "Exception writing response", e);

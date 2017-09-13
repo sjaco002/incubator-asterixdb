@@ -28,6 +28,7 @@ import java.rmi.RemoteException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
+import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedHashSet;
@@ -40,19 +41,22 @@ import java.util.concurrent.ExecutorService;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-import org.apache.asterix.active.ActiveJobNotificationHandler;
-import org.apache.asterix.active.ActiveLifecycleListener;
 import org.apache.asterix.active.ActivityState;
 import org.apache.asterix.active.EntityId;
 import org.apache.asterix.active.IActiveEntityEventsListener;
-import org.apache.asterix.active.IActiveEventSubscriber;
+import org.apache.asterix.active.NoRetryPolicyFactory;
 import org.apache.asterix.algebra.extension.IExtensionStatement;
 import org.apache.asterix.api.common.APIFramework;
 import org.apache.asterix.api.http.server.AbstractQueryApiServlet;
 import org.apache.asterix.api.http.server.ApiServlet;
 import org.apache.asterix.api.http.server.ResultUtil;
+import org.apache.asterix.app.active.ActiveEntityEventsListener;
+import org.apache.asterix.app.active.ActiveNotificationHandler;
+import org.apache.asterix.app.active.FeedEventsListener;
 import org.apache.asterix.app.result.ResultHandle;
 import org.apache.asterix.app.result.ResultReader;
+import org.apache.asterix.common.api.IMetadataLockManager;
+import org.apache.asterix.common.cluster.IClusterStateManager;
 import org.apache.asterix.common.config.ClusterProperties;
 import org.apache.asterix.common.config.DatasetConfig.DatasetType;
 import org.apache.asterix.common.config.DatasetConfig.ExternalFilePendingOp;
@@ -60,30 +64,27 @@ import org.apache.asterix.common.config.DatasetConfig.IndexType;
 import org.apache.asterix.common.config.DatasetConfig.TransactionState;
 import org.apache.asterix.common.config.ExternalProperties;
 import org.apache.asterix.common.config.GlobalConfig;
-import org.apache.asterix.common.context.IStorageComponentProvider;
 import org.apache.asterix.common.dataflow.ICcApplicationContext;
 import org.apache.asterix.common.exceptions.ACIDException;
 import org.apache.asterix.common.exceptions.AsterixException;
 import org.apache.asterix.common.exceptions.CompilationException;
 import org.apache.asterix.common.exceptions.ErrorCode;
+import org.apache.asterix.common.exceptions.MetadataException;
 import org.apache.asterix.common.functions.FunctionSignature;
-import org.apache.asterix.common.metadata.IDataset;
 import org.apache.asterix.common.utils.JobUtils;
 import org.apache.asterix.common.utils.JobUtils.ProgressState;
-import org.apache.asterix.compiler.provider.AqlCompilationProvider;
 import org.apache.asterix.compiler.provider.ILangCompilationProvider;
 import org.apache.asterix.external.feed.management.FeedConnectionId;
-import org.apache.asterix.external.feed.management.FeedEventsListener;
 import org.apache.asterix.external.indexing.ExternalFile;
 import org.apache.asterix.external.indexing.IndexingConstants;
+import org.apache.asterix.external.operators.FeedIntakeOperatorNodePushable;
 import org.apache.asterix.external.util.ExternalDataConstants;
-import org.apache.asterix.file.StorageComponentProvider;
 import org.apache.asterix.formats.nontagged.TypeTraitProvider;
 import org.apache.asterix.lang.common.base.IReturningStatement;
 import org.apache.asterix.lang.common.base.IRewriterFactory;
 import org.apache.asterix.lang.common.base.IStatementRewriter;
 import org.apache.asterix.lang.common.base.Statement;
-import org.apache.asterix.lang.common.expression.TypeExpression;
+import org.apache.asterix.lang.common.expression.IndexedTypeExpression;
 import org.apache.asterix.lang.common.statement.CompactStatement;
 import org.apache.asterix.lang.common.statement.ConnectFeedStatement;
 import org.apache.asterix.lang.common.statement.CreateDataverseStatement;
@@ -120,7 +121,6 @@ import org.apache.asterix.lang.common.statement.TypeDropStatement;
 import org.apache.asterix.lang.common.statement.WriteStatement;
 import org.apache.asterix.lang.common.struct.Identifier;
 import org.apache.asterix.metadata.IDatasetDetails;
-import org.apache.asterix.metadata.MetadataException;
 import org.apache.asterix.metadata.MetadataManager;
 import org.apache.asterix.metadata.MetadataTransactionContext;
 import org.apache.asterix.metadata.bootstrap.MetadataBuiltinEntities;
@@ -142,18 +142,17 @@ import org.apache.asterix.metadata.entities.InternalDatasetDetails;
 import org.apache.asterix.metadata.entities.NodeGroup;
 import org.apache.asterix.metadata.feeds.FeedMetadataUtil;
 import org.apache.asterix.metadata.lock.ExternalDatasetsRegistry;
-import org.apache.asterix.metadata.lock.MetadataLockManager;
 import org.apache.asterix.metadata.utils.DatasetUtil;
 import org.apache.asterix.metadata.utils.ExternalIndexingOperations;
 import org.apache.asterix.metadata.utils.IndexUtil;
 import org.apache.asterix.metadata.utils.KeyFieldTypeUtil;
 import org.apache.asterix.metadata.utils.MetadataConstants;
+import org.apache.asterix.metadata.utils.MetadataLockUtil;
 import org.apache.asterix.metadata.utils.MetadataUtil;
 import org.apache.asterix.om.types.ARecordType;
 import org.apache.asterix.om.types.ATypeTag;
 import org.apache.asterix.om.types.IAType;
 import org.apache.asterix.om.types.TypeSignature;
-import org.apache.asterix.runtime.utils.ClusterStateManager;
 import org.apache.asterix.transaction.management.service.transaction.DatasetIdFactory;
 import org.apache.asterix.translator.AbstractLangTranslator;
 import org.apache.asterix.translator.CompiledStatements.CompiledDeleteStatement;
@@ -163,6 +162,7 @@ import org.apache.asterix.translator.CompiledStatements.CompiledUpsertStatement;
 import org.apache.asterix.translator.CompiledStatements.ICompiledDmlStatement;
 import org.apache.asterix.translator.IStatementExecutor;
 import org.apache.asterix.translator.IStatementExecutorContext;
+import org.apache.asterix.translator.NoOpStatementExecutorContext;
 import org.apache.asterix.translator.SessionConfig;
 import org.apache.asterix.translator.SessionOutput;
 import org.apache.asterix.translator.TypeTranslator;
@@ -175,7 +175,6 @@ import org.apache.commons.lang3.mutable.Mutable;
 import org.apache.commons.lang3.mutable.MutableBoolean;
 import org.apache.commons.lang3.mutable.MutableObject;
 import org.apache.commons.lang3.tuple.Triple;
-import org.apache.hyracks.algebricks.common.constraints.AlgebricksAbsolutePartitionConstraint;
 import org.apache.hyracks.algebricks.common.exceptions.AlgebricksException;
 import org.apache.hyracks.algebricks.common.utils.Pair;
 import org.apache.hyracks.algebricks.core.algebra.expressions.AbstractFunctionCallExpression.FunctionKind;
@@ -191,8 +190,10 @@ import org.apache.hyracks.api.dataset.ResultSetId;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.apache.hyracks.api.io.FileSplit;
 import org.apache.hyracks.api.io.UnmanagedFileSplit;
+import org.apache.hyracks.api.job.JobFlag;
 import org.apache.hyracks.api.job.JobId;
 import org.apache.hyracks.api.job.JobSpecification;
+import org.apache.hyracks.control.common.controllers.CCConfig;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMMergePolicyFactory;
 
 /*
@@ -212,22 +213,25 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
     protected final List<FunctionDecl> declaredFunctions;
     protected final APIFramework apiFramework;
     protected final IRewriterFactory rewriterFactory;
-    protected final IStorageComponentProvider componentProvider;
     protected final ExecutorService executorService;
+    protected final EnumSet<JobFlag> jobFlags = EnumSet.noneOf(JobFlag.class);
+    protected final IMetadataLockManager lockManager;
 
     public QueryTranslator(ICcApplicationContext appCtx, List<Statement> statements, SessionOutput output,
-            ILangCompilationProvider compliationProvider, IStorageComponentProvider componentProvider,
-            ExecutorService executorService) {
+            ILangCompilationProvider compliationProvider, ExecutorService executorService) {
         this.appCtx = appCtx;
+        this.lockManager = appCtx.getMetadataLockManager();
         this.statements = statements;
         this.sessionOutput = output;
         this.sessionConfig = output.config();
-        this.componentProvider = componentProvider;
         declaredFunctions = getDeclaredFunctions(statements);
         apiFramework = new APIFramework(compliationProvider);
         rewriterFactory = compliationProvider.getRewriterFactory();
         activeDataverse = MetadataBuiltinEntities.DEFAULT_DATAVERSE;
         this.executorService = executorService;
+        if (appCtx.getServiceContext().getAppConfig().getBoolean(CCConfig.Option.ENFORCE_FRAME_WRITER_PROTOCOL)) {
+            this.jobFlags.add(JobFlag.ENFORCE_CONTRACT);
+        }
     }
 
     public SessionOutput getSessionOutput() {
@@ -258,13 +262,13 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
         FileSplit outputFile = null;
         IAWriterFactory writerFactory = PrinterBasedWriterFactory.INSTANCE;
         IResultSerializerFactoryProvider resultSerializerFactoryProvider = ResultSerializerFactoryProvider.INSTANCE;
-        Map<String, String> config = new HashMap<>();
         /* Since the system runs a large number of threads, when HTTP requests don't return, it becomes difficult to
          * find the thread running the request to determine where it has stopped.
          * Setting the thread name helps make that easier
          */
         String threadName = Thread.currentThread().getName();
         Thread.currentThread().setName(QueryTranslator.class.getSimpleName());
+        Map<String, String> config = new HashMap<>();
         try {
             for (Statement stmt : statements) {
                 if (sessionConfig.is(SessionConfig.FORMAT_HTML)) {
@@ -272,11 +276,11 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
                 }
                 validateOperation(appCtx, activeDataverse, stmt);
                 rewriteStatement(stmt); // Rewrite the statement's AST.
-                MetadataProvider metadataProvider = new MetadataProvider(appCtx, activeDataverse, componentProvider);
+                MetadataProvider metadataProvider = new MetadataProvider(appCtx, activeDataverse);
+                metadataProvider.getConfig().putAll(config);
                 metadataProvider.setWriterFactory(writerFactory);
                 metadataProvider.setResultSerializerFactoryProvider(resultSerializerFactoryProvider);
                 metadataProvider.setOutputFile(outputFile);
-                metadataProvider.setConfig(config);
                 switch (stmt.getKind()) {
                     case Statement.Kind.SET:
                         handleSetStatement(stmt, config);
@@ -331,7 +335,7 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
                                     || resultDelivery == ResultDelivery.DEFERRED);
                         }
                         handleInsertUpsertStatement(metadataProvider, stmt, hcc, hdc, resultDelivery, outMetadata,
-                                stats, false, clientContextId, ctx);
+                                stats, false, clientContextId);
                         break;
                     case Statement.Kind.DELETE:
                         handleDeleteStatement(metadataProvider, stmt, hcc, false);
@@ -422,7 +426,7 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
         String dvName = dvd.getDataverseName().getValue();
         MetadataTransactionContext mdTxnCtx = MetadataManager.INSTANCE.beginTransaction();
         metadataProvider.setMetadataTxnContext(mdTxnCtx);
-        MetadataLockManager.INSTANCE.acquireDataverseReadLock(metadataProvider.getLocks(), dvName);
+        lockManager.acquireDataverseReadLock(metadataProvider.getLocks(), dvName);
         try {
             Dataverse dv = MetadataManager.INSTANCE.getDataverse(metadataProvider.getMetadataTxnContext(), dvName);
             if (dv == null) {
@@ -445,7 +449,7 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
         MetadataTransactionContext mdTxnCtx = MetadataManager.INSTANCE.beginTransaction();
         metadataProvider.setMetadataTxnContext(mdTxnCtx);
 
-        MetadataLockManager.INSTANCE.acquireDataverseReadLock(metadataProvider.getLocks(), dvName);
+        lockManager.acquireDataverseReadLock(metadataProvider.getLocks(), dvName);
         try {
             Dataverse dv = MetadataManager.INSTANCE.getDataverse(metadataProvider.getMetadataTxnContext(), dvName);
             if (dv != null) {
@@ -520,7 +524,7 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
         MetadataTransactionContext mdTxnCtx = MetadataManager.INSTANCE.beginTransaction();
         boolean bActiveTxn = true;
         metadataProvider.setMetadataTxnContext(mdTxnCtx);
-        MetadataLockManager.INSTANCE.createDatasetBegin(metadataProvider.getLocks(), dataverseName,
+        MetadataLockUtil.createDatasetBegin(lockManager, metadataProvider.getLocks(), dataverseName,
                 itemTypeDataverseName, itemTypeDataverseName + "." + itemTypeName, metaItemTypeDataverseName,
                 metaItemTypeDataverseName + "." + metaItemTypeName, nodegroupName, compactionPolicy,
                 dataverseName + "." + datasetName, defaultCompactionPolicy);
@@ -621,7 +625,7 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
                 progress.setValue(ProgressState.ADDED_PENDINGOP_RECORD_TO_METADATA);
 
                 // #. runJob
-                JobUtils.runJob(hcc, jobSpec, true);
+                runJob(hcc, jobSpec);
 
                 // #. begin new metadataTxn
                 mdTxnCtx = MetadataManager.INSTANCE.beginTransaction();
@@ -653,7 +657,7 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
                     JobSpecification jobSpec = DatasetUtil.dropDatasetJobSpec(dataset, metadataProvider);
                     MetadataManager.INSTANCE.commitTransaction(mdTxnCtx);
                     bActiveTxn = false;
-                    JobUtils.runJob(hcc, jobSpec, true);
+                    runJob(hcc, jobSpec);
                 } catch (Exception e2) {
                     e.addSuppressed(e2);
                     if (bActiveTxn) {
@@ -681,13 +685,14 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
         }
     }
 
-    protected void validateIfResourceIsActiveInFeed(Dataset dataset) throws CompilationException {
+    protected static void validateIfResourceIsActiveInFeed(ICcApplicationContext appCtx, Dataset dataset)
+            throws CompilationException {
         StringBuilder builder = null;
-        ActiveLifecycleListener activeListener = (ActiveLifecycleListener) appCtx.getActiveLifecycleListener();
-        ActiveJobNotificationHandler activeEventHandler = activeListener.getNotificationHandler();
+        ActiveNotificationHandler activeEventHandler =
+                (ActiveNotificationHandler) appCtx.getActiveNotificationHandler();
         IActiveEntityEventsListener[] listeners = activeEventHandler.getEventListeners();
         for (IActiveEntityEventsListener listener : listeners) {
-            if (listener.isEntityUsingDataset(dataset)) {
+            if (listener.isEntityUsingDataset(dataset) && listener.isActive()) {
                 if (builder == null) {
                     builder = new StringBuilder();
                 }
@@ -702,17 +707,20 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
 
     protected static String configureNodegroupForDataset(ICcApplicationContext appCtx, Map<String, String> hints,
             String dataverseName, String datasetName, MetadataProvider metadataProvider) throws Exception {
-        Set<String> allNodes = ClusterStateManager.INSTANCE.getParticipantNodes();
+        IClusterStateManager csm = appCtx.getClusterStateManager();
+        Set<String> allNodes = csm.getParticipantNodes(true);
         Set<String> selectedNodes = new LinkedHashSet<>();
         String hintValue = hints.get(DatasetNodegroupCardinalityHint.NAME);
         if (hintValue == null) {
             selectedNodes.addAll(allNodes);
         } else {
             int nodegroupCardinality;
-            boolean valid = DatasetHints.validate(appCtx, DatasetNodegroupCardinalityHint.NAME,
-                    hints.get(DatasetNodegroupCardinalityHint.NAME)).first;
+            final Pair<Boolean, String> validation = DatasetHints.validate(appCtx, DatasetNodegroupCardinalityHint.NAME,
+                    hints.get(DatasetNodegroupCardinalityHint.NAME));
+            boolean valid = validation.first;
             if (!valid) {
-                throw new CompilationException("Incorrect use of hint:" + DatasetNodegroupCardinalityHint.NAME);
+                throw new CompilationException(
+                        "Incorrect use of hint '" + DatasetNodegroupCardinalityHint.NAME + "': " + validation.second);
             } else {
                 nodegroupCardinality = Integer.parseInt(hints.get(DatasetNodegroupCardinalityHint.NAME));
             }
@@ -726,27 +734,18 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
 
     public void handleCreateIndexStatement(MetadataProvider metadataProvider, Statement stmt,
             IHyracksClientConnection hcc) throws Exception {
-        ProgressState progress = ProgressState.NO_PROGRESS;
         CreateIndexStatement stmtCreateIndex = (CreateIndexStatement) stmt;
         String dataverseName = getActiveDataverse(stmtCreateIndex.getDataverseName());
         String datasetName = stmtCreateIndex.getDatasetName().getValue();
+        String indexName = stmtCreateIndex.getIndexName().getValue();
         List<Integer> keySourceIndicators = stmtCreateIndex.getFieldSourceIndicators();
-
         MetadataTransactionContext mdTxnCtx = MetadataManager.INSTANCE.beginTransaction();
-        boolean bActiveTxn = true;
         metadataProvider.setMetadataTxnContext(mdTxnCtx);
-        MetadataLockManager.INSTANCE.createIndexBegin(metadataProvider.getLocks(), dataverseName,
-                dataverseName + "." + datasetName);
-        String indexName = null;
-        JobSpecification spec = null;
+        String datasetFullyQualifiedName = dataverseName + "." + datasetName;
         Dataset ds = null;
-        // For external datasets
-        List<ExternalFile> externalFilesSnapshot = null;
-        boolean firstExternalDatasetIndex = false;
-        boolean filesIndexReplicated = false;
-        Index filesIndex = null;
-        boolean datasetLocked = false;
         Index index = null;
+        MetadataLockUtil.createIndexBegin(lockManager, metadataProvider.getLocks(), dataverseName,
+                datasetFullyQualifiedName);
         try {
             ds = metadataProvider.findDataset(dataverseName, datasetName);
             if (ds == null) {
@@ -754,9 +753,16 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
                         "There is no dataset with this name " + datasetName + " in dataverse " + dataverseName);
             }
 
-            indexName = stmtCreateIndex.getIndexName().getValue();
             index = MetadataManager.INSTANCE.getIndex(metadataProvider.getMetadataTxnContext(), dataverseName,
                     datasetName, indexName);
+            if (index != null) {
+                if (stmtCreateIndex.getIfNotExists()) {
+                    MetadataManager.INSTANCE.commitTransaction(mdTxnCtx);
+                    return;
+                } else {
+                    throw new AlgebricksException("An index with this name " + indexName + " already exists.");
+                }
+            }
             Datatype dt = MetadataManager.INSTANCE.getDatatype(metadataProvider.getMetadataTxnContext(),
                     ds.getItemTypeDataverseName(), ds.getItemTypeName());
             ARecordType aRecordType = (ARecordType) dt.getDatatype();
@@ -770,7 +776,8 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
             List<List<String>> indexFields = new ArrayList<>();
             List<IAType> indexFieldTypes = new ArrayList<>();
             int keyIndex = 0;
-            for (Pair<List<String>, TypeExpression> fieldExpr : stmtCreateIndex.getFieldExprs()) {
+            boolean overridesFieldTypes = false;
+            for (Pair<List<String>, IndexedTypeExpression> fieldExpr : stmtCreateIndex.getFieldExprs()) {
                 IAType fieldType = null;
                 ARecordType subType =
                         KeyFieldTypeUtil.chooseSource(keySourceIndicators, keyIndex, aRecordType, metaRecordType);
@@ -786,9 +793,13 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
                 if (fieldExpr.second == null) {
                     fieldType = subType.getSubFieldType(fieldExpr.first.subList(i, fieldExpr.first.size()));
                 } else {
-                    if (!stmtCreateIndex.isEnforced()) {
-                        throw new AlgebricksException("Cannot create typed index on \"" + fieldExpr.first
-                                + "\" field without enforcing it's type");
+                    if (!stmtCreateIndex.isEnforced() && stmtCreateIndex.getIndexType() != IndexType.BTREE) {
+                        throw new AsterixException(ErrorCode.INDEX_ILLEGAL_NON_ENFORCED_TYPED,
+                                stmtCreateIndex.getIndexType());
+                    }
+                    if (stmtCreateIndex.isEnforced() && !fieldExpr.second.isUnknownable()) {
+                        throw new AsterixException(ErrorCode.INDEX_ILLEGAL_ENFORCED_NON_OPTIONAL,
+                                String.valueOf(fieldExpr.first));
                     }
                     if (!isOpen) {
                         throw new AlgebricksException("Typed index on \"" + fieldExpr.first
@@ -798,9 +809,10 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
                         throw new AlgebricksException("Typed open index can only be created on the record part");
                     }
                     Map<TypeSignature, IAType> typeMap =
-                            TypeTranslator.computeTypes(mdTxnCtx, fieldExpr.second, indexName, dataverseName);
+                            TypeTranslator.computeTypes(mdTxnCtx, fieldExpr.second.getType(), indexName, dataverseName);
                     TypeSignature typeSignature = new TypeSignature(dataverseName, indexName);
                     fieldType = typeMap.get(typeSignature);
+                    overridesFieldTypes = true;
                 }
                 if (fieldType == null) {
                     throw new AlgebricksException(
@@ -812,18 +824,8 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
                 ++keyIndex;
             }
 
-            ValidateUtil.validateKeyFields(aRecordType, metaRecordType, indexFields, keySourceIndicators,
-                    indexFieldTypes, stmtCreateIndex.getIndexType());
-
-            if (index != null) {
-                if (stmtCreateIndex.getIfNotExists()) {
-                    MetadataManager.INSTANCE.commitTransaction(mdTxnCtx);
-                    return;
-                } else {
-                    throw new AlgebricksException("An index with this name " + indexName + " already exists.");
-                }
-            }
-
+            validateIndexKeyFields(stmtCreateIndex, keySourceIndicators, aRecordType, metaRecordType, indexFields,
+                    indexFieldTypes);
             // Checks whether a user is trying to create an inverted secondary index on a dataset
             // with a variable-length primary key.
             // Currently, we do not support this. Therefore, as a temporary solution, we print an
@@ -847,8 +849,30 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
                 }
             }
 
+            Index newIndex = new Index(dataverseName, datasetName, indexName, stmtCreateIndex.getIndexType(),
+                    indexFields, keySourceIndicators, indexFieldTypes, stmtCreateIndex.getGramLength(),
+                    overridesFieldTypes, stmtCreateIndex.isEnforced(), false, MetadataUtil.PENDING_ADD_OP);
+            doCreateIndex(hcc, metadataProvider, ds, newIndex, jobFlags);
+        } finally {
+            metadataProvider.getLocks().unlock();
+        }
+    }
+
+    public static void doCreateIndex(IHyracksClientConnection hcc, MetadataProvider metadataProvider, Dataset ds,
+            Index index, EnumSet<JobFlag> jobFlags) throws Exception {
+        ProgressState progress = ProgressState.NO_PROGRESS;
+        boolean bActiveTxn = true;
+        Index filesIndex = null;
+        boolean firstExternalDatasetIndex = false;
+        boolean datasetLocked = false;
+        List<ExternalFile> externalFilesSnapshot;
+        MetadataTransactionContext mdTxnCtx = metadataProvider.getMetadataTxnContext();
+        JobSpecification spec;
+        boolean filesIndexReplicated = false;
+        try {
+            index.setPendingOp(MetadataUtil.PENDING_ADD_OP);
             if (ds.getDatasetType() == DatasetType.INTERNAL) {
-                validateIfResourceIsActiveInFeed(ds);
+                validateIfResourceIsActiveInFeed(metadataProvider.getApplicationContext(), ds);
             } else {
                 // External dataset
                 // Check if the dataset is indexible
@@ -858,13 +882,14 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
                                     + " Adapter can't be indexed");
                 }
                 // Check if the name of the index is valid
-                if (!ExternalIndexingOperations.isValidIndexName(datasetName, indexName)) {
+                if (!ExternalIndexingOperations.isValidIndexName(index.getDatasetName(), index.getIndexName())) {
                     throw new AlgebricksException("external dataset index name is invalid");
                 }
 
                 // Check if the files index exist
-                filesIndex = MetadataManager.INSTANCE.getIndex(metadataProvider.getMetadataTxnContext(), dataverseName,
-                        datasetName, IndexingConstants.getFilesIndexName(datasetName));
+                filesIndex = MetadataManager.INSTANCE.getIndex(metadataProvider.getMetadataTxnContext(),
+                        index.getDataverseName(), index.getDatasetName(),
+                        IndexingConstants.getFilesIndexName(index.getDatasetName()));
                 firstExternalDatasetIndex = filesIndex == null;
                 // Lock external dataset
                 ExternalDatasetsRegistry.INSTANCE.buildIndexBegin(ds, firstExternalDatasetIndex);
@@ -872,7 +897,8 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
                 if (firstExternalDatasetIndex) {
                     // Verify that no one has created an index before we acquire the lock
                     filesIndex = MetadataManager.INSTANCE.getIndex(metadataProvider.getMetadataTxnContext(),
-                            dataverseName, datasetName, IndexingConstants.getFilesIndexName(datasetName));
+                            index.getDataverseName(), index.getDatasetName(),
+                            IndexingConstants.getFilesIndexName(index.getDatasetName()));
                     if (filesIndex != null) {
                         ExternalDatasetsRegistry.INSTANCE.buildIndexEnd(ds, firstExternalDatasetIndex);
                         firstExternalDatasetIndex = false;
@@ -883,9 +909,10 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
                     // Get snapshot from External File System
                     externalFilesSnapshot = ExternalIndexingOperations.getSnapshotFromExternalFileSystem(ds);
                     // Add an entry for the files index
-                    filesIndex = new Index(dataverseName, datasetName, IndexingConstants.getFilesIndexName(datasetName),
-                            IndexType.BTREE, ExternalIndexingOperations.FILE_INDEX_FIELD_NAMES, null,
-                            ExternalIndexingOperations.FILE_INDEX_FIELD_TYPES, false, false,
+                    filesIndex = new Index(index.getDataverseName(), index.getDatasetName(),
+                            IndexingConstants.getFilesIndexName(index.getDatasetName()), IndexType.BTREE,
+                            ExternalIndexingOperations.FILE_INDEX_FIELD_NAMES, null,
+                            ExternalIndexingOperations.FILE_INDEX_FIELD_TYPES, false, false, false,
                             MetadataUtil.PENDING_ADD_OP);
                     MetadataManager.INSTANCE.addIndex(metadataProvider.getMetadataTxnContext(), filesIndex);
                     // Add files to the external files index
@@ -900,44 +927,43 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
                                 "Failed to create job spec for replicating Files Index For external dataset");
                     }
                     filesIndexReplicated = true;
-                    JobUtils.runJob(hcc, spec, true);
+                    runJob(hcc, spec, jobFlags);
                 }
             }
 
             // check whether there exists another enforced index on the same field
-            if (stmtCreateIndex.isEnforced()) {
-                List<Index> indexes = MetadataManager.INSTANCE
-                        .getDatasetIndexes(metadataProvider.getMetadataTxnContext(), dataverseName, datasetName);
+            if (index.isEnforced()) {
+                List<Index> indexes = MetadataManager.INSTANCE.getDatasetIndexes(
+                        metadataProvider.getMetadataTxnContext(), index.getDataverseName(), index.getDatasetName());
                 for (Index existingIndex : indexes) {
-                    if (existingIndex.getKeyFieldNames().equals(indexFields)
-                            && !existingIndex.getKeyFieldTypes().equals(indexFieldTypes)
-                            && existingIndex.isEnforcingKeyFields()) {
-                        throw new CompilationException("Cannot create index " + indexName + " , enforced index "
-                                + existingIndex.getIndexName() + " on field \"" + StringUtils.join(indexFields, ',')
-                                + "\" is already defined with type \"" + existingIndex.getKeyFieldTypes() + "\"");
+                    if (existingIndex.getKeyFieldNames().equals(index.getKeyFieldNames())
+                            && !existingIndex.getKeyFieldTypes().equals(index.getKeyFieldTypes())
+                            && existingIndex.isEnforced()) {
+                        throw new CompilationException("Cannot create index " + index.getIndexName()
+                                + " , enforced index " + existingIndex.getIndexName() + " on field \""
+                                + StringUtils.join(index.getKeyFieldNames(), ',') + "\" is already defined with type \""
+                                + existingIndex.getKeyFieldTypes() + "\"");
                     }
                 }
             }
-
             // #. add a new index with PendingAddOp
-            index = new Index(dataverseName, datasetName, indexName, stmtCreateIndex.getIndexType(), indexFields,
-                    keySourceIndicators, indexFieldTypes, stmtCreateIndex.getGramLength(), stmtCreateIndex.isEnforced(),
-                    false, MetadataUtil.PENDING_ADD_OP);
             MetadataManager.INSTANCE.addIndex(metadataProvider.getMetadataTxnContext(), index);
-
             // #. prepare to create the index artifact in NC.
             spec = IndexUtil.buildSecondaryIndexCreationJobSpec(ds, index, metadataProvider);
             if (spec == null) {
-                throw new CompilationException("Failed to create job spec for creating index '"
-                        + stmtCreateIndex.getDatasetName() + "." + stmtCreateIndex.getIndexName() + "'");
+                throw new CompilationException("Failed to create job spec for creating index '" + ds.getDatasetName()
+                        + "." + index.getIndexName() + "'");
             }
             MetadataManager.INSTANCE.commitTransaction(mdTxnCtx);
             bActiveTxn = false;
-
             progress = ProgressState.ADDED_PENDINGOP_RECORD_TO_METADATA;
-
             // #. create the index artifact in NC.
-            JobUtils.runJob(hcc, spec, true);
+            runJob(hcc, spec, jobFlags);
+
+            // #. flush the internal dataset for correlated policy
+            if (ds.isCorrelated() && ds.getDatasetType() == DatasetType.INTERNAL) {
+                FlushDatasetUtil.flushDataset(hcc, metadataProvider, index.getDataverseName(), index.getDatasetName());
+            }
 
             mdTxnCtx = MetadataManager.INSTANCE.beginTransaction();
             bActiveTxn = true;
@@ -948,7 +974,7 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
             MetadataManager.INSTANCE.commitTransaction(mdTxnCtx);
             bActiveTxn = false;
 
-            JobUtils.runJob(hcc, spec, true);
+            runJob(hcc, spec, jobFlags);
 
             // #. begin new metadataTxn
             mdTxnCtx = MetadataManager.INSTANCE.beginTransaction();
@@ -956,15 +982,15 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
             metadataProvider.setMetadataTxnContext(mdTxnCtx);
 
             // #. add another new index with PendingNoOp after deleting the index with PendingAddOp
-            MetadataManager.INSTANCE.dropIndex(metadataProvider.getMetadataTxnContext(), dataverseName, datasetName,
-                    indexName);
+            MetadataManager.INSTANCE.dropIndex(metadataProvider.getMetadataTxnContext(), index.getDataverseName(),
+                    index.getDatasetName(), index.getIndexName());
             index.setPendingOp(MetadataUtil.PENDING_NO_OP);
             MetadataManager.INSTANCE.addIndex(metadataProvider.getMetadataTxnContext(), index);
             // add another new files index with PendingNoOp after deleting the index with
             // PendingAddOp
             if (firstExternalDatasetIndex) {
-                MetadataManager.INSTANCE.dropIndex(metadataProvider.getMetadataTxnContext(), dataverseName, datasetName,
-                        filesIndex.getIndexName());
+                MetadataManager.INSTANCE.dropIndex(metadataProvider.getMetadataTxnContext(), index.getDataverseName(),
+                        index.getDatasetName(), filesIndex.getIndexName());
                 filesIndex.setPendingOp(MetadataUtil.PENDING_NO_OP);
                 MetadataManager.INSTANCE.addIndex(metadataProvider.getMetadataTxnContext(), filesIndex);
                 // update transaction timestamp
@@ -972,7 +998,6 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
                 MetadataManager.INSTANCE.updateDataset(mdTxnCtx, ds);
             }
             MetadataManager.INSTANCE.commitTransaction(mdTxnCtx);
-
         } catch (Exception e) {
             if (bActiveTxn) {
                 abort(e, e, mdTxnCtx);
@@ -986,7 +1011,7 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
                             ExternalIndexingOperations.buildDropFilesIndexJobSpec(metadataProvider, ds);
                     MetadataManager.INSTANCE.commitTransaction(mdTxnCtx);
                     bActiveTxn = false;
-                    JobUtils.runJob(hcc, jobSpec, true);
+                    runJob(hcc, jobSpec, jobFlags);
                 } catch (Exception e2) {
                     e.addSuppressed(e2);
                     if (bActiveTxn) {
@@ -1005,7 +1030,7 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
                     JobSpecification jobSpec = IndexUtil.buildDropIndexJobSpec(index, metadataProvider, ds);
                     MetadataManager.INSTANCE.commitTransaction(mdTxnCtx);
                     bActiveTxn = false;
-                    JobUtils.runJob(hcc, jobSpec, true);
+                    runJob(hcc, jobSpec, jobFlags);
                 } catch (Exception e2) {
                     e.addSuppressed(e2);
                     if (bActiveTxn) {
@@ -1023,21 +1048,25 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
                     } catch (Exception e2) {
                         e.addSuppressed(e2);
                         abort(e, e2, mdTxnCtx);
-                        throw new IllegalStateException("System is inconsistent state: pending files for("
-                                + dataverseName + "." + datasetName + ") couldn't be removed from the metadata", e);
+                        throw new IllegalStateException(
+                                "System is inconsistent state: pending files for(" + index.getDataverseName() + "."
+                                        + index.getDatasetName() + ") couldn't be removed from the metadata",
+                                e);
                     }
                     mdTxnCtx = MetadataManager.INSTANCE.beginTransaction();
                     metadataProvider.setMetadataTxnContext(mdTxnCtx);
                     try {
                         // Drop the files index from metadata
-                        MetadataManager.INSTANCE.dropIndex(metadataProvider.getMetadataTxnContext(), dataverseName,
-                                datasetName, IndexingConstants.getFilesIndexName(datasetName));
+                        MetadataManager.INSTANCE.dropIndex(metadataProvider.getMetadataTxnContext(),
+                                index.getDataverseName(), index.getDatasetName(),
+                                IndexingConstants.getFilesIndexName(index.getDatasetName()));
                         MetadataManager.INSTANCE.commitTransaction(mdTxnCtx);
                     } catch (Exception e2) {
                         e.addSuppressed(e2);
                         abort(e, e2, mdTxnCtx);
-                        throw new IllegalStateException("System is inconsistent state: pending index(" + dataverseName
-                                + "." + datasetName + "." + IndexingConstants.getFilesIndexName(datasetName)
+                        throw new IllegalStateException("System is inconsistent state: pending index("
+                                + index.getDataverseName() + "." + index.getDatasetName() + "."
+                                + IndexingConstants.getFilesIndexName(index.getDatasetName())
                                 + ") couldn't be removed from the metadata", e);
                     }
                 }
@@ -1045,23 +1074,30 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
                 mdTxnCtx = MetadataManager.INSTANCE.beginTransaction();
                 metadataProvider.setMetadataTxnContext(mdTxnCtx);
                 try {
-                    MetadataManager.INSTANCE.dropIndex(metadataProvider.getMetadataTxnContext(), dataverseName,
-                            datasetName, indexName);
+                    MetadataManager.INSTANCE.dropIndex(metadataProvider.getMetadataTxnContext(),
+                            index.getDataverseName(), index.getDatasetName(), index.getIndexName());
                     MetadataManager.INSTANCE.commitTransaction(mdTxnCtx);
                 } catch (Exception e2) {
                     e.addSuppressed(e2);
                     abort(e, e2, mdTxnCtx);
-                    throw new IllegalStateException("System is in inconsistent state: pending index(" + dataverseName
-                            + "." + datasetName + "." + indexName + ") couldn't be removed from the metadata", e);
+                    throw new IllegalStateException("System is in inconsistent state: pending index("
+                            + index.getDataverseName() + "." + index.getDatasetName() + "." + index.getIndexName()
+                            + ") couldn't be removed from the metadata", e);
                 }
             }
             throw e;
         } finally {
-            metadataProvider.getLocks().unlock();
             if (datasetLocked) {
                 ExternalDatasetsRegistry.INSTANCE.buildIndexEnd(ds, firstExternalDatasetIndex);
             }
         }
+    }
+
+    protected void validateIndexKeyFields(CreateIndexStatement stmtCreateIndex, List<Integer> keySourceIndicators,
+            ARecordType aRecordType, ARecordType metaRecordType, List<List<String>> indexFields,
+            List<IAType> indexFieldTypes) throws AlgebricksException {
+        ValidateUtil.validateKeyFields(aRecordType, metaRecordType, indexFields, keySourceIndicators, indexFieldTypes,
+                stmtCreateIndex.getIndexType());
     }
 
     protected void handleCreateTypeStatement(MetadataProvider metadataProvider, Statement stmt) throws Exception {
@@ -1070,7 +1106,7 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
         String typeName = stmtCreateType.getIdent().getValue();
         MetadataTransactionContext mdTxnCtx = MetadataManager.INSTANCE.beginTransaction();
         metadataProvider.setMetadataTxnContext(mdTxnCtx);
-        MetadataLockManager.INSTANCE.createTypeBegin(metadataProvider.getLocks(), dataverseName,
+        MetadataLockUtil.createTypeBegin(lockManager, metadataProvider.getLocks(), dataverseName,
                 dataverseName + "." + typeName);
         try {
             Dataverse dv = MetadataManager.INSTANCE.getDataverse(mdTxnCtx, dataverseName);
@@ -1116,7 +1152,7 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
         boolean bActiveTxn = true;
         metadataProvider.setMetadataTxnContext(mdTxnCtx);
         List<JobSpecification> jobsToExecute = new ArrayList<>();
-        MetadataLockManager.INSTANCE.acquireDataverseWriteLock(metadataProvider.getLocks(), dataverseName);
+        lockManager.acquireDataverseWriteLock(metadataProvider.getLocks(), dataverseName);
         try {
             Dataverse dv = MetadataManager.INSTANCE.getDataverse(mdTxnCtx, dataverseName);
             if (dv == null) {
@@ -1127,26 +1163,41 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
                     throw new AlgebricksException("There is no dataverse with this name " + dataverseName + ".");
                 }
             }
+            // # check whether any function in current dataverse is being used by others
+            List<Function> functionsInDataverse =
+                    MetadataManager.INSTANCE.getDataverseFunctions(mdTxnCtx, dataverseName);
+            for (Function function : functionsInDataverse) {
+                if (checkWhetherFunctionIsBeingUsed(mdTxnCtx, function.getDataverseName(), function.getName(),
+                        function.getArity(), dataverseName)) {
+                    throw new MetadataException(ErrorCode.METADATA_DROP_FUCTION_IN_USE,
+                            function.getDataverseName() + "." + function.getName() + "@" + function.getArity());
+                }
+            }
+            MetadataManager.INSTANCE.commitTransaction(mdTxnCtx);
+            bActiveTxn = false;
             // # disconnect all feeds from any datasets in the dataverse.
-            ActiveLifecycleListener activeListener = (ActiveLifecycleListener) appCtx.getActiveLifecycleListener();
-            ActiveJobNotificationHandler activeEventHandler = activeListener.getNotificationHandler();
+            ActiveNotificationHandler activeEventHandler =
+                    (ActiveNotificationHandler) appCtx.getActiveNotificationHandler();
             IActiveEntityEventsListener[] activeListeners = activeEventHandler.getEventListeners();
-            Identifier dvId = new Identifier(dataverseName);
-            MetadataProvider tempMdProvider = new MetadataProvider(appCtx, metadataProvider.getDefaultDataverse(),
-                    metadataProvider.getStorageComponentProvider());
-            tempMdProvider.setConfig(metadataProvider.getConfig());
             for (IActiveEntityEventsListener listener : activeListeners) {
                 EntityId activeEntityId = listener.getEntityId();
                 if (activeEntityId.getExtensionName().equals(Feed.EXTENSION_NAME)
                         && activeEntityId.getDataverse().equals(dataverseName)) {
-                    tempMdProvider.getLocks().reset();
-                    stopFeedBeforeDelete(new Pair<>(dvId, new Identifier(activeEntityId.getEntityName())),
-                            tempMdProvider);
-                    // prepare job to remove feed log storage
-                    jobsToExecute.add(FeedOperations.buildRemoveFeedStorageJob(metadataProvider,
-                            MetadataManager.INSTANCE.getFeed(mdTxnCtx, dataverseName, activeEntityId.getEntityName())));
+                    if (listener.getState() != ActivityState.STOPPED) {
+                        ((ActiveEntityEventsListener) listener).stop(metadataProvider);
+                    }
+                    FeedEventsListener feedListener = (FeedEventsListener) listener;
+                    mdTxnCtx = MetadataManager.INSTANCE.beginTransaction();
+                    bActiveTxn = true;
+                    metadataProvider.setMetadataTxnContext(mdTxnCtx);
+                    doDropFeed(hcc, metadataProvider, feedListener.getFeed());
+                    MetadataManager.INSTANCE.commitTransaction(metadataProvider.getMetadataTxnContext());
+                    bActiveTxn = false;
                 }
             }
+            mdTxnCtx = MetadataManager.INSTANCE.beginTransaction();
+            bActiveTxn = true;
+            metadataProvider.setMetadataTxnContext(mdTxnCtx);
 
             // #. prepare jobs which will drop corresponding datasets with indexes.
             List<Dataset> datasets = MetadataManager.INSTANCE.getDataverseDatasets(mdTxnCtx, dataverseName);
@@ -1165,11 +1216,11 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
                             MetadataManager.INSTANCE.getDatasetIndexes(mdTxnCtx, dataverseName, datasetName);
                     for (int k = 0; k < indexes.size(); k++) {
                         if (ExternalIndexingOperations.isFileIndex(indexes.get(k))) {
-                            jobsToExecute.add(ExternalIndexingOperations.buildDropFilesIndexJobSpec(metadataProvider,
-                                    dataset));
-                        } else {
                             jobsToExecute.add(
-                                    IndexUtil.buildDropIndexJobSpec(indexes.get(k), metadataProvider, dataset));
+                                    ExternalIndexingOperations.buildDropFilesIndexJobSpec(metadataProvider, dataset));
+                        } else {
+                            jobsToExecute
+                                    .add(IndexUtil.buildDropIndexJobSpec(indexes.get(k), metadataProvider, dataset));
                         }
                     }
                     ExternalDatasetsRegistry.INSTANCE.removeDatasetInfo(dataset);
@@ -1189,7 +1240,7 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
             progress = ProgressState.ADDED_PENDINGOP_RECORD_TO_METADATA;
 
             for (JobSpecification jobSpec : jobsToExecute) {
-                JobUtils.runJob(hcc, jobSpec, true);
+                runJob(hcc, jobSpec);
             }
 
             mdTxnCtx = MetadataManager.INSTANCE.beginTransaction();
@@ -1202,7 +1253,7 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
             // Drops all node groups that no longer needed
             for (Dataset dataset : datasets) {
                 String nodeGroup = dataset.getNodeGroupName();
-                MetadataLockManager.INSTANCE.acquireNodeGroupWriteLock(metadataProvider.getLocks(), nodeGroup);
+                lockManager.acquireNodeGroupWriteLock(metadataProvider.getLocks(), nodeGroup);
                 if (MetadataManager.INSTANCE.getNodegroup(mdTxnCtx, nodeGroup) != null) {
                     MetadataManager.INSTANCE.dropNodegroup(mdTxnCtx, nodeGroup, true);
                 }
@@ -1226,7 +1277,7 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
                 // remove the all indexes in NC
                 try {
                     for (JobSpecification jobSpec : jobsToExecute) {
-                        JobUtils.runJob(hcc, jobSpec, true);
+                        runJob(hcc, jobSpec);
                     }
                 } catch (Exception e2) {
                     // do no throw exception since still the metadata needs to be compensated.
@@ -1253,26 +1304,12 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
         }
     }
 
-    protected void stopFeedBeforeDelete(Pair<Identifier, Identifier> feedNameComp, MetadataProvider metadataProvider) {
-        StopFeedStatement disStmt = new StopFeedStatement(feedNameComp);
-        try {
-            handleStopFeedStatement(metadataProvider, disStmt);
-            if (LOGGER.isLoggable(Level.INFO)) {
-                LOGGER.info("Stopped feed " + feedNameComp.second.getValue());
-            }
-        } catch (Exception exception) {
-            if (LOGGER.isLoggable(Level.WARNING)) {
-                LOGGER.warning("Unable to stop feed " + feedNameComp.second.getValue() + exception);
-            }
-        }
-    }
-
     public void handleDatasetDropStatement(MetadataProvider metadataProvider, Statement stmt,
             IHyracksClientConnection hcc) throws Exception {
         DropDatasetStatement stmtDelete = (DropDatasetStatement) stmt;
         String dataverseName = getActiveDataverse(stmtDelete.getDataverseName());
         String datasetName = stmtDelete.getDatasetName().getValue();
-        MetadataLockManager.INSTANCE.dropDatasetBegin(metadataProvider.getLocks(), dataverseName,
+        MetadataLockUtil.dropDatasetBegin(lockManager, metadataProvider.getLocks(), dataverseName,
                 dataverseName + "." + datasetName);
         try {
             doDropDataset(dataverseName, datasetName, metadataProvider, stmtDelete.getIfExists(), hcc, true);
@@ -1296,8 +1333,7 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
                     MetadataManager.INSTANCE.commitTransaction(mdTxnCtx.getValue());
                     return;
                 } else {
-                    throw new AlgebricksException("There is no dataset with this name " + datasetName + " in dataverse "
-                            + dataverseName + ".");
+                    throw new AsterixException(ErrorCode.NO_DATASET_WITH_NAME, dataverseName, datasetName);
                 }
             }
             ds.drop(metadataProvider, mdTxnCtx, jobsToExecute, bActiveTxn, progress, hcc, dropCorrespondingNodeGroup);
@@ -1345,14 +1381,14 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
         IndexDropStatement stmtIndexDrop = (IndexDropStatement) stmt;
         String datasetName = stmtIndexDrop.getDatasetName().getValue();
         String dataverseName = getActiveDataverse(stmtIndexDrop.getDataverseName());
+        String indexName = stmtIndexDrop.getIndexName().getValue();
         ProgressState progress = ProgressState.NO_PROGRESS;
         MetadataTransactionContext mdTxnCtx = MetadataManager.INSTANCE.beginTransaction();
         boolean bActiveTxn = true;
         metadataProvider.setMetadataTxnContext(mdTxnCtx);
         List<JobSpecification> jobsToExecute = new ArrayList<>();
-        MetadataLockManager.INSTANCE.dropIndexBegin(metadataProvider.getLocks(), dataverseName,
-                dataverseName + "." + datasetName);
-        String indexName = null;
+        String dsFullyQualifiedName = dataverseName + "." + datasetName;
+        MetadataLockUtil.dropIndexBegin(lockManager, metadataProvider.getLocks(), dataverseName, dsFullyQualifiedName);
         // For external index
         boolean dropFilesIndex = false;
         try {
@@ -1361,8 +1397,8 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
                 throw new AlgebricksException(
                         "There is no dataset with this name " + datasetName + " in dataverse " + dataverseName);
             }
-            ActiveLifecycleListener activeListener = (ActiveLifecycleListener) appCtx.getActiveLifecycleListener();
-            ActiveJobNotificationHandler activeEventHandler = activeListener.getNotificationHandler();
+            ActiveNotificationHandler activeEventHandler =
+                    (ActiveNotificationHandler) appCtx.getActiveNotificationHandler();
             IActiveEntityEventsListener[] listeners = activeEventHandler.getEventListeners();
             StringBuilder builder = null;
             for (IActiveEntityEventsListener listener : listeners) {
@@ -1379,7 +1415,6 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
             }
 
             if (ds.getDatasetType() == DatasetType.INTERNAL) {
-                indexName = stmtIndexDrop.getIndexName().getValue();
                 Index index = MetadataManager.INSTANCE.getIndex(mdTxnCtx, dataverseName, datasetName, indexName);
                 if (index == null) {
                     if (stmtIndexDrop.getIfExists()) {
@@ -1397,7 +1432,8 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
                 MetadataManager.INSTANCE.addIndex(mdTxnCtx,
                         new Index(dataverseName, datasetName, indexName, index.getIndexType(), index.getKeyFieldNames(),
                                 index.getKeyFieldSourceIndicators(), index.getKeyFieldTypes(),
-                                index.isEnforcingKeyFields(), index.isPrimaryIndex(), MetadataUtil.PENDING_DROP_OP));
+                                index.isOverridingKeyFieldTypes(), index.isEnforced(), index.isPrimaryIndex(),
+                                MetadataUtil.PENDING_DROP_OP));
 
                 // #. commit the existing transaction before calling runJob.
                 MetadataManager.INSTANCE.commitTransaction(mdTxnCtx);
@@ -1405,7 +1441,7 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
                 progress = ProgressState.ADDED_PENDINGOP_RECORD_TO_METADATA;
 
                 for (JobSpecification jobSpec : jobsToExecute) {
-                    JobUtils.runJob(hcc, jobSpec, true);
+                    runJob(hcc, jobSpec);
                 }
 
                 // #. begin a new transaction
@@ -1447,8 +1483,8 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
                                     new Index(dataverseName, datasetName, externalIndex.getIndexName(),
                                             externalIndex.getIndexType(), externalIndex.getKeyFieldNames(),
                                             externalIndex.getKeyFieldSourceIndicators(), index.getKeyFieldTypes(),
-                                            index.isEnforcingKeyFields(), externalIndex.isPrimaryIndex(),
-                                            MetadataUtil.PENDING_DROP_OP));
+                                            index.isOverridingKeyFieldTypes(), index.isEnforced(),
+                                            externalIndex.isPrimaryIndex(), MetadataUtil.PENDING_DROP_OP));
                         }
                     }
                 }
@@ -1458,7 +1494,8 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
                 MetadataManager.INSTANCE.addIndex(mdTxnCtx,
                         new Index(dataverseName, datasetName, indexName, index.getIndexType(), index.getKeyFieldNames(),
                                 index.getKeyFieldSourceIndicators(), index.getKeyFieldTypes(),
-                                index.isEnforcingKeyFields(), index.isPrimaryIndex(), MetadataUtil.PENDING_DROP_OP));
+                                index.isOverridingKeyFieldTypes(), index.isEnforced(), index.isPrimaryIndex(),
+                                MetadataUtil.PENDING_DROP_OP));
 
                 // #. commit the existing transaction before calling runJob.
                 MetadataManager.INSTANCE.commitTransaction(mdTxnCtx);
@@ -1466,7 +1503,7 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
                 progress = ProgressState.ADDED_PENDINGOP_RECORD_TO_METADATA;
 
                 for (JobSpecification jobSpec : jobsToExecute) {
-                    JobUtils.runJob(hcc, jobSpec, true);
+                    runJob(hcc, jobSpec);
                 }
 
                 // #. begin a new transaction
@@ -1496,7 +1533,7 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
                 // remove the all indexes in NC
                 try {
                     for (JobSpecification jobSpec : jobsToExecute) {
-                        JobUtils.runJob(hcc, jobSpec, true);
+                        runJob(hcc, jobSpec);
                     }
                 } catch (Exception e2) {
                     // do no throw exception since still the metadata needs to be compensated.
@@ -1538,7 +1575,7 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
 
         MetadataTransactionContext mdTxnCtx = MetadataManager.INSTANCE.beginTransaction();
         metadataProvider.setMetadataTxnContext(mdTxnCtx);
-        MetadataLockManager.INSTANCE.dropTypeBegin(metadataProvider.getLocks(), dataverseName,
+        MetadataLockUtil.dropTypeBegin(lockManager, metadataProvider.getLocks(), dataverseName,
                 dataverseName + "." + typeName);
         try {
             Datatype dt = MetadataManager.INSTANCE.getDatatype(mdTxnCtx, dataverseName, typeName);
@@ -1563,7 +1600,7 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
         String nodegroupName = stmtDelete.getNodeGroupName().getValue();
         MetadataTransactionContext mdTxnCtx = MetadataManager.INSTANCE.beginTransaction();
         metadataProvider.setMetadataTxnContext(mdTxnCtx);
-        MetadataLockManager.INSTANCE.acquireNodeGroupWriteLock(metadataProvider.getLocks(), nodegroupName);
+        lockManager.acquireNodeGroupWriteLock(metadataProvider.getLocks(), nodegroupName);
         try {
             NodeGroup ng = MetadataManager.INSTANCE.getNodegroup(mdTxnCtx, nodegroupName);
             if (ng == null) {
@@ -1591,7 +1628,7 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
 
         MetadataTransactionContext mdTxnCtx = MetadataManager.INSTANCE.beginTransaction();
         metadataProvider.setMetadataTxnContext(mdTxnCtx);
-        MetadataLockManager.INSTANCE.functionStatementBegin(metadataProvider.getLocks(), dataverse,
+        MetadataLockUtil.functionStatementBegin(lockManager, metadataProvider.getLocks(), dataverse,
                 dataverse + "." + functionName);
         try {
             Dataverse dv = MetadataManager.INSTANCE.getDataverse(mdTxnCtx, dataverse);
@@ -1602,7 +1639,7 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
             // If the function body contains function calls, theirs reference count won't be increased.
             Function function = new Function(dataverse, functionName, cfs.getSignature().getArity(),
                     cfs.getParamList(), Function.RETURNTYPE_VOID, cfs.getFunctionBody(), Function.LANGUAGE_AQL,
-                    FunctionKind.SCALAR.toString(), 0);
+                    FunctionKind.SCALAR.toString());
             MetadataManager.INSTANCE.addFunction(mdTxnCtx, function);
 
             MetadataManager.INSTANCE.commitTransaction(mdTxnCtx);
@@ -1614,22 +1651,42 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
         }
     }
 
+    protected boolean checkWhetherFunctionIsBeingUsed(MetadataTransactionContext ctx, String dataverseName,
+            String functionName, int arity, String currentDataverse) throws MetadataException {
+        List<Dataverse> allDataverses = MetadataManager.INSTANCE.getDataverses(ctx);
+        for (Dataverse dataverse : allDataverses) {
+            if (currentDataverse != null && dataverse.getDataverseName().equals(currentDataverse)) {
+                continue;
+            }
+            List<Feed> feeds = MetadataManager.INSTANCE.getFeeds(ctx, dataverse.getDataverseName());
+            for (Feed feed : feeds) {
+                List<FeedConnection> feedConnections = MetadataManager.INSTANCE.getFeedConections(ctx,
+                        dataverse.getDataverseName(), feed.getFeedName());
+                for (FeedConnection conn : feedConnections) {
+                    if (conn.containsFunction(dataverseName, functionName, arity)) {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
     protected void handleFunctionDropStatement(MetadataProvider metadataProvider, Statement stmt) throws Exception {
         FunctionDropStatement stmtDropFunction = (FunctionDropStatement) stmt;
         FunctionSignature signature = stmtDropFunction.getFunctionSignature();
         signature.setNamespace(getActiveDataverseName(signature.getNamespace()));
         MetadataTransactionContext mdTxnCtx = MetadataManager.INSTANCE.beginTransaction();
         metadataProvider.setMetadataTxnContext(mdTxnCtx);
-        MetadataLockManager.INSTANCE.functionStatementBegin(metadataProvider.getLocks(), signature.getNamespace(),
+        MetadataLockUtil.functionStatementBegin(lockManager, metadataProvider.getLocks(), signature.getNamespace(),
                 signature.getNamespace() + "." + signature.getName());
         try {
             Function function = MetadataManager.INSTANCE.getFunction(mdTxnCtx, signature);
-            if (function == null) {
-                if (!stmtDropFunction.getIfExists()) {
-                    throw new AlgebricksException("Unknonw function " + signature);
-                }
-            } else if (function.getReferenceCount() != 0) {
-                throw new AlgebricksException("Function " + signature + " is being used. It cannot be dropped.");
+            if (function == null && !stmtDropFunction.getIfExists()) {
+                throw new AlgebricksException("Unknonw function " + signature);
+            } else if (checkWhetherFunctionIsBeingUsed(mdTxnCtx, signature.getNamespace(), signature.getName(),
+                    signature.getArity(), null)) {
+                throw new MetadataException(ErrorCode.METADATA_DROP_FUCTION_IN_USE, signature);
             } else {
                 MetadataManager.INSTANCE.dropFunction(mdTxnCtx, signature);
             }
@@ -1650,7 +1707,7 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
         MetadataTransactionContext mdTxnCtx = MetadataManager.INSTANCE.beginTransaction();
         boolean bActiveTxn = true;
         metadataProvider.setMetadataTxnContext(mdTxnCtx);
-        MetadataLockManager.INSTANCE.modifyDatasetBegin(metadataProvider.getLocks(), dataverseName,
+        MetadataLockUtil.modifyDatasetBegin(lockManager, metadataProvider.getLocks(), dataverseName,
                 dataverseName + "." + datasetName);
         try {
             CompiledLoadFromFileStatement cls =
@@ -1660,7 +1717,7 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
             MetadataManager.INSTANCE.commitTransaction(mdTxnCtx);
             bActiveTxn = false;
             if (spec != null) {
-                JobUtils.runJob(hcc, spec, true);
+                runJob(hcc, spec);
             }
         } catch (Exception e) {
             if (bActiveTxn) {
@@ -1674,14 +1731,13 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
 
     public JobSpecification handleInsertUpsertStatement(MetadataProvider metadataProvider, Statement stmt,
             IHyracksClientConnection hcc, IHyracksDataset hdc, ResultDelivery resultDelivery,
-            ResultMetadata outMetadata, Stats stats, boolean compileOnly, String clientContextId,
-            IStatementExecutorContext ctx) throws Exception {
+            ResultMetadata outMetadata, Stats stats, boolean compileOnly, String clientContextId) throws Exception {
         InsertStatement stmtInsertUpsert = (InsertStatement) stmt;
         String dataverseName = getActiveDataverse(stmtInsertUpsert.getDataverseName());
         final IMetadataLocker locker = new IMetadataLocker() {
             @Override
             public void lock() throws AsterixException {
-                MetadataLockManager.INSTANCE.insertDeleteUpsertBegin(metadataProvider.getLocks(),
+                MetadataLockUtil.insertDeleteUpsertBegin(lockManager, metadataProvider.getLocks(),
                         dataverseName + "." + stmtInsertUpsert.getDatasetName());
             }
 
@@ -1718,7 +1774,7 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
 
         if (stmtInsertUpsert.getReturnExpression() != null) {
             deliverResult(hcc, hdc, compiler, metadataProvider, locker, resultDelivery, outMetadata, stats,
-                    clientContextId, ctx);
+                    clientContextId, NoOpStatementExecutorContext.INSTANCE);
         } else {
             locker.lock();
             try {
@@ -1726,7 +1782,7 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
                 if (jobSpec == null) {
                     return jobSpec;
                 }
-                JobUtils.runJob(hcc, jobSpec, true);
+                runJob(hcc, jobSpec);
             } finally {
                 locker.unlock();
             }
@@ -1741,7 +1797,7 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
         MetadataTransactionContext mdTxnCtx = MetadataManager.INSTANCE.beginTransaction();
         boolean bActiveTxn = true;
         metadataProvider.setMetadataTxnContext(mdTxnCtx);
-        MetadataLockManager.INSTANCE.insertDeleteUpsertBegin(metadataProvider.getLocks(),
+        MetadataLockUtil.insertDeleteUpsertBegin(lockManager, metadataProvider.getLocks(),
                 dataverseName + "." + stmtDelete.getDatasetName());
         try {
             metadataProvider.setWriteTransaction(true);
@@ -1754,7 +1810,7 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
             bActiveTxn = false;
 
             if (jobSpec != null && !compileOnly) {
-                JobUtils.runJob(hcc, jobSpec, true);
+                runJob(hcc, jobSpec);
             }
             return jobSpec;
         } catch (Exception e) {
@@ -1818,7 +1874,7 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
         String feedName = cfs.getFeedName().getValue();
         MetadataTransactionContext mdTxnCtx = MetadataManager.INSTANCE.beginTransaction();
         metadataProvider.setMetadataTxnContext(mdTxnCtx);
-        MetadataLockManager.INSTANCE.createFeedBegin(metadataProvider.getLocks(), dataverseName,
+        MetadataLockUtil.createFeedBegin(lockManager, metadataProvider.getLocks(), dataverseName,
                 dataverseName + "." + feedName);
         Feed feed = null;
         try {
@@ -1853,7 +1909,7 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
         CreateFeedPolicyStatement cfps = (CreateFeedPolicyStatement) stmt;
         dataverse = getActiveDataverse(null);
         policy = cfps.getPolicyName();
-        MetadataLockManager.INSTANCE.createFeedPolicyBegin(metadataProvider.getLocks(), dataverse,
+        MetadataLockUtil.createFeedPolicyBegin(lockManager, metadataProvider.getLocks(), dataverse,
                 dataverse + "." + policy);
         try {
             mdTxnCtx = MetadataManager.INSTANCE.beginTransaction();
@@ -1914,7 +1970,7 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
         String feedName = stmtFeedDrop.getFeedName().getValue();
         MetadataTransactionContext mdTxnCtx = MetadataManager.INSTANCE.beginTransaction();
         metadataProvider.setMetadataTxnContext(mdTxnCtx);
-        MetadataLockManager.INSTANCE.dropFeedBegin(metadataProvider.getLocks(), dataverseName,
+        MetadataLockUtil.dropFeedBegin(lockManager, metadataProvider.getLocks(), dataverseName,
                 dataverseName + "." + feedName);
         try {
             Feed feed = MetadataManager.INSTANCE.getFeed(mdTxnCtx, dataverseName, feedName);
@@ -1925,31 +1981,36 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
                 MetadataManager.INSTANCE.commitTransaction(mdTxnCtx);
                 return;
             }
-
-            EntityId feedId = new EntityId(Feed.EXTENSION_NAME, dataverseName, feedName);
-            ActiveLifecycleListener activeListener = (ActiveLifecycleListener) appCtx.getActiveLifecycleListener();
-            ActiveJobNotificationHandler activeEventHandler = activeListener.getNotificationHandler();
-            FeedEventsListener listener = (FeedEventsListener) activeEventHandler.getActiveEntityListener(feedId);
-            if (listener != null) {
-                throw new AlgebricksException("Feed " + feedId
-                        + " is currently active and connected to the following dataset(s) \n" + listener.toString());
-            } else {
-                JobSpecification spec = FeedOperations.buildRemoveFeedStorageJob(metadataProvider,
-                        MetadataManager.INSTANCE.getFeed(mdTxnCtx, feedId.getDataverse(), feedId.getEntityName()));
-                JobUtils.runJob(hcc, spec, true);
-                MetadataManager.INSTANCE.dropFeed(mdTxnCtx, dataverseName, feedName);
-            }
-
-            if (LOGGER.isLoggable(Level.INFO)) {
-                LOGGER.info("Removed feed " + feedId);
-            }
+            doDropFeed(hcc, metadataProvider, feed);
             MetadataManager.INSTANCE.commitTransaction(mdTxnCtx);
-
         } catch (Exception e) {
             abort(e, e, mdTxnCtx);
             throw e;
         } finally {
             metadataProvider.getLocks().unlock();
+        }
+    }
+
+    protected void doDropFeed(IHyracksClientConnection hcc, MetadataProvider metadataProvider, Feed feed)
+            throws Exception {
+        MetadataTransactionContext mdTxnCtx = metadataProvider.getMetadataTxnContext();
+        EntityId feedId = feed.getFeedId();
+        ActiveNotificationHandler activeNotificationHandler =
+                (ActiveNotificationHandler) appCtx.getActiveNotificationHandler();
+        ActiveEntityEventsListener listener =
+                (ActiveEntityEventsListener) activeNotificationHandler.getListener(feedId);
+        if (listener != null && listener.getState() != ActivityState.STOPPED) {
+            throw new AlgebricksException("Feed " + feedId
+                    + " is currently active and connected to the following dataset(s) \n" + listener.toString());
+        } else if (listener != null) {
+            listener.unregister();
+        }
+        JobSpecification spec = FeedOperations.buildRemoveFeedStorageJob(metadataProvider,
+                MetadataManager.INSTANCE.getFeed(mdTxnCtx, feedId.getDataverse(), feedId.getEntityName()));
+        runJob(hcc, spec);
+        MetadataManager.INSTANCE.dropFeed(mdTxnCtx, feed.getDataverseName(), feed.getFeedName());
+        if (LOGGER.isLoggable(Level.INFO)) {
+            LOGGER.info("Removed feed " + feedId);
         }
     }
 
@@ -1959,7 +2020,7 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
         FeedPolicyDropStatement stmtFeedPolicyDrop = (FeedPolicyDropStatement) stmt;
         String dataverseName = getActiveDataverse(stmtFeedPolicyDrop.getDataverseName());
         String policyName = stmtFeedPolicyDrop.getPolicyName().getValue();
-        MetadataLockManager.INSTANCE.dropFeedPolicyBegin(metadataProvider.getLocks(), dataverseName,
+        MetadataLockUtil.dropFeedPolicyBegin(lockManager, metadataProvider.getLocks(), dataverseName,
                 dataverseName + "." + policyName);
         try {
             FeedPolicyEntity feedPolicy = MetadataManager.INSTANCE.getFeedPolicy(mdTxnCtx, dataverseName, policyName);
@@ -1985,52 +2046,48 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
         StartFeedStatement sfs = (StartFeedStatement) stmt;
         String dataverseName = getActiveDataverse(sfs.getDataverseName());
         String feedName = sfs.getFeedName().getValue();
-        // Transcation handler
         MetadataTransactionContext mdTxnCtx = MetadataManager.INSTANCE.beginTransaction();
-        metadataProvider.setMetadataTxnContext(mdTxnCtx);
-        // Runtime handler
-        EntityId entityId = new EntityId(Feed.EXTENSION_NAME, dataverseName, feedName);
-        // Feed & Feed Connections
-        Feed feed = FeedMetadataUtil.validateIfFeedExists(dataverseName, feedName,
-                metadataProvider.getMetadataTxnContext());
-        List<FeedConnection> feedConnections = MetadataManager.INSTANCE
-                .getFeedConections(metadataProvider.getMetadataTxnContext(), dataverseName, feedName);
-        ILangCompilationProvider compilationProvider = new AqlCompilationProvider();
-        IStorageComponentProvider storageComponentProvider = new StorageComponentProvider();
-        DefaultStatementExecutorFactory qtFactory = new DefaultStatementExecutorFactory();
-        ActiveLifecycleListener activeListener = (ActiveLifecycleListener) appCtx.getActiveLifecycleListener();
-        ActiveJobNotificationHandler activeEventHandler = activeListener.getNotificationHandler();
-        FeedEventsListener listener = (FeedEventsListener) activeEventHandler.getActiveEntityListener(entityId);
-        if (listener != null) {
-            throw new AlgebricksException("Feed " + feedName + " is started already.");
-        }
-        // Start
-        MetadataLockManager.INSTANCE.startFeedBegin(metadataProvider.getLocks(), dataverseName,
-                dataverseName + "." + feedName, feedConnections);
+        boolean committed = false;
+        MetadataLockUtil.startFeedBegin(lockManager, metadataProvider.getLocks(), dataverseName,
+                dataverseName + "." + feedName);
         try {
-            // Prepare policy
-            List<IDataset> datasets = new ArrayList<>();
-            for (FeedConnection connection : feedConnections) {
-                Dataset ds = metadataProvider.findDataset(connection.getDataverseName(), connection.getDatasetName());
-                datasets.add(ds);
+            metadataProvider.setMetadataTxnContext(mdTxnCtx);
+            // Runtime handler
+            EntityId entityId = new EntityId(Feed.EXTENSION_NAME, dataverseName, feedName);
+            // Feed & Feed Connections
+            Feed feed = FeedMetadataUtil.validateIfFeedExists(dataverseName, feedName,
+                    metadataProvider.getMetadataTxnContext());
+            List<FeedConnection> feedConnections = MetadataManager.INSTANCE
+                    .getFeedConections(metadataProvider.getMetadataTxnContext(), dataverseName, feedName);
+            if (feedConnections.isEmpty()) {
+                throw new CompilationException(ErrorCode.FEED_START_FEED_WITHOUT_CONNECTION, feedName);
             }
-            org.apache.commons.lang3.tuple.Pair<JobSpecification, AlgebricksAbsolutePartitionConstraint> jobInfo =
-                    FeedOperations.buildStartFeedJob(sessionOutput, metadataProvider, feed, feedConnections,
-                            compilationProvider, storageComponentProvider, qtFactory, hcc);
-
-            JobSpecification feedJob = jobInfo.getLeft();
-            listener = new FeedEventsListener(appCtx, entityId, datasets, jobInfo.getRight().getLocations());
-            activeEventHandler.registerListener(listener);
-            IActiveEventSubscriber eventSubscriber = listener.subscribe(ActivityState.STARTED);
-            feedJob.setProperty(ActiveJobNotificationHandler.ACTIVE_ENTITY_PROPERTY_NAME, entityId);
-            JobUtils.runJob(hcc, feedJob,
-                    Boolean.valueOf(metadataProvider.getConfig().get(StartFeedStatement.WAIT_FOR_COMPLETION)));
-            eventSubscriber.sync();
-            LOGGER.log(Level.INFO, "Submitted");
+            for (FeedConnection feedConnection : feedConnections) {
+                // what if the dataset is in a different dataverse
+                String fqName = feedConnection.getDataverseName() + "." + feedConnection.getDatasetName();
+                lockManager.acquireDatasetReadLock(metadataProvider.getLocks(), fqName);
+            }
+            ActiveNotificationHandler activeEventHandler =
+                    (ActiveNotificationHandler) appCtx.getActiveNotificationHandler();
+            ActiveEntityEventsListener listener = (ActiveEntityEventsListener) activeEventHandler.getListener(entityId);
+            if (listener == null) {
+                // Prepare policy
+                List<Dataset> datasets = new ArrayList<>();
+                for (FeedConnection connection : feedConnections) {
+                    Dataset ds =
+                            metadataProvider.findDataset(connection.getDataverseName(), connection.getDatasetName());
+                    datasets.add(ds);
+                }
+                listener = new FeedEventsListener(this, metadataProvider.getApplicationContext(), hcc, entityId,
+                        datasets, null, FeedIntakeOperatorNodePushable.class.getSimpleName(),
+                        NoRetryPolicyFactory.INSTANCE, feed, feedConnections);
+            }
+            MetadataManager.INSTANCE.commitTransaction(mdTxnCtx);
+            committed = true;
+            listener.start(metadataProvider);
         } catch (Exception e) {
-            abort(e, e, mdTxnCtx);
-            if (listener != null) {
-                activeEventHandler.unregisterListener(listener);
+            if (!committed) {
+                abort(e, e, mdTxnCtx);
             }
             throw e;
         } finally {
@@ -2042,31 +2099,18 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
         StopFeedStatement sfst = (StopFeedStatement) stmt;
         String dataverseName = getActiveDataverse(sfst.getDataverseName());
         String feedName = sfst.getFeedName().getValue();
-        EntityId feedId = new EntityId(Feed.EXTENSION_NAME, dataverseName, feedName);
-        ActiveLifecycleListener activeListener = (ActiveLifecycleListener) appCtx.getActiveLifecycleListener();
-        ActiveJobNotificationHandler activeEventHandler = activeListener.getNotificationHandler();
+        EntityId entityId = new EntityId(Feed.EXTENSION_NAME, dataverseName, feedName);
+        ActiveNotificationHandler activeEventHandler =
+                (ActiveNotificationHandler) appCtx.getActiveNotificationHandler();
         // Obtain runtime info from ActiveListener
-        FeedEventsListener listener = (FeedEventsListener) activeEventHandler.getActiveEntityListener(feedId);
+        ActiveEntityEventsListener listener = (ActiveEntityEventsListener) activeEventHandler.getListener(entityId);
         if (listener == null) {
             throw new AlgebricksException("Feed " + feedName + " is not started.");
         }
-        IActiveEventSubscriber eventSubscriber = listener.subscribe(ActivityState.STOPPED);
-        // Transaction
-        MetadataTransactionContext mdTxnCtx = MetadataManager.INSTANCE.beginTransaction();
-        metadataProvider.setMetadataTxnContext(mdTxnCtx);
-        MetadataLockManager.INSTANCE.stopFeedBegin(metadataProvider.getLocks(), dataverseName, feedName);
+        MetadataLockUtil.stopFeedBegin(lockManager, metadataProvider.getLocks(), entityId.getDataverse(),
+                entityId.getEntityName());
         try {
-            // validate
-            FeedMetadataUtil.validateIfFeedExists(dataverseName, feedName, mdTxnCtx);
-            // Construct ActiveMessage
-            for (int i = 0; i < listener.getSources().length; i++) {
-                String intakeLocation = listener.getSources()[i];
-                FeedOperations.SendStopMessageToNode(appCtx, feedId, intakeLocation, i);
-            }
-            eventSubscriber.sync();
-        } catch (Exception e) {
-            abort(e, e, mdTxnCtx);
-            throw e;
+            listener.stop(metadataProvider);
         } finally {
             metadataProvider.getLocks().unlock();
         }
@@ -2082,20 +2126,20 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
         MetadataTransactionContext mdTxnCtx = MetadataManager.INSTANCE.beginTransaction();
         metadataProvider.setMetadataTxnContext(mdTxnCtx);
         // Check whether feed is alive
-        ActiveLifecycleListener activeListener = (ActiveLifecycleListener) appCtx.getActiveLifecycleListener();
-        ActiveJobNotificationHandler activeEventHandler = activeListener.getNotificationHandler();
-        if (activeEventHandler
-                .getActiveEntityListener(new EntityId(Feed.EXTENSION_NAME, dataverseName, feedName)) != null) {
-            throw new CompilationException(ErrorCode.FEED_CHANGE_FEED_CONNECTIVITY_ON_ALIVE_FEED, feedName);
-        }
+        ActiveNotificationHandler activeEventHandler =
+                (ActiveNotificationHandler) appCtx.getActiveNotificationHandler();
         // Transaction handling
-        MetadataLockManager.INSTANCE.connectFeedBegin(metadataProvider.getLocks(), dataverseName,
+        MetadataLockUtil.connectFeedBegin(lockManager, metadataProvider.getLocks(), dataverseName,
                 dataverseName + "." + datasetName, dataverseName + "." + feedName);
         try {
             // validation
-            FeedMetadataUtil.validateIfDatasetExists(metadataProvider, dataverseName, datasetName, mdTxnCtx);
+            Dataset dataset = FeedMetadataUtil.validateIfDatasetExists(metadataProvider, dataverseName, datasetName);
             Feed feed = FeedMetadataUtil.validateIfFeedExists(dataverseName, feedName,
                     metadataProvider.getMetadataTxnContext());
+            FeedEventsListener listener = (FeedEventsListener) activeEventHandler.getListener(feed.getFeedId());
+            if (listener != null && listener.isActive()) {
+                throw new CompilationException(ErrorCode.FEED_CHANGE_FEED_CONNECTIVITY_ON_ALIVE_FEED, feedName);
+            }
             ARecordType outputType = FeedMetadataUtil.getOutputType(feed, feed.getAdapterConfiguration(),
                     ExternalDataConstants.KEY_TYPE_NAME);
             List<FunctionSignature> appliedFunctions = cfs.getAppliedFunctions();
@@ -2113,14 +2157,11 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
             fc = new FeedConnection(dataverseName, feedName, datasetName, appliedFunctions, policyName,
                     outputType.toString());
             MetadataManager.INSTANCE.addFeedConnection(metadataProvider.getMetadataTxnContext(), fc);
-            // Increase function reference count.
-            for (FunctionSignature funcSig : appliedFunctions) {
-                // The function should be cached in Metadata manager, so this operation is not that expensive.
-                Function func = MetadataManager.INSTANCE.getFunction(mdTxnCtx, funcSig);
-                func.reference();
-                MetadataManager.INSTANCE.updateFunction(mdTxnCtx, func);
-            }
             MetadataManager.INSTANCE.commitTransaction(mdTxnCtx);
+            if (listener != null) {
+                listener.add(dataset);
+                listener.addFeedConnection(fc);
+            }
         } catch (Exception e) {
             abort(e, e, mdTxnCtx);
             throw e;
@@ -2136,32 +2177,34 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
         String feedName = cfs.getFeedName().getValue();
         MetadataTransactionContext mdTxnCtx = MetadataManager.INSTANCE.beginTransaction();
         metadataProvider.setMetadataTxnContext(mdTxnCtx);
-        ActiveLifecycleListener activeListener = (ActiveLifecycleListener) appCtx.getActiveLifecycleListener();
-        ActiveJobNotificationHandler activeEventHandler = activeListener.getNotificationHandler();
-        // Check whether feed is alive
-        if (activeEventHandler
-                .getActiveEntityListener(new EntityId(Feed.EXTENSION_NAME, dataverseName, feedName)) != null) {
-            throw new CompilationException(ErrorCode.FEED_CHANGE_FEED_CONNECTIVITY_ON_ALIVE_FEED, feedName);
-        }
-        MetadataLockManager.INSTANCE.disconnectFeedBegin(metadataProvider.getLocks(), dataverseName,
+        MetadataLockUtil.disconnectFeedBegin(lockManager, metadataProvider.getLocks(), dataverseName,
                 dataverseName + "." + datasetName, dataverseName + "." + cfs.getFeedName());
         try {
-            FeedMetadataUtil.validateIfDatasetExists(metadataProvider, dataverseName, cfs.getDatasetName().getValue(),
-                    mdTxnCtx);
+            ActiveNotificationHandler activeEventHandler =
+                    (ActiveNotificationHandler) appCtx.getActiveNotificationHandler();
+            // Check whether feed is alive
+            ActiveEntityEventsListener listener = (ActiveEntityEventsListener) activeEventHandler
+                    .getListener(new EntityId(Feed.EXTENSION_NAME, dataverseName, feedName));
+            if (listener != null && listener.isActive()) {
+                throw new CompilationException(ErrorCode.FEED_CHANGE_FEED_CONNECTIVITY_ON_ALIVE_FEED, feedName);
+            }
+            FeedMetadataUtil.validateIfDatasetExists(metadataProvider, dataverseName, cfs.getDatasetName().getValue());
             FeedMetadataUtil.validateIfFeedExists(dataverseName, cfs.getFeedName().getValue(), mdTxnCtx);
             FeedConnection fc = MetadataManager.INSTANCE.getFeedConnection(metadataProvider.getMetadataTxnContext(),
                     dataverseName, feedName, datasetName);
+            Dataset ds = metadataProvider.findDataset(dataverseName, datasetName);
+            if (ds == null) {
+                throw new CompilationException("Dataset " + dataverseName + "." + datasetName + " doesn't exist");
+            }
             if (fc == null) {
                 throw new CompilationException("Feed " + feedName + " is currently not connected to "
                         + cfs.getDatasetName().getValue() + ". Invalid operation!");
             }
             MetadataManager.INSTANCE.dropFeedConnection(mdTxnCtx, dataverseName, feedName, datasetName);
-            for (FunctionSignature functionSignature : fc.getAppliedFunctions()) {
-                Function function = MetadataManager.INSTANCE.getFunction(mdTxnCtx, functionSignature);
-                function.dereference();
-                MetadataManager.INSTANCE.updateFunction(mdTxnCtx, function);
-            }
             MetadataManager.INSTANCE.commitTransaction(mdTxnCtx);
+            if (listener != null) {
+                listener.remove(ds);
+            }
         } catch (Exception e) {
             abort(e, e, mdTxnCtx);
             throw e;
@@ -2179,7 +2222,7 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
         boolean bActiveTxn = true;
         metadataProvider.setMetadataTxnContext(mdTxnCtx);
         List<JobSpecification> jobsToExecute = new ArrayList<>();
-        MetadataLockManager.INSTANCE.compactBegin(metadataProvider.getLocks(), dataverseName,
+        MetadataLockUtil.compactBegin(lockManager, metadataProvider.getLocks(), dataverseName,
                 dataverseName + "." + datasetName);
         try {
             Dataset ds = metadataProvider.findDataset(dataverseName, datasetName);
@@ -2200,8 +2243,7 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
             if (ds.getDatasetType() == DatasetType.INTERNAL) {
                 for (Index index : indexes) {
                     if (index.isSecondaryIndex()) {
-                        jobsToExecute
-                                .add(IndexUtil.buildSecondaryIndexCompactJobSpec(ds, index, metadataProvider));
+                        jobsToExecute.add(IndexUtil.buildSecondaryIndexCompactJobSpec(ds, index, metadataProvider));
                     }
                 }
             } else {
@@ -2212,7 +2254,7 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
 
             // #. run the jobs
             for (JobSpecification jobSpec : jobsToExecute) {
-                JobUtils.runJob(hcc, jobSpec, true);
+                runJob(hcc, jobSpec);
             }
         } catch (Exception e) {
             if (bActiveTxn) {
@@ -2226,8 +2268,7 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
     }
 
     protected void prepareCompactJobsForExternalDataset(List<Index> indexes, Dataset ds,
-            List<JobSpecification> jobsToExecute, MetadataProvider metadataProvider)
-            throws AlgebricksException {
+            List<JobSpecification> jobsToExecute, MetadataProvider metadataProvider) throws AlgebricksException {
         for (int j = 0; j < indexes.size(); j++) {
             jobsToExecute.add(IndexUtil.buildSecondaryIndexCompactJobSpec(ds, indexes.get(j), metadataProvider));
 
@@ -2301,14 +2342,14 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
                 }
                 break;
             case IMMEDIATE:
-                createAndRunJob(hcc, null, compiler, locker, resultDelivery, id -> {
+                createAndRunJob(hcc, jobFlags, null, compiler, locker, resultDelivery, id -> {
                     final ResultReader resultReader = new ResultReader(hdc, id, resultSetId);
                     ResultUtil.printResults(appCtx, resultReader, sessionOutput, stats,
                             metadataProvider.findOutputRecordType());
                 }, clientContextId, ctx);
                 break;
             case DEFERRED:
-                createAndRunJob(hcc, null, compiler, locker, resultDelivery, id -> {
+                createAndRunJob(hcc, jobFlags, null, compiler, locker, resultDelivery, id -> {
                     ResultUtil.printResultHandle(sessionOutput, new ResultHandle(id, resultSetId));
                     if (outMetadata != null) {
                         outMetadata.getResultSets()
@@ -2326,7 +2367,7 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
             ResultSetId resultSetId, MutableBoolean printed) {
         Mutable<JobId> jobId = new MutableObject<>(JobId.INVALID);
         try {
-            createAndRunJob(hcc, jobId, compiler, locker, resultDelivery, id -> {
+            createAndRunJob(hcc, jobFlags, jobId, compiler, locker, resultDelivery, id -> {
                 final ResultHandle handle = new ResultHandle(id, resultSetId);
                 ResultUtil.printStatus(sessionOutput, AbstractQueryApiServlet.ResultStatus.RUNNING);
                 ResultUtil.printResultHandle(sessionOutput, handle);
@@ -2354,16 +2395,25 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
         }
     }
 
-    private static void createAndRunJob(IHyracksClientConnection hcc, Mutable<JobId> jId, IStatementCompiler compiler,
-            IMetadataLocker locker, ResultDelivery resultDelivery, IResultPrinter printer, String clientContextId,
-            IStatementExecutorContext ctx) throws Exception {
+    private void runJob(IHyracksClientConnection hcc, JobSpecification jobSpec) throws Exception {
+        runJob(hcc, jobSpec, jobFlags);
+    }
+
+    private static void runJob(IHyracksClientConnection hcc, JobSpecification jobSpec, EnumSet<JobFlag> jobFlags)
+            throws Exception {
+        JobUtils.runJob(hcc, jobSpec, jobFlags, true);
+    }
+
+    private static void createAndRunJob(IHyracksClientConnection hcc, EnumSet<JobFlag> jobFlags, Mutable<JobId> jId,
+            IStatementCompiler compiler, IMetadataLocker locker, ResultDelivery resultDelivery, IResultPrinter printer,
+            String clientContextId, IStatementExecutorContext ctx) throws Exception {
         locker.lock();
         try {
             final JobSpecification jobSpec = compiler.compile();
             if (jobSpec == null) {
                 return;
             }
-            final JobId jobId = JobUtils.runJob(hcc, jobSpec, false);
+            final JobId jobId = JobUtils.runJob(hcc, jobSpec, jobFlags, false);
             if (ctx != null && clientContextId != null) {
                 ctx.put(clientContextId, jobId); // Adds the running job into the context.
             }
@@ -2392,7 +2442,7 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
 
         MetadataTransactionContext mdTxnCtx = MetadataManager.INSTANCE.beginTransaction();
         metadataProvider.setMetadataTxnContext(mdTxnCtx);
-        MetadataLockManager.INSTANCE.acquireNodeGroupWriteLock(metadataProvider.getLocks(), ngName);
+        lockManager.acquireNodeGroupWriteLock(metadataProvider.getLocks(), ngName);
         try {
             NodeGroup ng = MetadataManager.INSTANCE.getNodegroup(mdTxnCtx, ngName);
             if (ng != null) {
@@ -2435,7 +2485,7 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
         Dataset transactionDataset = null;
         boolean lockAquired = false;
         boolean success = false;
-        MetadataLockManager.INSTANCE.refreshDatasetBegin(metadataProvider.getLocks(), dataverseName,
+        MetadataLockUtil.refreshDatasetBegin(lockManager, metadataProvider.getLocks(), dataverseName,
                 dataverseName + "." + datasetName);
         try {
             ds = metadataProvider.findDataset(dataverseName, datasetName);
@@ -2508,14 +2558,14 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
             transactionState = TransactionState.BEGIN;
 
             // run the files update job
-            JobUtils.runJob(hcc, spec, true);
+            runJob(hcc, spec);
 
             for (Index index : indexes) {
                 if (!ExternalIndexingOperations.isFileIndex(index)) {
                     spec = ExternalIndexingOperations.buildIndexUpdateOp(ds, index, metadataFiles, addedFiles,
                             appendedFiles, metadataProvider);
                     // run the files update job
-                    JobUtils.runJob(hcc, spec, true);
+                    runJob(hcc, spec);
                 }
             }
 
@@ -2534,7 +2584,7 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
             bActiveTxn = false;
             transactionState = TransactionState.READY_TO_COMMIT;
             // We don't release the latch since this job is expected to be quick
-            JobUtils.runJob(hcc, spec, true);
+            runJob(hcc, spec);
             // Start a new metadata transaction to record the final state of the transaction
             mdTxnCtx = MetadataManager.INSTANCE.beginTransaction();
             metadataProvider.setMetadataTxnContext(mdTxnCtx);
@@ -2603,7 +2653,7 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
                 MetadataManager.INSTANCE.commitTransaction(mdTxnCtx);
                 bActiveTxn = false;
                 try {
-                    JobUtils.runJob(hcc, spec, true);
+                    runJob(hcc, spec);
                 } catch (Exception e2) {
                     // This should never happen -- fix throw illegal
                     e.addSuppressed(e2);
@@ -2666,7 +2716,7 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
                 DatasetUtil.isFullyQualifiedName(datasetNameTo) ? datasetNameTo : dataverseNameTo + '.' + datasetNameTo;
         MetadataTransactionContext mdTxnCtx = MetadataManager.INSTANCE.beginTransaction();
         metadataProvider.setMetadataTxnContext(mdTxnCtx);
-        MetadataLockManager.INSTANCE.insertDeleteUpsertBegin(metadataProvider.getLocks(), fullyQualifiedDatasetNameTo);
+        MetadataLockUtil.insertDeleteUpsertBegin(lockManager, metadataProvider.getLocks(), fullyQualifiedDatasetNameTo);
         try {
             prepareRunExternalRuntime(metadataProvider, hcc, pregelixStmt, dataverseNameFrom, dataverseNameTo,
                     datasetNameFrom, datasetNameTo, mdTxnCtx);
@@ -2765,7 +2815,7 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
         }
 
         // Flushes source dataset.
-        FlushDatasetUtil.flushDataset(hcc, metadataProvider, dataverseNameFrom, datasetNameFrom, datasetNameFrom);
+        FlushDatasetUtil.flushDataset(hcc, metadataProvider, dataverseNameFrom, datasetNameFrom);
     }
 
     // Executes external shell commands.

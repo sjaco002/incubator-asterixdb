@@ -27,6 +27,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Queue;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.Semaphore;
 
@@ -35,12 +36,14 @@ import org.apache.commons.lang3.tuple.Pair;
 import org.apache.hyracks.api.comm.IFrameWriter;
 import org.apache.hyracks.api.context.IHyracksTaskContext;
 import org.apache.hyracks.api.dataflow.ActivityId;
+import org.apache.hyracks.api.dataflow.EnforceFrameWriter;
 import org.apache.hyracks.api.dataflow.IActivity;
 import org.apache.hyracks.api.dataflow.IConnectorDescriptor;
 import org.apache.hyracks.api.dataflow.IOperatorNodePushable;
 import org.apache.hyracks.api.dataflow.value.IRecordDescriptorProvider;
 import org.apache.hyracks.api.dataflow.value.RecordDescriptor;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
+import org.apache.hyracks.api.job.JobFlag;
 
 /**
  * The runtime of a SuperActivity, which internally executes a DAG of one-to-one
@@ -58,7 +61,8 @@ public class SuperActivityOperatorNodePushable implements IOperatorNodePushable 
     private int inputArity = 0;
 
     public SuperActivityOperatorNodePushable(SuperActivity parent, Map<ActivityId, IActivity> startActivities,
-            IHyracksTaskContext ctx, IRecordDescriptorProvider recordDescProvider, int partition, int nPartitions) {
+            IHyracksTaskContext ctx, IRecordDescriptorProvider recordDescProvider, int partition, int nPartitions)
+            throws HyracksDataException {
         this.parent = parent;
         this.startActivities = startActivities;
         this.ctx = ctx;
@@ -73,7 +77,7 @@ public class SuperActivityOperatorNodePushable implements IOperatorNodePushable 
         try {
             init();
         } catch (Exception e) {
-            throw new IllegalStateException(e);
+            throw HyracksDataException.create(e);
         }
     }
 
@@ -90,18 +94,18 @@ public class SuperActivityOperatorNodePushable implements IOperatorNodePushable 
     private void init() throws HyracksDataException {
         Queue<Pair<Pair<IActivity, Integer>, Pair<IActivity, Integer>>> childQueue = new LinkedList<>();
         List<IConnectorDescriptor> outputConnectors;
-
+        final boolean enforce = ctx.getJobFlags().contains(JobFlag.ENFORCE_CONTRACT);
         /*
          * Set up the source operators
          */
         for (Entry<ActivityId, IActivity> entry : startActivities.entrySet()) {
-            IOperatorNodePushable opPushable = entry.getValue().createPushRuntime(ctx, recordDescProvider, partition,
-                    nPartitions);
+            IOperatorNodePushable opPushable =
+                    entry.getValue().createPushRuntime(ctx, recordDescProvider, partition, nPartitions);
             operatorNodePushablesBFSOrder.add(opPushable);
             operatorNodePushables.put(entry.getKey(), opPushable);
             inputArity += opPushable.getInputArity();
-            outputConnectors = MapUtils.getObject(parent.getActivityOutputMap(), entry.getKey(),
-                    Collections.emptyList());
+            outputConnectors =
+                    MapUtils.getObject(parent.getActivityOutputMap(), entry.getKey(), Collections.emptyList());
             for (IConnectorDescriptor conn : outputConnectors) {
                 childQueue.add(parent.getConnectorActivityMap().get(conn.getConnectorId()));
             }
@@ -131,7 +135,9 @@ public class SuperActivityOperatorNodePushable implements IOperatorNodePushable 
             /*
              * construct the dataflow connection from a producer to a consumer
              */
-            sourceOp.setOutputFrameWriter(outputChannel, destOp.getInputFrameWriter(inputChannel),
+            IFrameWriter writer = destOp.getInputFrameWriter(inputChannel);
+            writer = enforce ? EnforceFrameWriter.enforce(writer) : writer;
+            sourceOp.setOutputFrameWriter(outputChannel, writer,
                     recordDescProvider.getInputRecordDescriptor(destId, inputChannel));
 
             /*
@@ -209,9 +215,9 @@ public class SuperActivityOperatorNodePushable implements IOperatorNodePushable 
             cancelTasks(tasks, startSemaphore, completeSemaphore);
             Thread.currentThread().interrupt();
             throw HyracksDataException.create(e);
-        } catch (Exception e) {
+        } catch (ExecutionException e) {
             cancelTasks(tasks, startSemaphore, completeSemaphore);
-            throw HyracksDataException.create(e);
+            throw HyracksDataException.create(e.getCause());
         }
     }
 

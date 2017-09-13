@@ -159,14 +159,14 @@ public class ConfigManager implements IConfigManager, Serializable {
                 : nodeSpecificMap.computeIfAbsent(node, this::createNodeSpecificMap);
     }
 
-    public void registerVirtualNode(String nodeId) {
-        LOGGER.fine("registerVirtualNode: " + nodeId);
+    public void ensureNode(String nodeId) {
+        LOGGER.fine("ensureNode: " + nodeId);
         nodeSpecificMap.computeIfAbsent(nodeId, this::createNodeSpecificMap);
     }
 
     private Map<IOption, Object> createNodeSpecificMap(String nodeId) {
         LOGGER.fine("createNodeSpecificMap: " + nodeId);
-        return new HashMap<>();
+        return Collections.synchronizedMap(new HashMap<>());
     }
 
     @Override
@@ -425,7 +425,7 @@ public class ConfigManager implements IConfigManager, Serializable {
     }
 
     public List<String> getNodeNames() {
-        return Collections.unmodifiableList(new ArrayList(nodeSpecificMap.keySet()));
+        return Collections.unmodifiableList(new ArrayList<>(nodeSpecificMap.keySet()));
     }
 
     public IApplicationConfig getNodeEffectiveConfig(String nodeId) {

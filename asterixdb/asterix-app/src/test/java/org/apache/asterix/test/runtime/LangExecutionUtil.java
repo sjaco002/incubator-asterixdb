@@ -19,7 +19,7 @@
 
 package org.apache.asterix.test.runtime;
 
-import static org.apache.hyracks.control.common.utils.ThreadDumpHelper.takeDumpJSON;
+import static org.apache.hyracks.control.common.utils.ThreadDumpHelper.takeDumpJSONString;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -41,13 +41,10 @@ import org.apache.commons.lang3.StringUtils;
 import org.apache.hyracks.api.io.IODeviceHandle;
 import org.apache.hyracks.control.common.utils.ThreadDumpHelper;
 import org.apache.hyracks.control.nc.NodeControllerService;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
 
 /**
  * Utils for running SQL++ or AQL runtime tests.
  */
-@RunWith(Parameterized.class)
 public class LangExecutionUtil {
 
     private static final String PATH_ACTUAL = "target" + File.separator + "rttest" + File.separator;
@@ -193,7 +190,7 @@ public class LangExecutionUtil {
     }
 
     private static void checkThreadLeaks() throws IOException {
-        String threadDump = ThreadDumpHelper.takeDumpJSON(ManagementFactory.getThreadMXBean());
+        String threadDump = ThreadDumpHelper.takeDumpJSONString(ManagementFactory.getThreadMXBean());
         // Currently we only do sanity check for threads used in the execution engine.
         // Later we should check if there are leaked storage threads as well.
         if (threadDump.contains("Operator") || threadDump.contains("SuperActivity")
@@ -218,7 +215,7 @@ public class LangExecutionUtil {
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
             int runFileCount = Integer.parseInt(reader.readLine().trim());
             if (runFileCount != 0) {
-                System.out.print(takeDumpJSON(ManagementFactory.getThreadMXBean()));
+                System.out.print(takeDumpJSONString(ManagementFactory.getThreadMXBean()));
                 outputLeakedOpenFiles(processId);
                 throw new AssertionError("There are " + runFileCount + " leaked run files.");
             }
