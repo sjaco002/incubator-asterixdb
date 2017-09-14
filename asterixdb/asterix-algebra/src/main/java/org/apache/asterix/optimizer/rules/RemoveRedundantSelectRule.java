@@ -19,15 +19,17 @@
 
 package org.apache.asterix.optimizer.rules;
 
-import org.apache.commons.lang3.mutable.Mutable;
-
 import org.apache.asterix.om.base.ABoolean;
 import org.apache.asterix.om.constants.AsterixConstantValue;
+import org.apache.asterix.om.functions.BuiltinFunctions;
+import org.apache.commons.lang3.mutable.Mutable;
 import org.apache.hyracks.algebricks.common.exceptions.AlgebricksException;
 import org.apache.hyracks.algebricks.core.algebra.base.ILogicalExpression;
 import org.apache.hyracks.algebricks.core.algebra.base.ILogicalOperator;
 import org.apache.hyracks.algebricks.core.algebra.base.IOptimizationContext;
+import org.apache.hyracks.algebricks.core.algebra.base.LogicalExpressionTag;
 import org.apache.hyracks.algebricks.core.algebra.base.LogicalOperatorTag;
+import org.apache.hyracks.algebricks.core.algebra.expressions.AbstractFunctionCallExpression;
 import org.apache.hyracks.algebricks.core.algebra.expressions.ConstantExpression;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.AbstractLogicalOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.SelectOperator;
@@ -57,7 +59,7 @@ public class RemoveRedundantSelectRule implements IAlgebraicRewriteRule {
         }
         SelectOperator select = (SelectOperator) op;
         ILogicalExpression cond = select.getCondition().getValue();
-        if (alwaysHold(cond)) {
+        if (alwaysHold(cond, context)) {
             opRef.setValue(select.getInputs().get(0).getValue());
             return true;
         }
@@ -70,12 +72,30 @@ public class RemoveRedundantSelectRule implements IAlgebraicRewriteRule {
      * @param cond
      * @return true if the condition always holds; false otherwise.
      */
-    private boolean alwaysHold(ILogicalExpression cond) {
+    private boolean alwaysHold(ILogicalExpression cond, IOptimizationContext context) {
         if (cond.equals(ConstantExpression.TRUE)) {
             return true;
         }
         if (cond.equals(new ConstantExpression(new AsterixConstantValue(ABoolean.TRUE)))) {
             return true;
+        }
+        /* is-missing is always false for constant values
+         * so not(is-missing(CONST)) is always true
+         * this situation arises when a left outer join with an "is-missing" filtering function call
+         * is converted to an inner join. See PushSelectIntoJoinRule
+         */
+        if (cond.getExpressionTag() == LogicalExpressionTag.FUNCTION_CALL
+                && ((AbstractFunctionCallExpression) cond).getFunctionIdentifier() == BuiltinFunctions.NOT) {
+            ILogicalExpression subExpr = ((AbstractFunctionCallExpression) cond).getArguments().get(0).getValue();
+            if (subExpr.getExpressionTag() == LogicalExpressionTag.FUNCTION_CALL
+                    && ((AbstractFunctionCallExpression) subExpr)
+                            .getFunctionIdentifier() == BuiltinFunctions.IS_MISSING) {
+                subExpr = ((AbstractFunctionCallExpression) subExpr).getArguments().get(0).getValue();
+                if (subExpr.getExpressionTag() == LogicalExpressionTag.CONSTANT) {
+                    return true;
+                }
+            }
+
         }
         return false;
     }

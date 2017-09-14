@@ -218,6 +218,7 @@ public final class RuleCollections {
 
         condPushDownAndJoinInference.add(new RemoveRedundantVariablesRule());
         condPushDownAndJoinInference.add(new AsterixInlineVariablesRule());
+        condPushDownAndJoinInference.add(new RemoveRedundantSelectRule());
         condPushDownAndJoinInference.add(new RemoveUnusedAssignAndAggregateRule());
 
         condPushDownAndJoinInference.add(new FactorRedundantGroupAndDecorVarsRule());
