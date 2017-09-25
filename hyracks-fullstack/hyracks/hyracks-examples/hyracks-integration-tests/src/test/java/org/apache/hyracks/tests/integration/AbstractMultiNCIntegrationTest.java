@@ -43,6 +43,7 @@ import org.apache.hyracks.api.job.resource.IJobCapacityController;
 import org.apache.hyracks.client.dataset.HyracksDataset;
 import org.apache.hyracks.control.cc.BaseCCApplication;
 import org.apache.hyracks.control.cc.ClusterControllerService;
+import org.apache.hyracks.control.cc.application.CCServiceContext;
 import org.apache.hyracks.control.common.controllers.CCConfig;
 import org.apache.hyracks.control.common.controllers.NCConfig;
 import org.apache.hyracks.control.nc.NodeControllerService;
@@ -58,17 +59,18 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 public abstract class AbstractMultiNCIntegrationTest {
 
     private static final Logger LOGGER = Logger.getLogger(AbstractMultiNCIntegrationTest.class.getName());
+    private static final TestJobLifecycleListener jobLifecycleListener = new TestJobLifecycleListener();
 
     public static final String[] ASTERIX_IDS =
             { "asterix-001", "asterix-002", "asterix-003", "asterix-004", "asterix-005", "asterix-006", "asterix-007" };
 
-    private static ClusterControllerService cc;
+    protected static ClusterControllerService cc;
 
-    private static NodeControllerService[] asterixNCs;
+    protected static NodeControllerService[] asterixNCs;
 
-    private static IHyracksClientConnection hcc;
+    protected static IHyracksClientConnection hcc;
 
-    private final List<File> outputFiles;
+    protected final List<File> outputFiles;
 
     public AbstractMultiNCIntegrationTest() {
         outputFiles = new ArrayList<>();
@@ -82,6 +84,7 @@ public abstract class AbstractMultiNCIntegrationTest {
         ccConfig.setClusterListenAddress("127.0.0.1");
         ccConfig.setClusterListenPort(39001);
         ccConfig.setProfileDumpPeriod(10000);
+        ccConfig.setJobHistorySize(2);
         File outDir = new File("target" + File.separator + "ClusterController");
         outDir.mkdirs();
         File ccRoot = File.createTempFile(AbstractMultiNCIntegrationTest.class.getName(), ".data", outDir);
@@ -91,7 +94,8 @@ public abstract class AbstractMultiNCIntegrationTest {
         ccConfig.setAppClass(DummyApplication.class.getName());
         cc = new ClusterControllerService(ccConfig);
         cc.start();
-
+        CCServiceContext serviceCtx = cc.getContext();
+        serviceCtx.addJobLifecycleListener(jobLifecycleListener);
         asterixNCs = new NodeControllerService[ASTERIX_IDS.length];
         for (int i = 0; i < ASTERIX_IDS.length; i++) {
             File ioDev = new File("target" + File.separator + ASTERIX_IDS[i] + File.separator + "ioDevice");
@@ -120,6 +124,7 @@ public abstract class AbstractMultiNCIntegrationTest {
             nc.stop();
         }
         cc.stop();
+        jobLifecycleListener.check();
     }
 
     protected JobId startJob(JobSpecification spec) throws Exception {
@@ -186,24 +191,30 @@ public abstract class AbstractMultiNCIntegrationTest {
                 readSize = reader.read(resultFrame);
             }
         }
+        waitForCompletion(jobId, expectedErrorMessage);
+        // Waiting a second time should lead to the same behavior
+        waitForCompletion(jobId, expectedErrorMessage);
+        dumpOutputFiles();
+    }
+
+    protected void waitForCompletion(JobId jobId, String expectedErrorMessage) throws Exception {
         boolean expectedExceptionThrown = false;
         try {
             hcc.waitForCompletion(jobId);
-        } catch (HyracksDataException hde) {
+        } catch (Exception e) {
             if (expectedErrorMessage != null) {
-                if (hde.toString().contains(expectedErrorMessage)) {
+                if (e.toString().contains(expectedErrorMessage)) {
                     expectedExceptionThrown = true;
                 } else {
-                    throw hde;
+                    throw e;
                 }
             } else {
-                throw hde;
+                throw e;
             }
         }
         if (expectedErrorMessage != null && !expectedExceptionThrown) {
             throw new Exception("Expected error (" + expectedErrorMessage + ") was not thrown");
         }
-        dumpOutputFiles();
     }
 
     private void dumpOutputFiles() {

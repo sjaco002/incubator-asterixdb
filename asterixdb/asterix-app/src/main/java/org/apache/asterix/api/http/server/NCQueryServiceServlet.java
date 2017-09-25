@@ -19,9 +19,12 @@
 
 package org.apache.asterix.api.http.server;
 
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.function.Function;
 import java.util.logging.Level;
 
 import org.apache.asterix.algebra.base.ILangExtension;
@@ -43,6 +46,7 @@ import org.apache.commons.lang3.tuple.Triple;
 import org.apache.hyracks.api.application.INCServiceContext;
 import org.apache.hyracks.api.dataset.ResultSetId;
 import org.apache.hyracks.api.job.JobId;
+import org.apache.hyracks.http.api.IServletRequest;
 import org.apache.hyracks.ipc.exceptions.IPCException;
 
 import io.netty.handler.codec.http.HttpResponseStatus;
@@ -54,14 +58,15 @@ import io.netty.handler.codec.http.HttpResponseStatus;
 public class NCQueryServiceServlet extends QueryServiceServlet {
 
     public NCQueryServiceServlet(ConcurrentMap<String, Object> ctx, String[] paths, IApplicationContext appCtx,
-            ILangExtension.Language queryLanguage) {
-        super(ctx, paths, appCtx, queryLanguage, null, null, null);
+            ILangExtension.Language queryLanguage,
+            Function<IServletRequest, Map<String, String>> optionalParamProvider) {
+        super(ctx, paths, appCtx, queryLanguage, null, null, null, optionalParamProvider);
     }
 
     @Override
-    protected void executeStatement(String statementsText, SessionOutput sessionOutput,
-            IStatementExecutor.ResultDelivery delivery, IStatementExecutor.Stats stats, RequestParameters param,
-            String handleUrl, long[] outExecStartEnd) throws Exception {
+    protected void executeStatement(String statementsText,
+            SessionOutput sessionOutput, IStatementExecutor.ResultDelivery delivery, IStatementExecutor.Stats stats,
+            RequestParameters param, long[] outExecStartEnd, Map<String, String> optionalParameters) throws Exception {
         // Running on NC -> send 'execute' message to CC
         INCServiceContext ncCtx = (INCServiceContext) serviceCtx;
         INCMessageBroker ncMb = (INCMessageBroker) ncCtx.getMessageBroker();
@@ -69,6 +74,7 @@ public class NCQueryServiceServlet extends QueryServiceServlet {
                 ? IStatementExecutor.ResultDelivery.DEFERRED : delivery;
         ExecuteStatementResponseMessage responseMsg;
         MessageFuture responseFuture = ncMb.registerMessageFuture();
+        final String handleUrl = getHandleUrl(param.host, param.path, delivery);
         try {
             if (param.clientContextID == null) {
                 param.clientContextID = UUID.randomUUID().toString();
@@ -80,7 +86,8 @@ public class NCQueryServiceServlet extends QueryServiceServlet {
             }
             ExecuteStatementRequestMessage requestMsg =
                     new ExecuteStatementRequestMessage(ncCtx.getNodeId(), responseFuture.getFutureId(), queryLanguage,
-                            statementsText, sessionOutput.config(), ccDelivery, param.clientContextID, handleUrl);
+                            statementsText, sessionOutput.config(), ccDelivery, param.clientContextID, handleUrl,
+                            optionalParameters);
             outExecStartEnd[0] = System.nanoTime();
             ncMb.sendMessageToCC(requestMsg);
             try {
@@ -126,8 +133,8 @@ public class NCQueryServiceServlet extends QueryServiceServlet {
             CancelQueryRequest cancelQueryMessage =
                     new CancelQueryRequest(nodeId, cancelQueryFuture.getFutureId(), clientContextID);
             messageBroker.sendMessageToCC(cancelQueryMessage);
-            cancelQueryFuture.get(ExecuteStatementRequestMessage.DEFAULT_QUERY_CANCELLATION_TIMEOUT_MILLIS,
-                    java.util.concurrent.TimeUnit.MILLISECONDS);
+            cancelQueryFuture.get(ExecuteStatementRequestMessage.DEFAULT_QUERY_CANCELLATION_WAIT_MILLIS,
+                    TimeUnit.MILLISECONDS);
         } catch (Exception e) {
             exception.addSuppressed(e);
         } finally {

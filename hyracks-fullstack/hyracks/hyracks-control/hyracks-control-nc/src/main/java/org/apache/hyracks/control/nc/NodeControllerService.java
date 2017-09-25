@@ -198,8 +198,8 @@ public class NodeControllerService implements IControllerService {
         // Set shutdown hook before so it doesn't have the same uncaught exception handler
         Runtime.getRuntime().addShutdownHook(new NCShutdownHook(this));
         Thread.currentThread().setUncaughtExceptionHandler(getLifeCycleComponentManager());
-        ioManager =
-                new IOManager(IODeviceHandle.getDevices(ncConfig.getIODevices()), application.getFileDeviceResolver());
+        ioManager = new IOManager(IODeviceHandle.getDevices(ncConfig.getIODevices()),
+                application.getFileDeviceResolver());
 
         workQueue = new WorkQueue(id, Thread.NORM_PRIORITY); // Reserves MAX_PRIORITY of the heartbeat thread.
         jobletMap = new Hashtable<>();
@@ -214,7 +214,7 @@ public class NodeControllerService implements IControllerService {
         osMXBean = ManagementFactory.getOperatingSystemMXBean();
         getNodeControllerInfosAcceptor = new MutableObject<>();
         memoryManager = new MemoryManager((long) (memoryMXBean.getHeapMemoryUsage().getMax() * MEMORY_FUDGE_FACTOR));
-        ioCounter = new IOCounterFactory().getIOCounter();
+        ioCounter = IOCounterFactory.INSTANCE.getIOCounter();
     }
 
     public IOManager getIoManager() {
@@ -340,8 +340,8 @@ public class NodeControllerService implements IControllerService {
         // Use "public" versions of network addresses and ports
         NetworkAddress datasetAddress = datasetNetworkManager.getPublicNetworkAddress();
         NetworkAddress netAddress = netManager.getPublicNetworkAddress();
-        NetworkAddress meesagingPort =
-                messagingNetManager != null ? messagingNetManager.getPublicNetworkAddress() : null;
+        NetworkAddress meesagingPort = messagingNetManager != null ? messagingNetManager.getPublicNetworkAddress()
+                : null;
         int allCores = osMXBean.getAvailableProcessors();
         nodeRegistration = new NodeRegistration(ipc.getSocketAddress(), id, ncConfig, netAddress, datasetAddress,
                 osMXBean.getName(), osMXBean.getArch(), osMXBean.getVersion(), allCores, runtimeMXBean.getVmName(),
@@ -369,8 +369,9 @@ public class NodeControllerService implements IControllerService {
 
     private void startApplication() throws Exception {
         serviceCtx = new NCServiceContext(this, serverCtx, ioManager, id, memoryManager, lccm, ncConfig.getAppConfig());
-        application.start(serviceCtx, ncConfig.getAppArgsArray());
+        application.init(serviceCtx);
         executor = Executors.newCachedThreadPool(serviceCtx.getThreadFactory());
+        application.start(ncConfig.getAppArgsArray());
     }
 
     public void updateMaxJobId(JobId jobId) {

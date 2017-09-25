@@ -26,6 +26,7 @@ import org.apache.hyracks.api.job.IActivityClusterGraphGenerator;
 import org.apache.hyracks.api.job.IActivityClusterGraphGeneratorFactory;
 import org.apache.hyracks.api.job.JobFlag;
 import org.apache.hyracks.api.job.JobId;
+import org.apache.hyracks.api.job.JobIdFactory;
 import org.apache.hyracks.control.cc.ClusterControllerService;
 import org.apache.hyracks.control.cc.application.CCServiceContext;
 import org.apache.hyracks.control.cc.job.IJobManager;
@@ -39,23 +40,23 @@ public class JobStartWork extends SynchronizableWork {
     private final byte[] acggfBytes;
     private final Set<JobFlag> jobFlags;
     private final DeploymentId deploymentId;
-    private final JobId jobId;
     private final IResultCallback<JobId> callback;
+    private final JobIdFactory jobIdFactory;
     private final long predestributedId;
     private final Map<byte[], byte[]> jobParameters;
 
     public JobStartWork(ClusterControllerService ccs, DeploymentId deploymentId, byte[] acggfBytes,
-            Set<JobFlag> jobFlags, JobId jobId, Map<byte[], byte[]> jobParameters,
+            Set<JobFlag> jobFlags, JobIdFactory jobIdFactory, Map<byte[], byte[]> jobParameters,
  IResultCallback<JobId> callback,
             long predestributedId) {
         this.deploymentId = deploymentId;
-        this.jobId = jobId;
         this.ccs = ccs;
         this.acggfBytes = acggfBytes;
         this.jobFlags = jobFlags;
         this.callback = callback;
         this.predestributedId = predestributedId;
         this.jobParameters = jobParameters;
+        this.jobIdFactory = jobIdFactory;
     }
 
     @Override
@@ -63,7 +64,9 @@ public class JobStartWork extends SynchronizableWork {
         IJobManager jobManager = ccs.getJobManager();
         try {
             final CCServiceContext ccServiceCtx = ccs.getContext();
+            JobId jobId;
             JobRun run;
+            jobId = jobIdFactory.create();
             if (predestributedId == -1) {
                 //Need to create the ActivityClusterGraph
                 IActivityClusterGraphGeneratorFactory acggf = (IActivityClusterGraphGeneratorFactory) DeploymentUtils

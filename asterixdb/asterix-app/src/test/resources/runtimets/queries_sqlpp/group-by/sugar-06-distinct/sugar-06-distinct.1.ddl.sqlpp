@@ -16,20 +16,14 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package org.apache.asterix.active.message;
 
-import java.io.Serializable;
+DROP DATAVERSE gby IF EXISTS;
+CREATE DATAVERSE gby;
 
-public class StatsRequestMessage extends ActiveManagerMessage {
-    private static final long serialVersionUID = 1L;
-    private final long reqId;
+USE gby;
 
-    public StatsRequestMessage(Serializable payload, long reqId) {
-        super(Kind.REQUEST_STATS, payload);
-        this.reqId = reqId;
-    }
+CREATE TYPE EmpType AS {
+  name : string
+};
 
-    public long getReqId() {
-        return reqId;
-    }
-}
+CREATE DATASET Employee(EmpType) PRIMARY KEY name;
