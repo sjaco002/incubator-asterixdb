@@ -58,5 +58,5 @@ insert into channels.roomRecordsResults as a (
   with channelExecutionTime as current_datetime()
   select result, channelExecutionTime, sub.subscriptionId as subscriptionId,current_datetime() as deliveryTime
   from channels.roomRecordsSubscriptions sub,
-  channels.RoomOccupants(sub.param0) result 
+  channels.RoomOccupants(sub.param0) result
 ) returning a;
