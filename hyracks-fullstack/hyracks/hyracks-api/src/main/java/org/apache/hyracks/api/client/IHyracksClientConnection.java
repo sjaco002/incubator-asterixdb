@@ -20,6 +20,7 @@ package org.apache.hyracks.api.client;
 
 import java.util.EnumSet;
 import java.util.List;
+import java.util.Map;
 
 import org.apache.hyracks.api.comm.NetworkAddress;
 import org.apache.hyracks.api.deployment.DeploymentId;
@@ -94,7 +95,7 @@ public interface IHyracksClientConnection extends IClusterInfoCollector {
      *            Flags
      * @throws Exception
      */
-    public long distributeJob(JobSpecification jobSpec) throws Exception;
+    long distributeJob(JobSpecification jobSpec) throws Exception;
 
     /**
      * Destroy the distributed graph for a pre-distributed job
@@ -103,7 +104,7 @@ public interface IHyracksClientConnection extends IClusterInfoCollector {
      *            The id of the predistributed job
      * @throws Exception
      */
-    JobId destroyJob(JobId jobId) throws Exception;
+    long destroyJob(long predestributedId) throws Exception;
 
     /**
      * Used to run a pre-distributed job by id (the same JobId will be returned)
@@ -114,7 +115,7 @@ public interface IHyracksClientConnection extends IClusterInfoCollector {
      *            The serialized job parameters
      * @throws Exception
      */
-    JobId startJob(JobId jobId) throws Exception;
+    JobId startJob(long predestributedId, Map<byte[], byte[]> jobParameters) throws Exception;
 
     /**
      * Start the specified Job.
