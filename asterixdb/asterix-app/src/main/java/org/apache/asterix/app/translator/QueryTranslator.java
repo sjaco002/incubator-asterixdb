@@ -26,10 +26,12 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.rmi.RemoteException;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Date;
 import java.util.EnumSet;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -194,7 +196,14 @@ import org.apache.hyracks.api.io.UnmanagedFileSplit;
 import org.apache.hyracks.api.job.JobFlag;
 import org.apache.hyracks.api.job.JobId;
 import org.apache.hyracks.api.job.JobSpecification;
+import org.apache.hyracks.api.job.JobStatus;
+import org.apache.hyracks.control.cc.ClusterControllerService;
+import org.apache.hyracks.control.cc.job.IJobManager;
+import org.apache.hyracks.control.cc.job.JobRun;
 import org.apache.hyracks.control.common.controllers.CCConfig;
+import org.apache.hyracks.control.common.job.profiling.om.JobProfile;
+import org.apache.hyracks.control.common.job.profiling.om.JobletProfile;
+import org.apache.hyracks.control.common.job.profiling.om.TaskProfile;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMMergePolicyFactory;
 
 /*
@@ -762,6 +771,10 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
                     throw new AlgebricksException("An index with this name " + indexName + " already exists.");
                 }
             }
+            // can't create secondary primary index on an external dataset
+            if (ds.getDatasetType() == DatasetType.EXTERNAL && stmtCreateIndex.getFieldExprs().isEmpty()) {
+                throw new AsterixException(ErrorCode.CANNOT_CREATE_SEC_PRIMARY_IDX_ON_EXT_DATASET);
+            }
             Datatype dt = MetadataManager.INSTANCE.getDatatype(metadataProvider.getMetadataTxnContext(),
                     ds.getItemTypeDataverseName(), ds.getItemTypeName());
             ARecordType aRecordType = (ARecordType) dt.getDatatype();
@@ -776,6 +789,13 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
             List<IAType> indexFieldTypes = new ArrayList<>();
             int keyIndex = 0;
             boolean overridesFieldTypes = false;
+
+            // this set is used to detect duplicates in the specified keys in the create index statement
+            // e.g. CREATE INDEX someIdx on dataset(id,id).
+            // checking only the names is not enough. Need also to check the source indicators for cases like:
+            // CREATE INDEX someIdx on dataset(meta().id, id)
+            Set<Pair<List<String>, Integer>> indexKeysSet = new HashSet<>();
+
             for (Pair<List<String>, IndexedTypeExpression> fieldExpr : stmtCreateIndex.getFieldExprs()) {
                 IAType fieldType = null;
                 ARecordType subType =
@@ -800,6 +820,13 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
                         throw new AsterixException(ErrorCode.INDEX_ILLEGAL_ENFORCED_NON_OPTIONAL,
                                 String.valueOf(fieldExpr.first));
                     }
+                    // don't allow creating an enforced index on a closed-type field, fields that are part of schema.
+                    // get the field type, if it's not null, then the field is closed-type
+                    if (stmtCreateIndex.isEnforced() &&
+                            subType.getSubFieldType(fieldExpr.first.subList(i, fieldExpr.first.size())) != null) {
+                        throw new AsterixException(ErrorCode.INDEX_ILLEGAL_ENFORCED_ON_CLOSED_FIELD,
+                                String.valueOf(fieldExpr.first));
+                    }
                     if (!isOpen) {
                         throw new AlgebricksException("Typed index on \"" + fieldExpr.first
                                 + "\" field could be created only for open datatype");
@@ -816,6 +843,13 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
                 if (fieldType == null) {
                     throw new AlgebricksException(
                             "Unknown type " + (fieldExpr.second == null ? fieldExpr.first : fieldExpr.second));
+                }
+
+                // try to add the key & its source to the set of keys, if key couldn't be added, there is a duplicate
+                if (!indexKeysSet.add(new Pair<>(fieldExpr.first,
+                        stmtCreateIndex.getFieldSourceIndicators().get(keyIndex)))) {
+                    throw new AsterixException(ErrorCode.INDEX_ILLEGAL_REPETITIVE_FIELD,
+                            String.valueOf(fieldExpr.first));
                 }
 
                 indexFields.add(fieldExpr.first);
@@ -2343,12 +2377,14 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
             case IMMEDIATE:
                 createAndRunJob(hcc, jobFlags, null, compiler, locker, resultDelivery, id -> {
                     final ResultReader resultReader = new ResultReader(hdc, id, resultSetId);
+                    updateJobStats(id, stats);
                     ResultUtil.printResults(appCtx, resultReader, sessionOutput, stats,
                             metadataProvider.findOutputRecordType());
                 }, clientContextId, ctx);
                 break;
             case DEFERRED:
                 createAndRunJob(hcc, jobFlags, null, compiler, locker, resultDelivery, id -> {
+                    updateJobStats(id, stats);
                     ResultUtil.printResultHandle(sessionOutput, new ResultHandle(id, resultSetId));
                     if (outMetadata != null) {
                         outMetadata.getResultSets()
@@ -2359,6 +2395,25 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
             default:
                 break;
         }
+    }
+
+    private void updateJobStats(JobId jobId, Stats stats) {
+        final IJobManager jobManager =
+                ((ClusterControllerService) appCtx.getServiceContext().getControllerService()).getJobManager();
+        final JobRun run = jobManager.get(jobId);
+        if (run == null || run.getStatus() != JobStatus.TERMINATED) {
+            return;
+        }
+        final JobProfile jobProfile = run.getJobProfile();
+        final Collection<JobletProfile> jobletProfiles = jobProfile.getJobletProfiles().values();
+        long processedObjects = 0;
+        for (JobletProfile jp : jobletProfiles) {
+            final Collection<TaskProfile> jobletTasksProfile = jp.getTaskProfiles().values();
+            for (TaskProfile tp : jobletTasksProfile) {
+                processedObjects += tp.getStatsCollector().getAggregatedStats().getTupleCounter().get();
+            }
+        }
+        stats.setProcessedObjects(processedObjects);
     }
 
     private void asyncCreateAndRunJob(IHyracksClientConnection hcc, IStatementCompiler compiler, IMetadataLocker locker,

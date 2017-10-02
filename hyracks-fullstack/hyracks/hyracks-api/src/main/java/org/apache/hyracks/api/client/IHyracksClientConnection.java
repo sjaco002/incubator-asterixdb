@@ -20,7 +20,6 @@ package org.apache.hyracks.api.client;
 
 import java.util.EnumSet;
 import java.util.List;
-import java.util.Map;
 
 import org.apache.hyracks.api.comm.NetworkAddress;
 import org.apache.hyracks.api.deployment.DeploymentId;
@@ -45,7 +44,7 @@ public interface IHyracksClientConnection extends IClusterInfoCollector {
      * @return {@link JobStatus}
      * @throws Exception
      */
-    public JobStatus getJobStatus(JobId jobId) throws Exception;
+    JobStatus getJobStatus(JobId jobId) throws Exception;
 
     /**
      * Gets detailed information about the specified Job.
@@ -55,7 +54,7 @@ public interface IHyracksClientConnection extends IClusterInfoCollector {
      * @return {@link JobStatus}
      * @throws Exception
      */
-    public JobInfo getJobInfo(JobId jobId) throws Exception;
+    JobInfo getJobInfo(JobId jobId) throws Exception;
 
     /**
      * Cancel the job that has the given job id.
@@ -64,7 +63,7 @@ public interface IHyracksClientConnection extends IClusterInfoCollector {
      *            the JobId of the Job
      * @throws Exception
      */
-    public void cancelJob(JobId jobId) throws Exception;
+    void cancelJob(JobId jobId) throws Exception;
 
     /**
      * Start the specified Job.
@@ -73,7 +72,7 @@ public interface IHyracksClientConnection extends IClusterInfoCollector {
      *            Job Specification
      * @throws Exception
      */
-    public JobId startJob(JobSpecification jobSpec) throws Exception;
+    JobId startJob(JobSpecification jobSpec) throws Exception;
 
     /**
      * Start the specified Job.
@@ -84,7 +83,7 @@ public interface IHyracksClientConnection extends IClusterInfoCollector {
      *            Flags
      * @throws Exception
      */
-    public JobId startJob(JobSpecification jobSpec, EnumSet<JobFlag> jobFlags) throws Exception;
+    JobId startJob(JobSpecification jobSpec, EnumSet<JobFlag> jobFlags) throws Exception;
 
     /**
      * Distribute the specified Job.
@@ -104,7 +103,7 @@ public interface IHyracksClientConnection extends IClusterInfoCollector {
      *            The id of the predistributed job
      * @throws Exception
      */
-    public long destroyJob(long predestributedId) throws Exception;
+    JobId destroyJob(JobId jobId) throws Exception;
 
     /**
      * Used to run a pre-distributed job by id (the same JobId will be returned)
@@ -115,7 +114,7 @@ public interface IHyracksClientConnection extends IClusterInfoCollector {
      *            The serialized job parameters
      * @throws Exception
      */
-    public JobId startJob(long predestributedId, Map<byte[], byte[]> jobParameters) throws Exception;
+    JobId startJob(JobId jobId) throws Exception;
 
     /**
      * Start the specified Job.
@@ -126,7 +125,7 @@ public interface IHyracksClientConnection extends IClusterInfoCollector {
      *            Flags
      * @throws Exception
      */
-    public JobId startJob(IActivityClusterGraphGeneratorFactory acggf, EnumSet<JobFlag> jobFlags) throws Exception;
+    JobId startJob(IActivityClusterGraphGeneratorFactory acggf, EnumSet<JobFlag> jobFlags) throws Exception;
 
     /**
      * Gets the IP Address and port for the DatasetDirectoryService wrapped in NetworkAddress
@@ -134,7 +133,7 @@ public interface IHyracksClientConnection extends IClusterInfoCollector {
      * @return {@link NetworkAddress}
      * @throws Exception
      */
-    public NetworkAddress getDatasetDirectoryServiceInfo() throws Exception;
+    NetworkAddress getDatasetDirectoryServiceInfo() throws Exception;
 
     /**
      * Waits until the specified job has completed, either successfully or has
@@ -144,8 +143,7 @@ public interface IHyracksClientConnection extends IClusterInfoCollector {
      *            JobId of the Job
      * @throws Exception
      */
-    public void waitForCompletion(JobId jobId) throws Exception;
-
+    void waitForCompletion(JobId jobId) throws Exception;
 
     /**
      * Deploy the user-defined jars to the cluster
@@ -153,7 +151,7 @@ public interface IHyracksClientConnection extends IClusterInfoCollector {
      * @param jars
      *            a list of user-defined jars
      */
-    public DeploymentId deployBinary(List<String> jars) throws Exception;
+    DeploymentId deployBinary(List<String> jars) throws Exception;
 
     /**
      * undeploy a certain deployment
@@ -161,7 +159,7 @@ public interface IHyracksClientConnection extends IClusterInfoCollector {
      * @param deploymentId
      *            the id for the deployment to be undeployed
      */
-    public void unDeployBinary(DeploymentId deploymentId) throws Exception;
+    void unDeployBinary(DeploymentId deploymentId) throws Exception;
 
     /**
      * Start the specified Job.
@@ -172,7 +170,7 @@ public interface IHyracksClientConnection extends IClusterInfoCollector {
      *            Job Specification
      * @throws Exception
      */
-    public JobId startJob(DeploymentId deploymentId, JobSpecification jobSpec) throws Exception;
+    JobId startJob(DeploymentId deploymentId, JobSpecification jobSpec) throws Exception;
 
     /**
      * Start the specified Job.
@@ -185,8 +183,7 @@ public interface IHyracksClientConnection extends IClusterInfoCollector {
      *            Flags
      * @throws Exception
      */
-    public JobId startJob(DeploymentId deploymentId, JobSpecification jobSpec, EnumSet<JobFlag> jobFlags)
-            throws Exception;
+    JobId startJob(DeploymentId deploymentId, JobSpecification jobSpec, EnumSet<JobFlag> jobFlags) throws Exception;
 
     /**
      * Start the specified Job.
@@ -199,27 +196,45 @@ public interface IHyracksClientConnection extends IClusterInfoCollector {
      *            Flags
      * @throws Exception
      */
-    public JobId startJob(DeploymentId deploymentId, IActivityClusterGraphGeneratorFactory acggf,
-            EnumSet<JobFlag> jobFlags) throws Exception;
+    JobId startJob(DeploymentId deploymentId, IActivityClusterGraphGeneratorFactory acggf, EnumSet<JobFlag> jobFlags)
+            throws Exception;
 
     /**
      * Shuts down all NCs and then the CC.
+     *
      * @param terminateNCService
      */
-    public void stopCluster(boolean terminateNCService) throws Exception;
+    void stopCluster(boolean terminateNCService) throws Exception;
 
     /**
      * Get details of specified node as JSON object
+     *
      * @param nodeId
-     *              id the subject node
+     *            id the subject node
      * @param includeStats
-     * @param includeConfig @return serialized JSON containing the node details
+     * @param includeConfig
+     * @return serialized JSON containing the node details
      * @throws Exception
      */
-    public String getNodeDetailsJSON(String nodeId, boolean includeStats, boolean includeConfig) throws Exception;
+    String getNodeDetailsJSON(String nodeId, boolean includeStats, boolean includeConfig) throws Exception;
 
     /**
      * Gets thread dump from the specified node as a serialized JSON string
      */
-    public String getThreadDump(String node) throws Exception;
+    String getThreadDump(String node) throws Exception;
+
+    /**
+     * @return true if the connection is alive, false otherwise
+     */
+    boolean isConnected();
+
+    /**
+     * @return the hostname of the cluster controller
+     */
+    String getHost();
+
+    /**
+     * @return the port of the cluster controller
+     */
+    int getPort();
 }

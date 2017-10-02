@@ -23,3 +23,6 @@ return testlib#toUpper($i);
 
 let $i:=testlib#toUpper({"id":1, "text":"lower text"})
 return $i;
+
+let $i:= {"field1" : testlib#toUpper({"id":1, "text":"lower text"}), "field2": 123}
+return $i;
