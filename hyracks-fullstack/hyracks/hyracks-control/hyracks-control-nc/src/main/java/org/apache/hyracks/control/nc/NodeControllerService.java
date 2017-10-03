@@ -427,7 +427,7 @@ public class NodeControllerService implements IControllerService {
 
     public JobParameterByteStore createOrGetJobParameterByteStore(JobId jobId) throws HyracksException {
         JobParameterByteStore jpbs = jobParameterByteStoreMap.get(jobId);
-        if (jpbs == null){
+        if (jpbs == null) {
             jpbs = new JobParameterByteStore();
             jobParameterByteStoreMap.put(jobId, jpbs);
         }
