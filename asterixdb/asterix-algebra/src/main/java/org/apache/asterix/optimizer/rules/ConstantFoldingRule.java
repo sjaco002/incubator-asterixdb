@@ -36,7 +36,6 @@ import org.apache.asterix.formats.nontagged.BinaryIntegerInspector;
 import org.apache.asterix.formats.nontagged.SerializerDeserializerProvider;
 import org.apache.asterix.formats.nontagged.TypeTraitProvider;
 import org.apache.asterix.jobgen.QueryLogicalExpressionJobGen;
-import org.apache.asterix.om.base.ABoolean;
 import org.apache.asterix.om.base.IAObject;
 import org.apache.asterix.om.constants.AsterixConstantValue;
 import org.apache.asterix.om.functions.BuiltinFunctions;
@@ -186,11 +185,6 @@ public class ConstantFoldingRule implements IAlgebraicRewriteRule {
             boolean changed = changeRec(expr, arg);
             if (!checkArgs(expr) || !expr.isFunctional()) {
                 return new Pair<>(changed, expr);
-            }
-
-            //IS_MISSING is always false for constant args
-            if (expr.getFunctionIdentifier().equals(BuiltinFunctions.IS_MISSING)) {
-                return new Pair<>(true, new ConstantExpression(new AsterixConstantValue(ABoolean.FALSE)));
             }
 
             // Skip Constant Folding for the record-related functions.
