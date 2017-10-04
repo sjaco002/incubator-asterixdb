@@ -829,9 +829,9 @@ public class CCNCFunctions {
             }
 
             // read job parameters
-            int runTimeVarsSize = dis.readInt();
+            int paramListSize = dis.readInt();
             Map<byte[], byte[]> jobParameters = new HashMap<>();
-            for (int i = 0; i < runTimeVarsSize; i++) {
+            for (int i = 0; i < paramListSize; i++) {
                 int nameLength = dis.readInt();
                 byte[] nameBytes = null;
                 if (nameLength >= 0) {
