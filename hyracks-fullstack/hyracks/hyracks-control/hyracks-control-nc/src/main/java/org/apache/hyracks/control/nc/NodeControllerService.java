@@ -27,7 +27,6 @@ import java.lang.management.MemoryUsage;
 import java.lang.management.OperatingSystemMXBean;
 import java.lang.management.RuntimeMXBean;
 import java.lang.management.ThreadMXBean;
-import java.lang.reflect.Field;
 import java.net.InetSocketAddress;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -38,6 +37,7 @@ import java.util.Timer;
 import java.util.TimerTask;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.logging.Level;
@@ -92,12 +92,15 @@ import org.apache.hyracks.net.protocols.muxdemux.FullFrameChannelInterfaceFactor
 import org.apache.hyracks.net.protocols.muxdemux.MuxDemuxPerformanceCounters;
 import org.apache.hyracks.util.ExitUtil;
 import org.apache.hyracks.util.PidHelper;
+import org.apache.hyracks.util.trace.ITracer;
+import org.apache.hyracks.util.trace.Tracer;
 import org.kohsuke.args4j.CmdLineException;
 
 public class NodeControllerService implements IControllerService {
     private static final Logger LOGGER = Logger.getLogger(NodeControllerService.class.getName());
 
     private static final double MEMORY_FUDGE_FACTOR = 0.8;
+    private static final long ONE_SECOND_NANOS = TimeUnit.SECONDS.toNanos(1);
 
     private NCConfig ncConfig;
 
@@ -135,7 +138,7 @@ public class NodeControllerService implements IControllerService {
 
     private NodeParameters nodeParameters;
 
-    private HeartbeatTask heartbeatTask;
+    private Thread heartbeatThread;
 
     private final ServerContext serverCtx;
 
@@ -198,8 +201,8 @@ public class NodeControllerService implements IControllerService {
         // Set shutdown hook before so it doesn't have the same uncaught exception handler
         Runtime.getRuntime().addShutdownHook(new NCShutdownHook(this));
         Thread.currentThread().setUncaughtExceptionHandler(getLifeCycleComponentManager());
-        ioManager = new IOManager(IODeviceHandle.getDevices(ncConfig.getIODevices()),
-                application.getFileDeviceResolver());
+        ioManager =
+                new IOManager(IODeviceHandle.getDevices(ncConfig.getIODevices()), application.getFileDeviceResolver());
 
         workQueue = new WorkQueue(id, Thread.NORM_PRIORITY); // Reserves MAX_PRIORITY of the heartbeat thread.
         jobletMap = new Hashtable<>();
@@ -310,20 +313,19 @@ public class NodeControllerService implements IControllerService {
 
         workQueue.start();
 
-        heartbeatTask = new HeartbeatTask(ccs);
-
-        // Use reflection to set the priority of the timer thread.
-        Field threadField = timer.getClass().getDeclaredField("thread");
-        threadField.setAccessible(true);
-        Thread timerThread = (Thread) threadField.get(timer); // The internal timer thread of the Timer object.
-        timerThread.setPriority(Thread.MAX_PRIORITY);
-        // Schedule heartbeat generator.
-        timer.schedule(heartbeatTask, 0, nodeParameters.getHeartbeatPeriod());
+        // Schedule tracing a human-readable datetime
+        timer.schedule(new TraceCurrentTimeTask(serviceCtx.getTracer()), 0, 60000);
 
         if (nodeParameters.getProfileDumpPeriod() > 0) {
             // Schedule profile dump generator.
             timer.schedule(new ProfileDumpTask(ccs), 0, nodeParameters.getProfileDumpPeriod());
         }
+
+        // Start heartbeat generator.
+        heartbeatThread = new Thread(new HeartbeatTask(ccs, nodeParameters.getHeartbeatPeriod()), id + "-Heartbeat");
+        heartbeatThread.setPriority(Thread.MAX_PRIORITY);
+        heartbeatThread.setDaemon(true);
+        heartbeatThread.start();
 
         LOGGER.log(Level.INFO, "Started NodeControllerService");
         application.startupCompleted();
@@ -340,8 +342,8 @@ public class NodeControllerService implements IControllerService {
         // Use "public" versions of network addresses and ports
         NetworkAddress datasetAddress = datasetNetworkManager.getPublicNetworkAddress();
         NetworkAddress netAddress = netManager.getPublicNetworkAddress();
-        NetworkAddress meesagingPort = messagingNetManager != null ? messagingNetManager.getPublicNetworkAddress()
-                : null;
+        NetworkAddress meesagingPort =
+                messagingNetManager != null ? messagingNetManager.getPublicNetworkAddress() : null;
         int allCores = osMXBean.getAvailableProcessors();
         nodeRegistration = new NodeRegistration(ipc.getSocketAddress(), id, ncConfig, netAddress, datasetAddress,
                 osMXBean.getName(), osMXBean.getArch(), osMXBean.getVersion(), allCores, runtimeMXBean.getVmName(),
@@ -401,7 +403,10 @@ public class NodeControllerService implements IControllerService {
              * Stop heartbeat after NC has stopped to avoid false node failure detection
              * on CC if an NC takes a long time to stop.
              */
-            heartbeatTask.cancel();
+            if (heartbeatThread != null) {
+                heartbeatThread.interrupt();
+                heartbeatThread.join(1000); // give it 1s to stop gracefully
+            }
             LOGGER.log(Level.INFO, "Stopped NodeControllerService");
         } else {
             LOGGER.log(Level.SEVERE, "Duplicate shutdown call; original: " + Arrays.toString(shutdownCallStack),
@@ -492,17 +497,16 @@ public class NodeControllerService implements IControllerService {
         return workQueue;
     }
 
-    public ThreadMXBean getThreadMXBean() {
-        return threadMXBean;
-    }
-
-    private class HeartbeatTask extends TimerTask {
-        private IClusterController cc;
+    private class HeartbeatTask implements Runnable {
+        private final Semaphore delayBlock = new Semaphore(0);
+        private final IClusterController cc;
+        private final long heartbeatPeriodNanos;
 
         private final HeartbeatData hbData;
 
-        public HeartbeatTask(IClusterController cc) {
+        HeartbeatTask(IClusterController cc, int heartbeatPeriod) {
             this.cc = cc;
+            this.heartbeatPeriodNanos = TimeUnit.MILLISECONDS.toNanos(heartbeatPeriod);
             hbData = new HeartbeatData();
             hbData.gcCollectionCounts = new long[gcMXBeans.size()];
             hbData.gcCollectionTimes = new long[gcMXBeans.size()];
@@ -510,6 +514,28 @@ public class NodeControllerService implements IControllerService {
 
         @Override
         public void run() {
+            while (!Thread.currentThread().isInterrupted()) {
+                try {
+                    long nextFireNanoTime = System.nanoTime() + heartbeatPeriodNanos;
+                    final boolean success = execute();
+                    sleepUntilNextFire(success ? nextFireNanoTime - System.nanoTime() : ONE_SECOND_NANOS);
+                } catch (InterruptedException e) { // NOSONAR
+                    break;
+                }
+            }
+            LOGGER.log(Level.INFO, "Heartbeat thread interrupted; shutting down");
+        }
+
+        private void sleepUntilNextFire(long delayNanos) throws InterruptedException {
+            if (delayNanos > 0) {
+                delayBlock.tryAcquire(delayNanos, TimeUnit.NANOSECONDS); //NOSONAR - ignore result of tryAcquire
+            } else {
+                LOGGER.warning("After sending heartbeat, next one is already late by "
+                        + TimeUnit.NANOSECONDS.toMillis(-delayNanos) + "ms; sending without delay");
+            }
+        }
+
+        private boolean execute() throws InterruptedException {
             MemoryUsage heapUsage = memoryMXBean.getHeapMemoryUsage();
             hbData.heapInitSize = heapUsage.getInit();
             hbData.heapUsedSize = heapUsage.getUsed();
@@ -555,8 +581,13 @@ public class NodeControllerService implements IControllerService {
 
             try {
                 cc.nodeHeartbeat(id, hbData);
+                LOGGER.log(Level.FINE, "Successfully sent heartbeat");
+                return true;
+            } catch (InterruptedException e) {
+                throw e;
             } catch (Exception e) {
-                LOGGER.log(Level.SEVERE, "Exception sending heartbeat", e);
+                LOGGER.log(Level.SEVERE, "Exception sending heartbeat; will retry after 1s", e);
+                return false;
             }
         }
     }
@@ -580,6 +611,24 @@ public class NodeControllerService implements IControllerService {
                 }
             } catch (Exception e) {
                 LOGGER.log(Level.WARNING, "Exception reporting profile", e);
+            }
+        }
+    }
+
+    private class TraceCurrentTimeTask extends TimerTask {
+
+        private ITracer tracer;
+
+        public TraceCurrentTimeTask(ITracer tracer) {
+            this.tracer = tracer;
+        }
+
+        @Override
+        public void run() {
+            try {
+                ITracer.check(tracer).instant("CurrentTime", "Timestamp", Tracer.Scope.p, Tracer.dateTimeStamp());
+            } catch (Exception e) {
+                LOGGER.log(Level.WARNING, "Exception tracing current time", e);
             }
         }
     }

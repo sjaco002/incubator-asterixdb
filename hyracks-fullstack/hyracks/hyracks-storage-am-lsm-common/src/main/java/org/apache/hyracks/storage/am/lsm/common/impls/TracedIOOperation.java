@@ -26,8 +26,9 @@ import org.apache.hyracks.api.io.FileReference;
 import org.apache.hyracks.api.io.IODeviceHandle;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMIOOperation;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMIOOperationCallback;
-import org.apache.hyracks.util.trace.Tracer;
-import org.apache.hyracks.util.trace.Tracer.Scope;
+import org.apache.hyracks.storage.am.lsm.common.api.ILSMIndexAccessor;
+import org.apache.hyracks.util.trace.ITracer;
+import org.apache.hyracks.util.trace.ITracer.Scope;
 
 class TracedIOOperation implements ILSMIOOperation {
 
@@ -35,17 +36,17 @@ class TracedIOOperation implements ILSMIOOperation {
 
     protected final ILSMIOOperation ioOp;
     private final LSMIOOpertionType ioOpType;
-    private final Tracer tracer;
+    private final ITracer tracer;
     private final String cat;
 
-    protected TracedIOOperation(ILSMIOOperation ioOp, Tracer tracer) {
+    protected TracedIOOperation(ILSMIOOperation ioOp, ITracer tracer) {
         this.ioOp = ioOp;
         this.tracer = tracer;
         this.ioOpType = ioOp.getIOOpertionType();
         this.cat = ioOpType.name().toLowerCase();
     }
 
-    public static ILSMIOOperation wrap(final ILSMIOOperation ioOp, final Tracer tracer) {
+    public static ILSMIOOperation wrap(final ILSMIOOperation ioOp, final ITracer tracer) {
         if (tracer != null && tracer.isEnabled()) {
             tracer.instant(ioOp.getTarget().getRelativePath(),
                     ioOp.getIOOpertionType() == LSMIOOpertionType.FLUSH ? "schedule-flush" : "schedule-merge", Scope.p,
@@ -94,11 +95,16 @@ class TracedIOOperation implements ILSMIOOperation {
     public FileReference getTarget() {
         return ioOp.getTarget();
     }
+
+    @Override
+    public ILSMIndexAccessor getAccessor() {
+        return ioOp.getAccessor();
+    }
 }
 
 class ComparableTracedIOOperation extends TracedIOOperation implements Comparable<ILSMIOOperation> {
 
-    protected ComparableTracedIOOperation(ILSMIOOperation ioOp, Tracer trace) {
+    protected ComparableTracedIOOperation(ILSMIOOperation ioOp, ITracer trace) {
         super(ioOp, trace);
     }
 
