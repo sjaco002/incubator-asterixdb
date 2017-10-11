@@ -53,6 +53,7 @@ import org.apache.hyracks.api.exceptions.HyracksException;
 import org.apache.hyracks.api.job.JobId;
 import org.apache.hyracks.api.job.JobIdFactory;
 import org.apache.hyracks.api.job.JobParameterByteStore;
+import org.apache.hyracks.api.job.PredistributedIdFactory;
 import org.apache.hyracks.api.job.resource.IJobCapacityController;
 import org.apache.hyracks.api.service.IControllerService;
 import org.apache.hyracks.api.topology.ClusterTopology;
@@ -139,6 +140,8 @@ public class ClusterControllerService implements IControllerService {
 
     private final JobIdFactory jobIdFactory;
 
+    private final PredistributedIdFactory predistributedIdFactory;
+
     private IJobManager jobManager;
 
     private ShutdownRun shutdownCallback;
@@ -179,6 +182,8 @@ public class ClusterControllerService implements IControllerService {
         nodeManager = new NodeManager(this, ccConfig, resourceManager);
 
         jobIdFactory = new JobIdFactory();
+
+        predistributedIdFactory = new PredistributedIdFactory();
     }
 
     private static ClusterTopology computeClusterTopology(CCConfig ccConfig) throws Exception {
@@ -413,6 +418,10 @@ public class ClusterControllerService implements IControllerService {
 
     public JobIdFactory getJobIdFactory() {
         return jobIdFactory;
+    }
+
+    public PredistributedIdFactory getPredistributedIdFactory() {
+        return predistributedIdFactory;
     }
 
     private final class ClusterControllerContext implements ICCContext {
