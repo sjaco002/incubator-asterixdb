@@ -187,7 +187,9 @@ public abstract class IndexSearchOperatorNodePushable extends AbstractUnaryInput
             for (int i = 0; i < tupleCount; i++) {
                 resetSearchPredicate(i);
                 cursor.reset();
+                //this does the actual work of the search (for range or key queries)
                 indexAccessor.search(cursor, searchPred);
+                //This goes through writing, all the way to the tail (e.g. aggregation after search will be part of this time)
                 writeSearchResults(i);
             }
         } catch (Exception e) {
