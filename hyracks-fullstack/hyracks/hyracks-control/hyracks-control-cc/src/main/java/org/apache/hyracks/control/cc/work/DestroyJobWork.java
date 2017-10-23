@@ -18,6 +18,7 @@
  */
 package org.apache.hyracks.control.cc.work;
 
+import org.apache.hyracks.api.job.PreDistributedId;
 import org.apache.hyracks.control.cc.ClusterControllerService;
 import org.apache.hyracks.control.cc.NodeControllerState;
 import org.apache.hyracks.control.cc.cluster.INodeManager;
@@ -26,11 +27,12 @@ import org.apache.hyracks.control.common.work.SynchronizableWork;
 
 public class DestroyJobWork extends SynchronizableWork {
     private final ClusterControllerService ccs;
-    private final long predestributedId;
-    private final IResultCallback<Long> callback;
+    private final PreDistributedId preDistributedId;
+    private final IResultCallback<PreDistributedId> callback;
 
-    public DestroyJobWork(ClusterControllerService ccs, long predestributedId, IResultCallback<Long> callback) {
-        this.predestributedId = predestributedId;
+    public DestroyJobWork(ClusterControllerService ccs, PreDistributedId preDistributedId,
+            IResultCallback<PreDistributedId> callback) {
+        this.preDistributedId = preDistributedId;
         this.ccs = ccs;
         this.callback = callback;
     }
@@ -38,12 +40,12 @@ public class DestroyJobWork extends SynchronizableWork {
     @Override
     protected void doRun() throws Exception {
         try {
-            ccs.getPreDistributedJobStore().removeDistributedJobDescriptor(predestributedId);
+            ccs.getPreDistributedJobStore().removeDistributedJobDescriptor(preDistributedId);
             INodeManager nodeManager = ccs.getNodeManager();
             for (NodeControllerState node : nodeManager.getAllNodeControllerStates()) {
-                node.getNodeController().destroyJob(predestributedId);
+                node.getNodeController().destroyJob(preDistributedId);
             }
-            callback.setValue(predestributedId);
+            callback.setValue(preDistributedId);
         } catch (Exception e) {
             callback.setException(e);
         }

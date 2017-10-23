@@ -20,19 +20,20 @@ package org.apache.hyracks.control.cc.work;
 
 import org.apache.hyracks.api.exceptions.ErrorCode;
 import org.apache.hyracks.api.exceptions.HyracksException;
+import org.apache.hyracks.api.job.PreDistributedId;
 import org.apache.hyracks.control.common.work.SynchronizableWork;
 
 public class DistributedJobFailureWork extends SynchronizableWork {
-    protected final long predistributedId;
+    protected final PreDistributedId preDistributedId;
     protected final String nodeId;
 
-    public DistributedJobFailureWork(long predistributedId, String nodeId) {
-        this.predistributedId = predistributedId;
+    public DistributedJobFailureWork(PreDistributedId preDistributedId, String nodeId) {
+        this.preDistributedId = preDistributedId;
         this.nodeId = nodeId;
     }
 
     @Override
     public void doRun() throws HyracksException {
-        throw HyracksException.create(ErrorCode.DISTRIBUTED_JOB_FAILURE, predistributedId, nodeId);
+        throw HyracksException.create(ErrorCode.DISTRIBUTED_JOB_FAILURE, preDistributedId, nodeId);
     }
 }

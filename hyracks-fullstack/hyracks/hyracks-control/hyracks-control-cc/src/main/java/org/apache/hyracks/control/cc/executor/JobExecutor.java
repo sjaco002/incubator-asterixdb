@@ -49,6 +49,7 @@ import org.apache.hyracks.api.job.ActivityCluster;
 import org.apache.hyracks.api.job.ActivityClusterGraph;
 import org.apache.hyracks.api.job.JobId;
 import org.apache.hyracks.api.job.JobStatus;
+import org.apache.hyracks.api.job.PreDistributedId;
 import org.apache.hyracks.api.partitions.PartitionId;
 import org.apache.hyracks.api.util.JavaSerializationUtils;
 import org.apache.hyracks.control.cc.ClusterControllerService;
@@ -65,8 +66,8 @@ import org.apache.hyracks.control.cc.partitions.PartitionMatchMaker;
 import org.apache.hyracks.control.cc.work.JobCleanupWork;
 import org.apache.hyracks.control.common.job.PartitionState;
 import org.apache.hyracks.control.common.job.TaskAttemptDescriptor;
-import org.apache.hyracks.control.common.work.NoOpCallback;
 import org.apache.hyracks.control.common.work.IResultCallback;
+import org.apache.hyracks.control.common.work.NoOpCallback;
 
 public class JobExecutor {
     private static final Logger LOGGER = Logger.getLogger(JobExecutor.class.getName());
@@ -77,7 +78,7 @@ public class JobExecutor {
 
     private final PartitionConstraintSolver solver;
 
-    private final long predistributedId;
+    private final PreDistributedId preDistributedId;
 
     private final Map<PartitionId, TaskCluster> partitionProducingTaskClusterMap;
 
@@ -88,10 +89,10 @@ public class JobExecutor {
     private boolean cancelled = false;
 
     public JobExecutor(ClusterControllerService ccs, JobRun jobRun, Collection<Constraint> constraints,
-            long predistributedId) {
+            PreDistributedId preDistributedId) {
         this.ccs = ccs;
         this.jobRun = jobRun;
-        this.predistributedId = predistributedId;
+        this.preDistributedId = preDistributedId;
         solver = new PartitionConstraintSolver();
         partitionProducingTaskClusterMap = new HashMap<>();
         inProgressTaskClusters = new HashSet<>();
@@ -100,7 +101,7 @@ public class JobExecutor {
     }
 
     public boolean isPredistributed() {
-        return predistributedId != -1;
+        return preDistributedId != null;
     }
 
     public JobRun getJobRun() {
@@ -517,7 +518,7 @@ public class JobExecutor {
                     byte[] jagBytes = changed ? acgBytes : null;
                     node.getNodeController().startTasks(deploymentId, jobId, jagBytes, taskDescriptors,
                             connectorPolicies, jobRun.getFlags(),
-                            ccs.createOrGetJobParameterByteStore(jobId).getParameterMap(), predistributedId);
+                            ccs.createOrGetJobParameterByteStore(jobId).getParameterMap(), preDistributedId);
                 }
             }
         } catch (Exception e) {

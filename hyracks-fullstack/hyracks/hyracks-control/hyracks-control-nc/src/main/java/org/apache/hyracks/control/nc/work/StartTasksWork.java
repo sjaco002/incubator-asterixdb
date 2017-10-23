@@ -47,13 +47,13 @@ import org.apache.hyracks.api.dataflow.connectors.IConnectorPolicy;
 import org.apache.hyracks.api.dataflow.value.IRecordDescriptorProvider;
 import org.apache.hyracks.api.dataflow.value.RecordDescriptor;
 import org.apache.hyracks.api.deployment.DeploymentId;
-import org.apache.hyracks.api.exceptions.ErrorCode;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.apache.hyracks.api.exceptions.HyracksException;
 import org.apache.hyracks.api.job.ActivityCluster;
 import org.apache.hyracks.api.job.ActivityClusterGraph;
 import org.apache.hyracks.api.job.JobFlag;
 import org.apache.hyracks.api.job.JobId;
+import org.apache.hyracks.api.job.PreDistributedId;
 import org.apache.hyracks.api.partitions.PartitionId;
 import org.apache.hyracks.comm.channels.NetworkInputChannel;
 import org.apache.hyracks.control.common.deployment.DeploymentUtils;
@@ -79,7 +79,7 @@ public class StartTasksWork extends AbstractWork {
 
     private final JobId jobId;
 
-    private final long predistributedId;
+    private final PreDistributedId preDistributedId;
 
     private final byte[] acgBytes;
 
@@ -94,11 +94,11 @@ public class StartTasksWork extends AbstractWork {
     public StartTasksWork(NodeControllerService ncs, DeploymentId deploymentId, JobId jobId, byte[] acgBytes,
             List<TaskAttemptDescriptor> taskDescriptors,
             Map<ConnectorDescriptorId, IConnectorPolicy> connectorPoliciesMap, Set<JobFlag> flags,
-            Map<byte[], byte[]> jobParameters, long predistributedId) {
+            Map<byte[], byte[]> jobParameters, PreDistributedId preDistributedId) {
         this.ncs = ncs;
         this.deploymentId = deploymentId;
         this.jobId = jobId;
-        this.predistributedId = predistributedId;
+        this.preDistributedId = preDistributedId;
         this.acgBytes = acgBytes;
         this.taskDescriptors = taskDescriptors;
         this.connectorPoliciesMap = connectorPoliciesMap;
@@ -113,7 +113,7 @@ public class StartTasksWork extends AbstractWork {
         try {
             ncs.updateMaxJobId(jobId);
             NCServiceContext serviceCtx = ncs.getContext();
-            Joblet joblet = getOrCreateLocalJoblet(deploymentId, predistributedId, serviceCtx, acgBytes);
+            Joblet joblet = getOrCreateLocalJoblet(deploymentId, serviceCtx, acgBytes);
             final ActivityClusterGraph acg = joblet.getActivityClusterGraph();
             IRecordDescriptorProvider rdp = new IRecordDescriptorProvider() {
                 @Override
@@ -197,16 +197,15 @@ public class StartTasksWork extends AbstractWork {
         }
     }
 
-    private Joblet getOrCreateLocalJoblet(DeploymentId deploymentId, long destributedId, INCServiceContext appCtx,
-            byte[] acgBytes) throws HyracksException {
+    private Joblet getOrCreateLocalJoblet(DeploymentId deploymentId, INCServiceContext appCtx, byte[] acgBytes)
+            throws HyracksException {
         Map<JobId, Joblet> jobletMap = ncs.getJobletMap();
         Joblet ji = jobletMap.get(jobId);
         if (ji == null) {
-            ActivityClusterGraph acg = ncs.getActivityClusterGraph(destributedId);
-            if (acg == null) {
-                if (acgBytes == null) {
-                    throw HyracksException.create(ErrorCode.ERROR_FINDING_DISTRIBUTED_JOB, jobId);
-                }
+            ActivityClusterGraph acg;
+            if (preDistributedId != null) {
+                acg = ncs.getActivityClusterGraph(preDistributedId);
+            } else {
                 acg = (ActivityClusterGraph) DeploymentUtils.deserialize(acgBytes, deploymentId, appCtx);
             }
             ncs.createOrGetJobParameterByteStore(jobId).setParameters(jobParameters);

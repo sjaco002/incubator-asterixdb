@@ -30,6 +30,7 @@ import org.apache.hyracks.api.job.JobFlag;
 import org.apache.hyracks.api.job.JobId;
 import org.apache.hyracks.api.job.JobInfo;
 import org.apache.hyracks.api.job.JobStatus;
+import org.apache.hyracks.api.job.PreDistributedId;
 import org.apache.hyracks.api.topology.ClusterTopology;
 import org.apache.hyracks.ipc.api.IIPCHandle;
 import org.apache.hyracks.ipc.api.RPCInterface;
@@ -76,9 +77,9 @@ public class HyracksClientInterfaceRemoteProxy implements IHyracksClientInterfac
     }
 
     @Override
-    public JobId startJob(long predestributedId, Map<byte[], byte[]> jobParameters) throws Exception {
+    public JobId startJob(PreDistributedId preDistributedId, Map<byte[], byte[]> jobParameters) throws Exception {
         HyracksClientInterfaceFunctions.StartJobFunction sjf =
-                new HyracksClientInterfaceFunctions.StartJobFunction(predestributedId, jobParameters);
+                new HyracksClientInterfaceFunctions.StartJobFunction(preDistributedId, jobParameters);
         return (JobId) rpci.call(ipcHandle, sjf);
     }
 
@@ -90,17 +91,17 @@ public class HyracksClientInterfaceRemoteProxy implements IHyracksClientInterfac
     }
 
     @Override
-    public long distributeJob(byte[] acggfBytes) throws Exception {
+    public PreDistributedId distributeJob(byte[] acggfBytes) throws Exception {
         HyracksClientInterfaceFunctions.DistributeJobFunction sjf =
                 new HyracksClientInterfaceFunctions.DistributeJobFunction(acggfBytes);
-        return (long) rpci.call(ipcHandle, sjf);
+        return (PreDistributedId) rpci.call(ipcHandle, sjf);
     }
 
     @Override
-    public long destroyJob(long predestributedId) throws Exception {
+    public PreDistributedId destroyJob(PreDistributedId preDistributedId) throws Exception {
         HyracksClientInterfaceFunctions.DestroyJobFunction sjf =
-                new HyracksClientInterfaceFunctions.DestroyJobFunction(predestributedId);
-        return (long) rpci.call(ipcHandle, sjf);
+                new HyracksClientInterfaceFunctions.DestroyJobFunction(preDistributedId);
+        return (PreDistributedId) rpci.call(ipcHandle, sjf);
     }
 
     @Override

@@ -43,6 +43,7 @@ import org.apache.hyracks.api.job.JobFlag;
 import org.apache.hyracks.api.job.JobId;
 import org.apache.hyracks.api.job.JobSpecification;
 import org.apache.hyracks.api.job.JobStatus;
+import org.apache.hyracks.api.job.PreDistributedId;
 import org.apache.hyracks.api.partitions.PartitionId;
 import org.apache.hyracks.control.cc.ClusterControllerService;
 import org.apache.hyracks.control.cc.PreDistributedJobStore.PreDistributedJobDescriptor;
@@ -117,20 +118,20 @@ public class JobRun implements IJobStatusConditionVariable {
     //Run a Pre-distributed job by passing the JobId
     public JobRun(ClusterControllerService ccs, DeploymentId deploymentId, JobId jobId, Set<JobFlag> jobFlags,
             PreDistributedJobDescriptor distributedJobDescriptor, Map<byte[], byte[]> jobParameters,
-            long predestributedId)
+            PreDistributedId preDistributedId)
             throws HyracksException {
         this(deploymentId, jobId, jobFlags,
                 distributedJobDescriptor.getJobSpecification(), distributedJobDescriptor.getActivityClusterGraph());
         ccs.createOrGetJobParameterByteStore(jobId).setParameters(jobParameters);
         Set<Constraint> constaints = distributedJobDescriptor.getActivityClusterGraphConstraints();
-        this.scheduler = new JobExecutor(ccs, this, constaints, predestributedId);
+        this.scheduler = new JobExecutor(ccs, this, constaints, preDistributedId);
     }
 
     //Run a new job by creating an ActivityClusterGraph
     public JobRun(ClusterControllerService ccs, DeploymentId deploymentId, JobId jobId,
             IActivityClusterGraphGeneratorFactory acggf, IActivityClusterGraphGenerator acgg, Set<JobFlag> jobFlags) {
         this(deploymentId, jobId, jobFlags, acggf.getJobSpecification(), acgg.initialize());
-        this.scheduler = new JobExecutor(ccs, this, acgg.getConstraints(), -1);
+        this.scheduler = new JobExecutor(ccs, this, acgg.getConstraints(), null);
     }
 
     public DeploymentId getDeploymentId() {

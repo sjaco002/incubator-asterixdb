@@ -29,6 +29,7 @@ import org.apache.hyracks.api.job.JobFlag;
 import org.apache.hyracks.api.job.JobId;
 import org.apache.hyracks.api.job.JobInfo;
 import org.apache.hyracks.api.job.JobStatus;
+import org.apache.hyracks.api.job.PreDistributedId;
 import org.apache.hyracks.api.topology.ClusterTopology;
 
 public interface IHyracksClientInterface {
@@ -38,13 +39,13 @@ public interface IHyracksClientInterface {
 
     public JobId startJob(byte[] acggfBytes, EnumSet<JobFlag> jobFlags) throws Exception;
 
-    public JobId startJob(long predestributedId, Map<byte[], byte[]> jobParameters) throws Exception;
+    public JobId startJob(PreDistributedId preDistributedId, Map<byte[], byte[]> jobParameters) throws Exception;
 
     public void cancelJob(JobId jobId) throws Exception;
 
-    public long distributeJob(byte[] acggfBytes) throws Exception;
+    public PreDistributedId distributeJob(byte[] acggfBytes) throws Exception;
 
-    public long destroyJob(long predestributedId) throws Exception;
+    public PreDistributedId destroyJob(PreDistributedId preDistributedId) throws Exception;
 
     public NetworkAddress getDatasetDirectoryServiceInfo() throws Exception;
 

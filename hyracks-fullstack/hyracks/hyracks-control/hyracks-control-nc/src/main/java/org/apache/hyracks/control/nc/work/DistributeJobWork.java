@@ -21,6 +21,7 @@ package org.apache.hyracks.control.nc.work;
 
 import org.apache.hyracks.api.exceptions.HyracksException;
 import org.apache.hyracks.api.job.ActivityClusterGraph;
+import org.apache.hyracks.api.job.PreDistributedId;
 import org.apache.hyracks.control.common.deployment.DeploymentUtils;
 import org.apache.hyracks.control.common.work.AbstractWork;
 import org.apache.hyracks.control.nc.NodeControllerService;
@@ -33,24 +34,24 @@ public class DistributeJobWork extends AbstractWork {
 
     private final NodeControllerService ncs;
     private final byte[] acgBytes;
-    private final long predestributedId;
+    private final PreDistributedId preDistributedId;
 
-    public DistributeJobWork(NodeControllerService ncs, long predestributedId, byte[] acgBytes) {
+    public DistributeJobWork(NodeControllerService ncs, PreDistributedId preDistributedId, byte[] acgBytes) {
         this.ncs = ncs;
-        this.predestributedId = predestributedId;
+        this.preDistributedId = preDistributedId;
         this.acgBytes = acgBytes;
     }
 
     @Override
     public void run() {
         try {
-            ncs.checkForDuplicateDistributedJob(predestributedId);
+            ncs.checkForDuplicateDistributedJob(preDistributedId);
             ActivityClusterGraph acg =
                     (ActivityClusterGraph) DeploymentUtils.deserialize(acgBytes, null, ncs.getContext());
-            ncs.storeActivityClusterGraph(predestributedId, acg);
+            ncs.storeActivityClusterGraph(preDistributedId, acg);
         } catch (HyracksException e) {
             try {
-                ncs.getClusterController().notifyDistributedJobFailure(predestributedId, ncs.getId());
+                ncs.getClusterController().notifyDistributedJobFailure(preDistributedId, ncs.getId());
             } catch (Exception e1) {
                 e1.printStackTrace();
             }

@@ -27,6 +27,7 @@ import org.apache.hyracks.api.dataflow.TaskAttemptId;
 import org.apache.hyracks.api.dataset.ResultSetId;
 import org.apache.hyracks.api.deployment.DeploymentId;
 import org.apache.hyracks.api.job.JobId;
+import org.apache.hyracks.api.job.PreDistributedId;
 import org.apache.hyracks.control.common.base.IClusterController;
 import org.apache.hyracks.control.common.controllers.NodeRegistration;
 import org.apache.hyracks.control.common.deployment.DeploymentStatus;
@@ -167,8 +168,8 @@ public class ClusterControllerRemoteProxy extends ControllerRemoteProxy implemen
     }
 
     @Override
-    public void notifyDistributedJobFailure(long predestributedId, String nodeId) throws Exception {
-        ReportDistributedJobFailureFunction fn = new ReportDistributedJobFailureFunction(predestributedId, nodeId);
+    public void notifyDistributedJobFailure(PreDistributedId preDistributedId, String nodeId) throws Exception {
+        ReportDistributedJobFailureFunction fn = new ReportDistributedJobFailureFunction(preDistributedId, nodeId);
         ensureIpcHandle().send(-1, fn, null);
     }
 

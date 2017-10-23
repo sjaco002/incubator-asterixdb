@@ -33,6 +33,7 @@ import org.apache.hyracks.api.client.HyracksConnection;
 import org.apache.hyracks.api.client.IHyracksClientConnection;
 import org.apache.hyracks.api.job.JobId;
 import org.apache.hyracks.api.job.JobSpecification;
+import org.apache.hyracks.api.job.PreDistributedId;
 import org.apache.hyracks.control.cc.ClusterControllerService;
 import org.apache.hyracks.control.cc.cluster.INodeManager;
 import org.apache.hyracks.control.cc.cluster.NodeManager;
@@ -43,7 +44,6 @@ import org.junit.AfterClass;
 import org.junit.Assert;
 import org.junit.BeforeClass;
 import org.junit.Test;
-import org.mockito.Matchers;
 import org.mockito.Mockito;
 
 public class PredistributedJobsTest {
@@ -121,16 +121,16 @@ public class PredistributedJobsTest {
         JobSpecification spec2 = HeapSortMergeTest.createSortMergeJobSpec();
 
         //distribute both jobs
-        long distributedId1 = hcc.distributeJob(spec1);
-        long distributedId2 = hcc.distributeJob(spec2);
+        PreDistributedId distributedId1 = hcc.distributeJob(spec1);
+        PreDistributedId distributedId2 = hcc.distributeJob(spec2);
 
         //make sure it finished
         //cc will get the store once to check for duplicate insertion and once to insert per job
         verify(cc, Mockito.timeout(5000).times(4)).getPreDistributedJobStore();
-        verify(nc1, Mockito.timeout(5000).times(2)).storeActivityClusterGraph(Matchers.anyLong(), any());
-        verify(nc2, Mockito.timeout(5000).times(2)).storeActivityClusterGraph(Matchers.anyLong(), any());
-        verify(nc1, Mockito.timeout(5000).times(2)).checkForDuplicateDistributedJob(Matchers.anyLong());
-        verify(nc2, Mockito.timeout(5000).times(2)).checkForDuplicateDistributedJob(Matchers.anyLong());
+        verify(nc1, Mockito.timeout(5000).times(2)).storeActivityClusterGraph(any(), any());
+        verify(nc2, Mockito.timeout(5000).times(2)).storeActivityClusterGraph(any(), any());
+        verify(nc1, Mockito.timeout(5000).times(2)).checkForDuplicateDistributedJob(any());
+        verify(nc2, Mockito.timeout(5000).times(2)).checkForDuplicateDistributedJob(any());
 
         //confirm that both jobs are distributed
         Assert.assertTrue(nc1.getActivityClusterGraph(distributedId1) != null && nc2.getActivityClusterGraph(distributedId1) != null);
@@ -152,8 +152,8 @@ public class PredistributedJobsTest {
 
         //make sure it finished
         verify(cc, Mockito.timeout(5000).times(8)).getPreDistributedJobStore();
-        verify(nc1, Mockito.timeout(5000).times(1)).removeActivityClusterGraph(Matchers.anyLong());
-        verify(nc2, Mockito.timeout(5000).times(1)).removeActivityClusterGraph(Matchers.anyLong());
+        verify(nc1, Mockito.timeout(5000).times(1)).removeActivityClusterGraph(any());
+        verify(nc2, Mockito.timeout(5000).times(1)).removeActivityClusterGraph(any());
 
         //confirm the first job is destroyed
         Assert.assertTrue(nc1.getActivityClusterGraph(distributedId1) == null && nc2.getActivityClusterGraph(distributedId1) == null);
@@ -186,8 +186,8 @@ public class PredistributedJobsTest {
 
         //make sure it finished
         verify(cc, Mockito.timeout(5000).times(12)).getPreDistributedJobStore();
-        verify(nc1, Mockito.timeout(5000).times(2)).removeActivityClusterGraph(Matchers.anyLong());
-        verify(nc2, Mockito.timeout(5000).times(2)).removeActivityClusterGraph(Matchers.anyLong());
+        verify(nc1, Mockito.timeout(5000).times(2)).removeActivityClusterGraph(any());
+        verify(nc2, Mockito.timeout(5000).times(2)).removeActivityClusterGraph(any());
 
         //confirm the second job is destroyed
         Assert.assertTrue(nc1.getActivityClusterGraph(distributedId2) == null && nc2.getActivityClusterGraph(distributedId2) == null);

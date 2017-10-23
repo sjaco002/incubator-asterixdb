@@ -31,13 +31,14 @@ import org.apache.hyracks.api.deployment.DeploymentId;
 import org.apache.hyracks.api.job.JobFlag;
 import org.apache.hyracks.api.job.JobId;
 import org.apache.hyracks.api.job.JobStatus;
+import org.apache.hyracks.api.job.PreDistributedId;
 import org.apache.hyracks.api.partitions.PartitionId;
 import org.apache.hyracks.control.common.job.TaskAttemptDescriptor;
 
 public interface INodeController {
     public void startTasks(DeploymentId deploymentId, JobId jobId, byte[] planBytes,
             List<TaskAttemptDescriptor> taskDescriptors, Map<ConnectorDescriptorId, IConnectorPolicy> connectorPolicies,
-            Set<JobFlag> flags, Map<byte[], byte[]> jobParameters, long predistributedId) throws Exception;
+            Set<JobFlag> flags, Map<byte[], byte[]> jobParameters, PreDistributedId preDistributedId) throws Exception;
 
     public void abortTasks(JobId jobId, List<TaskAttemptId> tasks) throws Exception;
 
@@ -49,9 +50,9 @@ public interface INodeController {
 
     public void undeployBinary(DeploymentId deploymentId) throws Exception;
 
-    public void distributeJob(long predistributedId, byte[] planBytes) throws Exception;
+    public void distributeJob(PreDistributedId preDistributedId, byte[] planBytes) throws Exception;
 
-    public void destroyJob(long predestributedId) throws Exception;
+    public void destroyJob(PreDistributedId preDistributedId) throws Exception;
 
     public void dumpState(String stateDumpId) throws Exception;
 

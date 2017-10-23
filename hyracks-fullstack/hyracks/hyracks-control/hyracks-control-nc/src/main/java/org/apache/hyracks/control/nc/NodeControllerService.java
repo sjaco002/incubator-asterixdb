@@ -56,6 +56,7 @@ import org.apache.hyracks.api.io.IODeviceHandle;
 import org.apache.hyracks.api.job.ActivityClusterGraph;
 import org.apache.hyracks.api.job.JobId;
 import org.apache.hyracks.api.job.JobParameterByteStore;
+import org.apache.hyracks.api.job.PreDistributedId;
 import org.apache.hyracks.api.lifecycle.ILifeCycleComponentManager;
 import org.apache.hyracks.api.lifecycle.LifeCycleComponentManager;
 import org.apache.hyracks.api.service.IControllerService;
@@ -440,28 +441,29 @@ public class NodeControllerService implements IControllerService {
     }
 
 
-    public void storeActivityClusterGraph(long predestributedId, ActivityClusterGraph acg) throws HyracksException {
-        if (preDistributedJobActivityClusterGraphMap.get(predestributedId) != null) {
-            throw HyracksException.create(ErrorCode.DUPLICATE_DISTRIBUTED_JOB, predestributedId);
+    public void storeActivityClusterGraph(PreDistributedId preDistributedId, ActivityClusterGraph acg)
+            throws HyracksException {
+        if (preDistributedJobActivityClusterGraphMap.get(preDistributedId.getId()) != null) {
+            throw HyracksException.create(ErrorCode.DUPLICATE_DISTRIBUTED_JOB, preDistributedId);
         }
-        preDistributedJobActivityClusterGraphMap.put(predestributedId, acg);
+        preDistributedJobActivityClusterGraphMap.put(preDistributedId.getId(), acg);
     }
 
-    public void removeActivityClusterGraph(long predestributedId) throws HyracksException {
-        if (preDistributedJobActivityClusterGraphMap.get(predestributedId) == null) {
-            throw HyracksException.create(ErrorCode.ERROR_FINDING_DISTRIBUTED_JOB, predestributedId);
+    public void removeActivityClusterGraph(PreDistributedId preDistributedId) throws HyracksException {
+        if (preDistributedJobActivityClusterGraphMap.get(preDistributedId.getId()) == null) {
+            throw HyracksException.create(ErrorCode.ERROR_FINDING_DISTRIBUTED_JOB, preDistributedId);
         }
-        preDistributedJobActivityClusterGraphMap.remove(predestributedId);
+        preDistributedJobActivityClusterGraphMap.remove(preDistributedId.getId());
     }
 
-    public void checkForDuplicateDistributedJob(long predestributedId) throws HyracksException {
-        if (preDistributedJobActivityClusterGraphMap.get(predestributedId) != null) {
-            throw HyracksException.create(ErrorCode.DUPLICATE_DISTRIBUTED_JOB, predestributedId);
+    public void checkForDuplicateDistributedJob(PreDistributedId preDistributedId) throws HyracksException {
+        if (preDistributedJobActivityClusterGraphMap.get(preDistributedId.getId()) != null) {
+            throw HyracksException.create(ErrorCode.DUPLICATE_DISTRIBUTED_JOB, preDistributedId);
         }
     }
 
-    public ActivityClusterGraph getActivityClusterGraph(long predistributedId) throws HyracksException {
-        return preDistributedJobActivityClusterGraphMap.get(predistributedId);
+    public ActivityClusterGraph getActivityClusterGraph(PreDistributedId preDistributedId) throws HyracksException {
+        return preDistributedJobActivityClusterGraphMap.get(preDistributedId.getId());
     }
 
     public NetworkManager getNetworkManager() {

@@ -27,6 +27,7 @@ import org.apache.hyracks.api.exceptions.ErrorCode;
 import org.apache.hyracks.api.exceptions.HyracksException;
 import org.apache.hyracks.api.job.ActivityClusterGraph;
 import org.apache.hyracks.api.job.JobSpecification;
+import org.apache.hyracks.api.job.PreDistributedId;
 
 public class PreDistributedJobStore {
 
@@ -36,37 +37,39 @@ public class PreDistributedJobStore {
         preDistributedJobDescriptorMap = new Hashtable<>();
     }
 
-    public void addDistributedJobDescriptor(long predestributedId, ActivityClusterGraph activityClusterGraph,
+    public void addDistributedJobDescriptor(PreDistributedId preDistributedId,
+            ActivityClusterGraph activityClusterGraph,
             JobSpecification jobSpecification, Set<Constraint> activityClusterGraphConstraints)
                     throws HyracksException {
-        if (preDistributedJobDescriptorMap.get(predestributedId) != null) {
-            throw HyracksException.create(ErrorCode.DUPLICATE_DISTRIBUTED_JOB, predestributedId);
+        if (preDistributedJobDescriptorMap.get(preDistributedId.getId()) != null) {
+            throw HyracksException.create(ErrorCode.DUPLICATE_DISTRIBUTED_JOB, preDistributedId);
         }
         PreDistributedJobDescriptor descriptor =
                 new PreDistributedJobDescriptor(activityClusterGraph, jobSpecification, activityClusterGraphConstraints);
-        preDistributedJobDescriptorMap.put(predestributedId, descriptor);
+        preDistributedJobDescriptorMap.put(preDistributedId.getId(), descriptor);
     }
 
-    public void checkForExistingDistributedJobDescriptor(long predestributedId) throws HyracksException {
-        if (preDistributedJobDescriptorMap.get(predestributedId) != null) {
-            throw HyracksException.create(ErrorCode.DUPLICATE_DISTRIBUTED_JOB, predestributedId);
+    public void checkForExistingDistributedJobDescriptor(PreDistributedId preDistributedId) throws HyracksException {
+        if (preDistributedJobDescriptorMap.get(preDistributedId.getId()) != null) {
+            throw HyracksException.create(ErrorCode.DUPLICATE_DISTRIBUTED_JOB, preDistributedId);
         }
     }
 
-    public PreDistributedJobDescriptor getDistributedJobDescriptor(long predestributedId) throws HyracksException {
-        PreDistributedJobDescriptor descriptor = preDistributedJobDescriptorMap.get(predestributedId);
+    public PreDistributedJobDescriptor getDistributedJobDescriptor(PreDistributedId preDistributedId)
+            throws HyracksException {
+        PreDistributedJobDescriptor descriptor = preDistributedJobDescriptorMap.get(preDistributedId.getId());
         if (descriptor == null) {
-            throw HyracksException.create(ErrorCode.ERROR_FINDING_DISTRIBUTED_JOB, predestributedId);
+            throw HyracksException.create(ErrorCode.ERROR_FINDING_DISTRIBUTED_JOB, preDistributedId);
         }
         return descriptor;
     }
 
-    public void removeDistributedJobDescriptor(long predestributedId) throws HyracksException {
-        PreDistributedJobDescriptor descriptor = preDistributedJobDescriptorMap.get(predestributedId);
+    public void removeDistributedJobDescriptor(PreDistributedId preDistributedId) throws HyracksException {
+        PreDistributedJobDescriptor descriptor = preDistributedJobDescriptorMap.get(preDistributedId.getId());
         if (descriptor == null) {
-            throw HyracksException.create(ErrorCode.ERROR_FINDING_DISTRIBUTED_JOB, predestributedId);
+            throw HyracksException.create(ErrorCode.ERROR_FINDING_DISTRIBUTED_JOB, preDistributedId);
         }
-        preDistributedJobDescriptorMap.remove(predestributedId);
+        preDistributedJobDescriptorMap.remove(preDistributedId.getId());
     }
 
     public class PreDistributedJobDescriptor {

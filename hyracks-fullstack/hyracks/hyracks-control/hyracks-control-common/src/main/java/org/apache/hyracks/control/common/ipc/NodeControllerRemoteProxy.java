@@ -33,6 +33,7 @@ import org.apache.hyracks.api.deployment.DeploymentId;
 import org.apache.hyracks.api.job.JobFlag;
 import org.apache.hyracks.api.job.JobId;
 import org.apache.hyracks.api.job.JobStatus;
+import org.apache.hyracks.api.job.PreDistributedId;
 import org.apache.hyracks.api.partitions.PartitionId;
 import org.apache.hyracks.control.common.base.INodeController;
 import org.apache.hyracks.control.common.ipc.CCNCFunctions.AbortTasksFunction;
@@ -71,9 +72,9 @@ public class NodeControllerRemoteProxy extends ControllerRemoteProxy implements 
     @Override
     public void startTasks(DeploymentId deploymentId, JobId jobId, byte[] planBytes,
             List<TaskAttemptDescriptor> taskDescriptors, Map<ConnectorDescriptorId, IConnectorPolicy> connectorPolicies,
-            Set<JobFlag> flags, Map<byte[], byte[]> jobParameters, long predistributedId) throws Exception {
+            Set<JobFlag> flags, Map<byte[], byte[]> jobParameters, PreDistributedId preDistributedId) throws Exception {
         StartTasksFunction stf = new StartTasksFunction(deploymentId, jobId, planBytes,
-                taskDescriptors, connectorPolicies, flags, jobParameters, predistributedId);
+                taskDescriptors, connectorPolicies, flags, jobParameters, preDistributedId);
         ensureIpcHandle().send(-1, stf, null);
     }
 
@@ -109,14 +110,14 @@ public class NodeControllerRemoteProxy extends ControllerRemoteProxy implements 
     }
 
     @Override
-    public void distributeJob(long predistributedId, byte[] planBytes) throws Exception {
-        DistributeJobFunction fn = new DistributeJobFunction(predistributedId, planBytes);
+    public void distributeJob(PreDistributedId preDistributedId, byte[] planBytes) throws Exception {
+        DistributeJobFunction fn = new DistributeJobFunction(preDistributedId, planBytes);
         ensureIpcHandle().send(-1, fn, null);
     }
 
     @Override
-    public void destroyJob(long predistributedId) throws Exception {
-        DestroyJobFunction fn = new DestroyJobFunction(predistributedId);
+    public void destroyJob(PreDistributedId preDistributedId) throws Exception {
+        DestroyJobFunction fn = new DestroyJobFunction(preDistributedId);
         ensureIpcHandle().send(-1, fn, null);
     }
 

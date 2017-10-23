@@ -30,6 +30,7 @@ import org.apache.hyracks.api.job.JobId;
 import org.apache.hyracks.api.job.JobInfo;
 import org.apache.hyracks.api.job.JobSpecification;
 import org.apache.hyracks.api.job.JobStatus;
+import org.apache.hyracks.api.job.PreDistributedId;
 
 /**
  * Interface used by clients to communicate with the Hyracks Cluster Controller.
@@ -95,27 +96,27 @@ public interface IHyracksClientConnection extends IClusterInfoCollector {
      *            Flags
      * @throws Exception
      */
-    long distributeJob(JobSpecification jobSpec) throws Exception;
+    PreDistributedId distributeJob(JobSpecification jobSpec) throws Exception;
 
     /**
      * Destroy the distributed graph for a pre-distributed job
      *
-     * @param predestributedId
+     * @param preDistributedId
      *            The id of the predistributed job
      * @throws Exception
      */
-    long destroyJob(long predestributedId) throws Exception;
+    PreDistributedId destroyJob(PreDistributedId preDistributedId) throws Exception;
 
     /**
      * Used to run a pre-distributed job by id (the same JobId will be returned)
      *
-     * @param predestributedId
+     * @param preDistributedId
      *            The id of the predistributed job
      * @param jobParameters
      *            The serialized job parameters
      * @throws Exception
      */
-    JobId startJob(long predestributedId, Map<byte[], byte[]> jobParameters) throws Exception;
+    JobId startJob(PreDistributedId preDistributedId, Map<byte[], byte[]> jobParameters) throws Exception;
 
     /**
      * Start the specified Job.

@@ -42,6 +42,7 @@ import org.apache.hyracks.api.job.JobId;
 import org.apache.hyracks.api.job.JobInfo;
 import org.apache.hyracks.api.job.JobSpecification;
 import org.apache.hyracks.api.job.JobStatus;
+import org.apache.hyracks.api.job.PreDistributedId;
 import org.apache.hyracks.api.topology.ClusterTopology;
 import org.apache.hyracks.api.util.JavaSerializationUtils;
 import org.apache.hyracks.ipc.api.RPCInterface;
@@ -109,20 +110,20 @@ public final class HyracksConnection implements IHyracksClientConnection {
     }
 
     @Override
-    public long distributeJob(JobSpecification jobSpec) throws Exception {
+    public PreDistributedId distributeJob(JobSpecification jobSpec) throws Exception {
         JobSpecificationActivityClusterGraphGeneratorFactory jsacggf =
                 new JobSpecificationActivityClusterGraphGeneratorFactory(jobSpec);
         return distributeJob(jsacggf);
     }
 
     @Override
-    public long destroyJob(long predestributedId) throws Exception {
-        return hci.destroyJob(predestributedId);
+    public PreDistributedId destroyJob(PreDistributedId preDistributedId) throws Exception {
+        return hci.destroyJob(preDistributedId);
     }
 
     @Override
-    public JobId startJob(long predestributedId, Map<byte[], byte[]> jobParameters) throws Exception {
-        return hci.startJob(predestributedId, jobParameters);
+    public JobId startJob(PreDistributedId preDistributedId, Map<byte[], byte[]> jobParameters) throws Exception {
+        return hci.startJob(preDistributedId, jobParameters);
     }
 
     @Override
@@ -130,7 +131,7 @@ public final class HyracksConnection implements IHyracksClientConnection {
         return hci.startJob(JavaSerializationUtils.serialize(acggf), jobFlags);
     }
 
-    public long distributeJob(IActivityClusterGraphGeneratorFactory acggf) throws Exception {
+    public PreDistributedId distributeJob(IActivityClusterGraphGeneratorFactory acggf) throws Exception {
         return hci.distributeJob(JavaSerializationUtils.serialize(acggf));
     }
 
