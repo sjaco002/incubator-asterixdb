@@ -47,6 +47,11 @@ public class MultiTransactionJobletEventListenerFactory implements IJobletEventL
     }
 
     @Override
+    public void updateJobId(int jobId) {
+        // no op
+    }
+
+    @Override
     public IJobletEventListener createListener(final IHyracksJobletContext jobletContext) {
 
         return new IJobletEventListener() {

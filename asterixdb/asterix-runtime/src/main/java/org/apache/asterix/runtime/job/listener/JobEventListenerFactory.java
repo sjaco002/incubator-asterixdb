@@ -45,6 +45,11 @@ public class JobEventListenerFactory implements IJobletEventListenerFactory {
     }
 
     @Override
+    public void updateJobId(int newJobId) {
+        this.jobId.setId(newJobId);
+    }
+
+    @Override
     public IJobletEventListener createListener(final IHyracksJobletContext jobletContext) {
 
         return new IJobletEventListener() {

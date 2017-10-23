@@ -205,6 +205,7 @@ public class StartTasksWork extends AbstractWork {
             ActivityClusterGraph acg;
             if (preDistributedId != null) {
                 acg = ncs.getActivityClusterGraph(preDistributedId);
+                acg.getJobletEventListenerFactory().updateJobId(preDistributedId.getAsterixJobId());
             } else {
                 acg = (ActivityClusterGraph) DeploymentUtils.deserialize(acgBytes, deploymentId, appCtx);
             }

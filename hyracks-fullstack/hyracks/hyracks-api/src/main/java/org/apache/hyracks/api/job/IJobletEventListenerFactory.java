@@ -24,4 +24,6 @@ import org.apache.hyracks.api.context.IHyracksJobletContext;
 
 public interface IJobletEventListenerFactory extends Serializable {
     public IJobletEventListener createListener(IHyracksJobletContext ctx);
+
+    public void updateJobId(int asterixJobId);
 }
