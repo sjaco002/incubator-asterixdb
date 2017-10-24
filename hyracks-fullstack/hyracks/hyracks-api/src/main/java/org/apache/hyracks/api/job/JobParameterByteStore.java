@@ -27,24 +27,24 @@ public class JobParameterByteStore implements Serializable {
 
     private static final long serialVersionUID = 1L;
 
-    private Map<byte[], byte[]> vars;
+    private Map<byte[], byte[]> runtimeValues;
     private Map<String, byte[]> nonpureSingletonValues;
     private final byte[] empty = new byte[0];
 
     public JobParameterByteStore() {
-        vars = new HashMap<>();
+        runtimeValues = new HashMap<>();
     }
 
     public Map<byte[], byte[]> getParameterMap() {
-        return vars;
+        return runtimeValues;
     }
 
     public void setParameters(Map<byte[], byte[]> map) {
-        vars = map;
+        runtimeValues = map;
     }
 
     public byte[] getParameterValue(byte[] name, int start, int length) {
-        for (Entry<byte[], byte[]> entry : vars.entrySet()) {
+        for (Entry<byte[], byte[]> entry : runtimeValues.entrySet()) {
             byte[] key = entry.getKey();
             if (key.length == length) {
                 boolean matched = true;

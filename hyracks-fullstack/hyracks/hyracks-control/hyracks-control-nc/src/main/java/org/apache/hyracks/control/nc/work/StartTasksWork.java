@@ -51,6 +51,7 @@ import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.apache.hyracks.api.exceptions.HyracksException;
 import org.apache.hyracks.api.job.ActivityCluster;
 import org.apache.hyracks.api.job.ActivityClusterGraph;
+import org.apache.hyracks.api.job.IJobletEventListenerFactory;
 import org.apache.hyracks.api.job.JobFlag;
 import org.apache.hyracks.api.job.JobId;
 import org.apache.hyracks.api.job.PreDistributedId;
@@ -203,14 +204,17 @@ public class StartTasksWork extends AbstractWork {
         Joblet ji = jobletMap.get(jobId);
         if (ji == null) {
             ActivityClusterGraph acg;
+            IJobletEventListenerFactory listenerFactory;
             if (preDistributedId != null) {
                 acg = ncs.getActivityClusterGraph(preDistributedId);
-                acg.getJobletEventListenerFactory().updateJobId(preDistributedId.getAsterixJobId());
+                listenerFactory = acg.getJobletEventListenerFactory().copyFactory();
+                listenerFactory.changeJobId(preDistributedId.getAsterixJobId());
             } else {
                 acg = (ActivityClusterGraph) DeploymentUtils.deserialize(acgBytes, deploymentId, appCtx);
+                listenerFactory = acg.getJobletEventListenerFactory();
             }
             ncs.createOrGetJobParameterByteStore(jobId).setParameters(jobParameters);
-            ji = new Joblet(ncs, deploymentId, jobId, appCtx, acg);
+            ji = new Joblet(ncs, deploymentId, jobId, appCtx, acg, listenerFactory);
             jobletMap.put(jobId, ji);
         }
         return ji;

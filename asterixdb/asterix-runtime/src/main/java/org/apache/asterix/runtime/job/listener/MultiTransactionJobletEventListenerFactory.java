@@ -47,8 +47,18 @@ public class MultiTransactionJobletEventListenerFactory implements IJobletEventL
     }
 
     @Override
-    public void updateJobId(int jobId) {
-        // no op
+    public IJobletEventListenerFactory copyFactory() {
+        return new MultiTransactionJobletEventListenerFactory(jobIds, transactionalWrite);
+    }
+
+    @Override
+    public void changeJobId(int newId) {
+        //no op
+    }
+
+    @Override
+    public int getJobIdValue() {
+        return -1;
     }
 
     @Override

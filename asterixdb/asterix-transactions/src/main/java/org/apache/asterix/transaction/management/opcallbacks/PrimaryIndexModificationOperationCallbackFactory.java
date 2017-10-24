@@ -66,7 +66,8 @@ public class PrimaryIndexModificationOperationCallbackFactory extends AbstractOp
         }
 
         try {
-            ITransactionContext txnCtx = txnSubsystem.getTransactionManager().getTransactionContext(jobId, false);
+            ITransactionContext txnCtx = txnSubsystem.getTransactionManager().getTransactionContext(
+                    new JobId(ctx.getJobletContext().getEventListenerFactory().getJobIdValue()), false);
             DatasetLocalResource aResource = (DatasetLocalResource) resource.getResource();
             IModificationOperationCallback modCallback = new PrimaryIndexModificationOperationCallback(
                     new DatasetId(datasetId), primaryKeyFields, txnCtx, txnSubsystem.getLockManager(), txnSubsystem,

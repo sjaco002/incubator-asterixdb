@@ -32,7 +32,7 @@ import org.apache.hyracks.api.job.JobStatus;
 public class JobEventListenerFactory implements IJobletEventListenerFactory {
 
     private static final long serialVersionUID = 1L;
-    private final JobId jobId;
+    private JobId jobId;
     private final boolean transactionalWrite;
 
     public JobEventListenerFactory(JobId jobId, boolean transactionalWrite) {
@@ -45,8 +45,18 @@ public class JobEventListenerFactory implements IJobletEventListenerFactory {
     }
 
     @Override
-    public void updateJobId(int newJobId) {
-        this.jobId.setId(newJobId);
+    public int getJobIdValue() {
+        return jobId.getId();
+    }
+
+    @Override
+    public IJobletEventListenerFactory copyFactory() {
+        return new JobEventListenerFactory(jobId, transactionalWrite);
+    }
+
+    @Override
+    public void changeJobId(int newId) {
+        this.jobId = new JobId(newId);
     }
 
     @Override

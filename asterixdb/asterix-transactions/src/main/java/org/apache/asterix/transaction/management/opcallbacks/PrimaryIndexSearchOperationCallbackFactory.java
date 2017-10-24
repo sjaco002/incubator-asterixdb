@@ -47,7 +47,8 @@ public class PrimaryIndexSearchOperationCallbackFactory extends AbstractOperatio
             IOperatorNodePushable operatorNodePushable) throws HyracksDataException {
         ITransactionSubsystem txnSubsystem = txnSubsystemProvider.getTransactionSubsystem(ctx);
         try {
-            ITransactionContext txnCtx = txnSubsystem.getTransactionManager().getTransactionContext(jobId, false);
+            ITransactionContext txnCtx = txnSubsystem.getTransactionManager().getTransactionContext(
+                    new JobId(ctx.getJobletContext().getEventListenerFactory().getJobIdValue()), false);
             return new PrimaryIndexSearchOperationCallback(new DatasetId(datasetId), primaryKeyFields,
                     txnSubsystem.getLockManager(), txnCtx);
         } catch (ACIDException e) {
