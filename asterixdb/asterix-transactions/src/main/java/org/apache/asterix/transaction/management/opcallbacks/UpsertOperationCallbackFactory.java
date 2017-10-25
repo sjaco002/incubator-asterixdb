@@ -32,6 +32,7 @@ import org.apache.asterix.transaction.management.opcallbacks.AbstractIndexModifi
 import org.apache.hyracks.api.context.IHyracksTaskContext;
 import org.apache.hyracks.api.dataflow.IOperatorNodePushable;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
+import org.apache.hyracks.api.job.IJobletEventListenerFactory;
 import org.apache.hyracks.storage.am.common.api.IModificationOperationCallbackFactory;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMIndex;
 import org.apache.hyracks.storage.common.IModificationOperationCallback;
@@ -63,8 +64,10 @@ public class UpsertOperationCallbackFactory extends AbstractOperationCallbackFac
         }
 
         try {
-            ITransactionContext txnCtx = txnSubsystem.getTransactionManager().getTransactionContext(
-                    ((IJobEventListenerFactory) ctx.getJobletContext().getEventListenerFactory()).getJobId(), false);
+            IJobletEventListenerFactory fact = ctx.getJobletContext().getEventListenerFactory();
+            JobId lookupId =
+                    fact instanceof IJobEventListenerFactory ? ((IJobEventListenerFactory) fact).getJobId() : jobId;
+            ITransactionContext txnCtx = txnSubsystem.getTransactionManager().getTransactionContext(lookupId, false);
             IModificationOperationCallback modCallback = new UpsertOperationCallback(new DatasetId(datasetId),
                     primaryKeyFields, txnCtx, txnSubsystem.getLockManager(), txnSubsystem, resource.getId(),
                     aResource.getPartition(), resourceType, indexOp);

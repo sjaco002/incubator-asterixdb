@@ -25,6 +25,7 @@ import org.apache.hyracks.algebricks.runtime.base.IPushRuntime;
 import org.apache.hyracks.algebricks.runtime.base.IPushRuntimeFactory;
 import org.apache.hyracks.api.context.IHyracksTaskContext;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
+import org.apache.hyracks.api.job.IJobletEventListenerFactory;
 
 public class CommitRuntimeFactory implements IPushRuntimeFactory {
 
@@ -56,8 +57,10 @@ public class CommitRuntimeFactory implements IPushRuntimeFactory {
 
     @Override
     public IPushRuntime createPushRuntime(IHyracksTaskContext ctx) throws HyracksDataException {
-        return new CommitRuntime(ctx,
-                ((IJobEventListenerFactory) ctx.getJobletContext().getEventListenerFactory()).getJobId(), datasetId,
+        IJobletEventListenerFactory fact = ctx.getJobletContext().getEventListenerFactory();
+        JobId lookupId =
+                fact instanceof IJobEventListenerFactory ? ((IJobEventListenerFactory) fact).getJobId() : jobId;
+        return new CommitRuntime(ctx, lookupId, datasetId,
                 primaryKeyFields, isTemporaryDatasetWriteJob, isWriteTransaction,
                 datasetPartitions[ctx.getTaskAttemptId().getTaskId().getPartition()], isSink);
     }
