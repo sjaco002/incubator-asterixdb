@@ -70,7 +70,7 @@ public class ClusterControllerRemoteProxy extends ControllerRemoteProxy implemen
     @Override
     protected int getMaxRetries(boolean first) {
         // -1 == retry forever
-        return first ? clusterConnectRetries : -1;
+        return first ? clusterConnectRetries : 0;
     }
 
     @Override

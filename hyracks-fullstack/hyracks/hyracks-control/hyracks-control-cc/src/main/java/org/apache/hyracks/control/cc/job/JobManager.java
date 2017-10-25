@@ -287,6 +287,11 @@ public class JobManager implements IJobManager {
         return ccs.getCCConfig().getJobQueueCapacity();
     }
 
+    @Override
+    public void clearJobQueue() {
+        jobQueue.clear();
+    }
+
     private void pickJobsToRun() throws HyracksException {
         List<JobRun> selectedRuns = jobQueue.pull();
         for (JobRun run : selectedRuns) {

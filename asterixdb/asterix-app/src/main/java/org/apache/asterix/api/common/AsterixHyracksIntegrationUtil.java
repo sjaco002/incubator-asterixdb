@@ -121,6 +121,10 @@ public class AsterixHyracksIntegrationUtil {
         this.ncs = nodeControllers.toArray(new NodeControllerService[nodeControllers.size()]);
     }
 
+    public ClusterControllerService getClusterControllerService() {
+        return cc;
+    }
+
     protected CCConfig createCCConfig(ConfigManager configManager) throws IOException {
         CCConfig ccConfig = new CCConfig(configManager);
         ccConfig.setClusterListenAddress(Inet4Address.getLoopbackAddress().getHostAddress());
@@ -162,7 +166,7 @@ public class AsterixHyracksIntegrationUtil {
         ncConfig.getConfigManager().processConfig();
 
         // get initial partitions from config
-        String[] nodeStores = ncConfig.getAppConfig().getStringArray(NCConfig.Option.IODEVICES);
+        String[] nodeStores = ncConfig.getNodeScopedAppConfig().getStringArray(NCConfig.Option.IODEVICES);
         if (nodeStores == null) {
             throw new IllegalStateException("Couldn't find stores for NC: " + ncConfig.getNodeId());
         }

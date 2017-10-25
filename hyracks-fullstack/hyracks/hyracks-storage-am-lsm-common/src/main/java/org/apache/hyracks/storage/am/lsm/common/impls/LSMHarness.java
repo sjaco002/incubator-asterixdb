@@ -253,8 +253,8 @@ public class LSMHarness implements ILSMHarness {
                                     }
                                     break;
                                 case INACTIVE:
-                                    ITracer.check(tracer).instant(lsmIndex.toString(), "release-memory-component",
-                                            Scope.p, null);
+                                    ITracer.check(tracer).instant(c.toString(), "release-memory-component", Scope.p,
+                                            lsmIndex.toString());
                                     ((AbstractLSMMemoryComponent) c).reset();
                                     // Notify all waiting threads whenever the mutable component's has change to inactive. This is important because
                                     // even though we switched the mutable components, it is possible that the component that we just switched
@@ -356,8 +356,8 @@ public class LSMHarness implements ILSMHarness {
                         lsmIndex.scheduleReplication(null, inactiveDiskComponentsToBeDeleted, false,
                                 ReplicationOperation.DELETE, opType);
                     }
-                    for (ILSMComponent c : inactiveDiskComponentsToBeDeleted) {
-                        ((AbstractLSMDiskComponent) c).destroy();
+                    for (ILSMDiskComponent c : inactiveDiskComponentsToBeDeleted) {
+                        c.deactivateAndDestroy();
                     }
                 } catch (Throwable e) {
                     if (LOGGER.isLoggable(Level.WARNING)) {
@@ -643,9 +643,9 @@ public class LSMHarness implements ILSMHarness {
         exitComponents(ctx, LSMOperationType.REPLICATE, null, false);
     }
 
-    protected void validateOperationEnterComponentsState(ILSMIndexOperationContext ctx) throws HyracksDataException {
+    protected void validateOperationEnterComponentsState(ILSMIndexOperationContext ctx) {
         if (ctx.isAccessingComponents()) {
-            throw new HyracksDataException("Opeartion already has access to components of index " + lsmIndex);
+            throw new IllegalStateException("Operation already has access to components of index " + lsmIndex);
         }
     }
 
@@ -684,17 +684,17 @@ public class LSMHarness implements ILSMHarness {
         processor.start();
         enter(ctx);
         try {
-            int tupleCount = accessor.getTupleCount();
-            int i = 0;
-            while (i < tupleCount) {
-                tuple.reset(accessor, i);
-                processor.process(tuple, i);
-                i++;
+            try {
+                processFrame(accessor, tuple, processor);
+                frameOpCallback.frameCompleted();
+            } finally {
+                processor.finish();
             }
-            frameOpCallback.frameCompleted();
-            processor.finish();
-        } catch (Exception e) {
-            throw HyracksDataException.create(e);
+        } catch (HyracksDataException e) {
+            if (LOGGER.isLoggable(Level.SEVERE)) {
+                LOGGER.log(Level.SEVERE, "Failed to process frame", e);
+            }
+            throw e;
         } finally {
             exit(ctx);
         }
@@ -851,6 +851,17 @@ public class LSMHarness implements ILSMHarness {
             }
         }
         return false;
+    }
+
+    private static void processFrame(FrameTupleAccessor accessor, FrameTupleReference tuple,
+            IFrameTupleProcessor processor) throws HyracksDataException {
+        int tupleCount = accessor.getTupleCount();
+        int i = 0;
+        while (i < tupleCount) {
+            tuple.reset(accessor, i);
+            processor.process(tuple, i);
+            i++;
+        }
     }
 
     @Override

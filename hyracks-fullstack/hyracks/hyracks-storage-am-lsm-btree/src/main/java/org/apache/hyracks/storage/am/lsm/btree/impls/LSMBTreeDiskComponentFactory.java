@@ -20,34 +20,27 @@
 package org.apache.hyracks.storage.am.lsm.btree.impls;
 
 import org.apache.hyracks.api.exceptions.HyracksDataException;
-import org.apache.hyracks.storage.am.bloomfilter.impls.BloomFilterFactory;
 import org.apache.hyracks.storage.am.btree.impls.BTree;
 import org.apache.hyracks.storage.am.lsm.common.api.IComponentFilterHelper;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMDiskComponentFactory;
+import org.apache.hyracks.storage.am.lsm.common.impls.AbstractLSMIndex;
 import org.apache.hyracks.storage.am.lsm.common.impls.LSMComponentFileReferences;
 import org.apache.hyracks.storage.am.lsm.common.impls.TreeIndexFactory;
 
 public class LSMBTreeDiskComponentFactory implements ILSMDiskComponentFactory {
-    private final TreeIndexFactory<BTree> btreeFactory;
-    private final BloomFilterFactory bloomFilterFactory;
-    private final IComponentFilterHelper filterHelper;
+    protected final TreeIndexFactory<BTree> btreeFactory;
+    protected final IComponentFilterHelper filterHelper;
 
-    public LSMBTreeDiskComponentFactory(TreeIndexFactory<BTree> btreeFactory, BloomFilterFactory bloomFilterFactory,
-            IComponentFilterHelper filterHelper) {
+    public LSMBTreeDiskComponentFactory(TreeIndexFactory<BTree> btreeFactory, IComponentFilterHelper filterHelper) {
         this.btreeFactory = btreeFactory;
-        this.bloomFilterFactory = bloomFilterFactory;
         this.filterHelper = filterHelper;
     }
 
     @Override
-    public LSMBTreeDiskComponent createComponent(LSMComponentFileReferences cfr) throws HyracksDataException {
-        return new LSMBTreeDiskComponent(btreeFactory.createIndexInstance(cfr.getInsertIndexFileReference()),
-                bloomFilterFactory == null ? null
-                        : bloomFilterFactory.createBloomFiltertInstance(cfr.getBloomFilterFileReference()),
+    public LSMBTreeDiskComponent createComponent(AbstractLSMIndex lsmIndex, LSMComponentFileReferences cfr)
+            throws HyracksDataException {
+        return new LSMBTreeDiskComponent(lsmIndex, btreeFactory.createIndexInstance(cfr.getInsertIndexFileReference()),
                 filterHelper == null ? null : filterHelper.createFilter());
     }
 
-    public int[] getBloomFilterKeyFields() {
-        return bloomFilterFactory == null ? null : bloomFilterFactory.getBloomFilterKeyFields();
-    }
 }
