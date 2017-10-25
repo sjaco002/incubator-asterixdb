@@ -19,6 +19,7 @@
 
 package org.apache.asterix.transaction.management.runtime;
 
+import org.apache.asterix.common.api.IJobEventListenerFactory;
 import org.apache.asterix.common.transactions.JobId;
 import org.apache.hyracks.algebricks.runtime.base.IPushRuntime;
 import org.apache.hyracks.algebricks.runtime.base.IPushRuntimeFactory;
@@ -55,8 +56,9 @@ public class CommitRuntimeFactory implements IPushRuntimeFactory {
 
     @Override
     public IPushRuntime createPushRuntime(IHyracksTaskContext ctx) throws HyracksDataException {
-        return new CommitRuntime(ctx, new JobId(ctx.getJobletContext().getEventListenerFactory().getJobIdValue()),
-                datasetId, primaryKeyFields, isTemporaryDatasetWriteJob,
-                    isWriteTransaction, datasetPartitions[ctx.getTaskAttemptId().getTaskId().getPartition()], isSink);
+        return new CommitRuntime(ctx,
+                ((IJobEventListenerFactory) ctx.getJobletContext().getEventListenerFactory()).getJobId(), datasetId,
+                primaryKeyFields, isTemporaryDatasetWriteJob, isWriteTransaction,
+                datasetPartitions[ctx.getTaskAttemptId().getTaskId().getPartition()], isSink);
     }
 }

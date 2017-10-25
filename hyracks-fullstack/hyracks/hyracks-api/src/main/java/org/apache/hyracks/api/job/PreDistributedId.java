@@ -33,7 +33,6 @@ public final class PreDistributedId implements IWritable, Serializable {
 
     private static final long serialVersionUID = 1L;
     private long id;
-    private int asterixJobId;
 
     public static PreDistributedId create(DataInput dis) throws IOException {
         PreDistributedId preDistributedId = new PreDistributedId();
@@ -46,19 +45,10 @@ public final class PreDistributedId implements IWritable, Serializable {
 
     public PreDistributedId(long id) {
         this.id = id;
-        this.asterixJobId = -1;
     }
 
     public long getId() {
         return id;
-    }
-
-    public int getAsterixJobId() {
-        return asterixJobId;
-    }
-
-    public void setAsterixJobId(int asterixJobId) {
-        this.asterixJobId = asterixJobId;
     }
 
     @Override
@@ -93,12 +83,10 @@ public final class PreDistributedId implements IWritable, Serializable {
     @Override
     public void writeFields(DataOutput output) throws IOException {
         output.writeLong(id);
-        output.writeInt(asterixJobId);
     }
 
     @Override
     public void readFields(DataInput input) throws IOException {
         id = input.readLong();
-        asterixJobId = input.readInt();
     }
 }

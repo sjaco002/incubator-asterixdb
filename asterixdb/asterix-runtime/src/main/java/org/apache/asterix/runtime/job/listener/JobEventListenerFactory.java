@@ -18,6 +18,7 @@
  */
 package org.apache.asterix.runtime.job.listener;
 
+import org.apache.asterix.common.api.IJobEventListenerFactory;
 import org.apache.asterix.common.api.INcApplicationContext;
 import org.apache.asterix.common.exceptions.ACIDException;
 import org.apache.asterix.common.transactions.DatasetId;
@@ -27,26 +28,24 @@ import org.apache.asterix.common.transactions.JobId;
 import org.apache.hyracks.api.context.IHyracksJobletContext;
 import org.apache.hyracks.api.job.IJobletEventListener;
 import org.apache.hyracks.api.job.IJobletEventListenerFactory;
+import org.apache.hyracks.api.job.JobParameterByteStore;
 import org.apache.hyracks.api.job.JobStatus;
 
-public class JobEventListenerFactory implements IJobletEventListenerFactory {
+public class JobEventListenerFactory implements IJobEventListenerFactory {
 
     private static final long serialVersionUID = 1L;
     private JobId jobId;
     private final boolean transactionalWrite;
+    private String jobIdParameterName = "jobIdParameter";
 
     public JobEventListenerFactory(JobId jobId, boolean transactionalWrite) {
         this.jobId = jobId;
         this.transactionalWrite = transactionalWrite;
     }
 
+    @Override
     public JobId getJobId() {
         return jobId;
-    }
-
-    @Override
-    public int getJobIdValue() {
-        return jobId.getId();
     }
 
     @Override
@@ -55,8 +54,13 @@ public class JobEventListenerFactory implements IJobletEventListenerFactory {
     }
 
     @Override
-    public void changeJobId(int newId) {
-        this.jobId = new JobId(newId);
+    public void updateListenerJobParameters(JobParameterByteStore jobParameterByteStore) {
+        byte[] jobIdParameter = jobIdParameterName.getBytes();
+        String jobIdString =
+                new String(jobParameterByteStore.getParameterValue(jobIdParameter, 0, jobIdParameter.length));
+        if (jobIdString.length() > 0) {
+            this.jobId = new JobId(Integer.parseInt(jobIdString));
+        }
     }
 
     @Override

@@ -208,12 +208,16 @@ public class StartTasksWork extends AbstractWork {
             if (preDistributedId != null) {
                 acg = ncs.getActivityClusterGraph(preDistributedId);
                 listenerFactory = acg.getJobletEventListenerFactory().copyFactory();
-                listenerFactory.changeJobId(preDistributedId.getAsterixJobId());
             } else {
                 acg = (ActivityClusterGraph) DeploymentUtils.deserialize(acgBytes, deploymentId, appCtx);
                 listenerFactory = acg.getJobletEventListenerFactory();
             }
+
             ncs.createOrGetJobParameterByteStore(jobId).setParameters(jobParameters);
+            if (listenerFactory != null) {
+                listenerFactory.updateListenerJobParameters(ncs.createOrGetJobParameterByteStore(jobId));
+            }
+
             ji = new Joblet(ncs, deploymentId, jobId, appCtx, acg, listenerFactory);
             jobletMap.put(jobId, ji);
         }

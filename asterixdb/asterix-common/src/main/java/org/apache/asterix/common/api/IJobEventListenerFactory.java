@@ -16,16 +16,15 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package org.apache.hyracks.api.job;
+package org.apache.asterix.common.api;
 
-import java.io.Serializable;
+import org.apache.asterix.common.transactions.JobId;
+import org.apache.hyracks.api.job.IJobletEventListenerFactory;
 
-import org.apache.hyracks.api.context.IHyracksJobletContext;
+/**
+ * an interface for JobEventListenerFactories to add Asterix transaction id API
+ */
+public interface IJobEventListenerFactory extends IJobletEventListenerFactory {
 
-public interface IJobletEventListenerFactory extends Serializable {
-    IJobletEventListener createListener(IHyracksJobletContext ctx);
-
-    IJobletEventListenerFactory copyFactory();
-
-    void updateListenerJobParameters(JobParameterByteStore jobParameterByteStore);
+    JobId getJobId();
 }

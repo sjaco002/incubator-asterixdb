@@ -29,6 +29,7 @@ import org.apache.asterix.common.transactions.JobId;
 import org.apache.hyracks.api.context.IHyracksJobletContext;
 import org.apache.hyracks.api.job.IJobletEventListener;
 import org.apache.hyracks.api.job.IJobletEventListenerFactory;
+import org.apache.hyracks.api.job.JobParameterByteStore;
 import org.apache.hyracks.api.job.JobStatus;
 
 /**
@@ -52,13 +53,8 @@ public class MultiTransactionJobletEventListenerFactory implements IJobletEventL
     }
 
     @Override
-    public void changeJobId(int newId) {
+    public void updateListenerJobParameters(JobParameterByteStore jobParameterByteStore) {
         //no op
-    }
-
-    @Override
-    public int getJobIdValue() {
-        return -1;
     }
 
     @Override
