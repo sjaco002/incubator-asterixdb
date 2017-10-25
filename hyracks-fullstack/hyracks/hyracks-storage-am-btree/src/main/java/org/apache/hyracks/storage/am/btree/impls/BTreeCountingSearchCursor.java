@@ -25,13 +25,13 @@ import org.apache.hyracks.dataflow.common.comm.io.ArrayTupleBuilder;
 import org.apache.hyracks.dataflow.common.comm.io.ArrayTupleReference;
 import org.apache.hyracks.dataflow.common.data.accessors.ITupleReference;
 import org.apache.hyracks.storage.am.btree.api.IBTreeLeafFrame;
-import org.apache.hyracks.storage.am.common.api.ICursorInitialState;
-import org.apache.hyracks.storage.am.common.api.ISearchPredicate;
 import org.apache.hyracks.storage.am.common.api.ITreeIndexCursor;
 import org.apache.hyracks.storage.am.common.api.ITreeIndexTupleReference;
 import org.apache.hyracks.storage.am.common.ophelpers.FindTupleMode;
 import org.apache.hyracks.storage.am.common.ophelpers.FindTupleNoExactMatchPolicy;
-import org.apache.hyracks.storage.am.common.ophelpers.MultiComparator;
+import org.apache.hyracks.storage.common.ICursorInitialState;
+import org.apache.hyracks.storage.common.ISearchPredicate;
+import org.apache.hyracks.storage.common.MultiComparator;
 import org.apache.hyracks.storage.common.buffercache.IBufferCache;
 import org.apache.hyracks.storage.common.buffercache.ICachedPage;
 import org.apache.hyracks.storage.common.file.BufferedFileHandle;
@@ -244,11 +244,6 @@ public class BTreeCountingSearchCursor implements ITreeIndexCursor {
     }
 
     @Override
-    public ICachedPage getPage() {
-        return page;
-    }
-
-    @Override
     public void setBufferCache(IBufferCache bufferCache) {
         this.bufferCache = bufferCache;
     }
@@ -259,17 +254,7 @@ public class BTreeCountingSearchCursor implements ITreeIndexCursor {
     }
 
     @Override
-    public boolean exclusiveLatchNodes() {
+    public boolean isExclusiveLatchNodes() {
         return exclusiveLatchNodes;
     }
-
-    @Override
-    public void markCurrentTupleAsUpdated() throws HyracksDataException {
-        if (exclusiveLatchNodes) {
-            isPageDirty = true;
-        } else {
-            throw new HyracksDataException("This cursor has not been created with the intention to allow updates.");
-        }
-    }
-
 }

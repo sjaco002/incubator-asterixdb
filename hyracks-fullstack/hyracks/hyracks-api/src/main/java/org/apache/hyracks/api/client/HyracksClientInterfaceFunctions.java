@@ -130,6 +130,9 @@ public class HyracksClientInterfaceFunctions {
 
         public CancelJobFunction(JobId jobId) {
             this.jobId = jobId;
+            if (jobId == null) {
+                throw new IllegalArgumentException("jobId");
+            }
         }
 
         @Override
@@ -177,7 +180,7 @@ public class HyracksClientInterfaceFunctions {
         }
 
         public StartJobFunction(JobId jobId) {
-            this(null, null, null, jobId);
+            this(null, null, EnumSet.noneOf(JobFlag.class), jobId);
         }
 
         public StartJobFunction(byte[] acggfBytes, EnumSet<JobFlag> jobFlags) {

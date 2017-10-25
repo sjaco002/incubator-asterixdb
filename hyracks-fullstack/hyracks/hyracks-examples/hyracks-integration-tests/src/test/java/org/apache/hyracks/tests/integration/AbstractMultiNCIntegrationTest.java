@@ -26,8 +26,6 @@ import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ArrayNode;
 import org.apache.commons.io.FileUtils;
 import org.apache.hyracks.api.client.HyracksConnection;
 import org.apache.hyracks.api.client.IHyracksClientConnection;
@@ -40,10 +38,12 @@ import org.apache.hyracks.api.exceptions.HyracksException;
 import org.apache.hyracks.api.job.JobFlag;
 import org.apache.hyracks.api.job.JobId;
 import org.apache.hyracks.api.job.JobSpecification;
+import org.apache.hyracks.api.job.JobStatus;
 import org.apache.hyracks.api.job.resource.IJobCapacityController;
 import org.apache.hyracks.client.dataset.HyracksDataset;
 import org.apache.hyracks.control.cc.BaseCCApplication;
 import org.apache.hyracks.control.cc.ClusterControllerService;
+import org.apache.hyracks.control.cc.application.CCServiceContext;
 import org.apache.hyracks.control.common.controllers.CCConfig;
 import org.apache.hyracks.control.common.controllers.NCConfig;
 import org.apache.hyracks.control.nc.NodeControllerService;
@@ -52,26 +52,25 @@ import org.apache.hyracks.dataflow.common.comm.io.ResultFrameTupleAccessor;
 import org.apache.hyracks.dataflow.common.comm.util.ByteBufferInputStream;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
-import org.junit.Rule;
-import org.junit.rules.TemporaryFolder;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
 
 public abstract class AbstractMultiNCIntegrationTest {
 
     private static final Logger LOGGER = Logger.getLogger(AbstractMultiNCIntegrationTest.class.getName());
+    private static final TestJobLifecycleListener jobLifecycleListener = new TestJobLifecycleListener();
 
-    public static final String[] ASTERIX_IDS = { "asterix-001", "asterix-002", "asterix-003", "asterix-004",
-            "asterix-005", "asterix-006", "asterix-007" };
+    public static final String[] ASTERIX_IDS =
+            { "asterix-001", "asterix-002", "asterix-003", "asterix-004", "asterix-005", "asterix-006", "asterix-007" };
 
-    private static ClusterControllerService cc;
+    protected static ClusterControllerService cc;
 
-    private static NodeControllerService[] asterixNCs;
+    protected static NodeControllerService[] asterixNCs;
 
-    private static IHyracksClientConnection hcc;
+    protected static IHyracksClientConnection hcc;
 
-    private final List<File> outputFiles;
-
-    @Rule
-    public TemporaryFolder outputFolder = new TemporaryFolder();
+    protected final List<File> outputFiles;
 
     public AbstractMultiNCIntegrationTest() {
         outputFiles = new ArrayList<>();
@@ -85,6 +84,7 @@ public abstract class AbstractMultiNCIntegrationTest {
         ccConfig.setClusterListenAddress("127.0.0.1");
         ccConfig.setClusterListenPort(39001);
         ccConfig.setProfileDumpPeriod(10000);
+        ccConfig.setJobHistorySize(2);
         File outDir = new File("target" + File.separator + "ClusterController");
         outDir.mkdirs();
         File ccRoot = File.createTempFile(AbstractMultiNCIntegrationTest.class.getName(), ".data", outDir);
@@ -94,7 +94,8 @@ public abstract class AbstractMultiNCIntegrationTest {
         ccConfig.setAppClass(DummyApplication.class.getName());
         cc = new ClusterControllerService(ccConfig);
         cc.start();
-
+        CCServiceContext serviceCtx = cc.getContext();
+        serviceCtx.addJobLifecycleListener(jobLifecycleListener);
         asterixNCs = new NodeControllerService[ASTERIX_IDS.length];
         for (int i = 0; i < ASTERIX_IDS.length; i++) {
             File ioDev = new File("target" + File.separator + ASTERIX_IDS[i] + File.separator + "ioDevice");
@@ -106,7 +107,7 @@ public abstract class AbstractMultiNCIntegrationTest {
             ncConfig.setClusterListenAddress("127.0.0.1");
             ncConfig.setDataListenAddress("127.0.0.1");
             ncConfig.setResultListenAddress("127.0.0.1");
-            ncConfig.setIODevices(new String [] { ioDev.getAbsolutePath() });
+            ncConfig.setIODevices(new String[] { ioDev.getAbsolutePath() });
             asterixNCs[i] = new NodeControllerService(ncConfig);
             asterixNCs[i].start();
         }
@@ -123,6 +124,7 @@ public abstract class AbstractMultiNCIntegrationTest {
             nc.stop();
         }
         cc.stop();
+        jobLifecycleListener.check();
     }
 
     protected JobId startJob(JobSpecification spec) throws Exception {
@@ -133,11 +135,15 @@ public abstract class AbstractMultiNCIntegrationTest {
         hcc.waitForCompletion(jobId);
     }
 
+    protected JobStatus getJobStatus(JobId jobId) throws Exception {
+        return hcc.getJobStatus(jobId);
+    }
+
     protected void cancelJob(JobId jobId) throws Exception {
         hcc.cancelJob(jobId);
     }
 
-    protected void runTest(JobSpecification spec) throws Exception {
+    protected void runTest(JobSpecification spec, String expectedErrorMessage) throws Exception {
         if (LOGGER.isLoggable(Level.INFO)) {
             LOGGER.info(spec.toJSON().asText());
         }
@@ -179,15 +185,36 @@ public abstract class AbstractMultiNCIntegrationTest {
                     try {
                         bbis.close();
                     } catch (IOException e) {
-                        throw new HyracksDataException(e);
+                        throw HyracksDataException.create(e);
                     }
                 }
-
                 readSize = reader.read(resultFrame);
             }
         }
-        hcc.waitForCompletion(jobId);
+        waitForCompletion(jobId, expectedErrorMessage);
+        // Waiting a second time should lead to the same behavior
+        waitForCompletion(jobId, expectedErrorMessage);
         dumpOutputFiles();
+    }
+
+    protected void waitForCompletion(JobId jobId, String expectedErrorMessage) throws Exception {
+        boolean expectedExceptionThrown = false;
+        try {
+            hcc.waitForCompletion(jobId);
+        } catch (Exception e) {
+            if (expectedErrorMessage != null) {
+                if (e.toString().contains(expectedErrorMessage)) {
+                    expectedExceptionThrown = true;
+                } else {
+                    throw e;
+                }
+            } else {
+                throw e;
+            }
+        }
+        if (expectedErrorMessage != null && !expectedExceptionThrown) {
+            throw new Exception("Expected error (" + expectedErrorMessage + ") was not thrown");
+        }
     }
 
     private void dumpOutputFiles() {
@@ -205,15 +232,6 @@ public abstract class AbstractMultiNCIntegrationTest {
                 }
             }
         }
-    }
-
-    protected File createTempFile() throws IOException {
-        File tempFile = File.createTempFile(getClass().getName(), ".tmp", outputFolder.getRoot());
-        if (LOGGER.isLoggable(Level.INFO)) {
-            LOGGER.info("Output file: " + tempFile.getAbsolutePath());
-        }
-        outputFiles.add(tempFile);
-        return tempFile;
     }
 
     public static class DummyApplication extends BaseCCApplication {

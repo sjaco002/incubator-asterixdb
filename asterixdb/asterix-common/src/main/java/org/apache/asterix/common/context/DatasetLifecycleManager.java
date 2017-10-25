@@ -28,24 +28,25 @@ import java.util.concurrent.ConcurrentHashMap;
 
 import org.apache.asterix.common.api.IDatasetLifecycleManager;
 import org.apache.asterix.common.config.StorageProperties;
+import org.apache.asterix.common.dataflow.DatasetLocalResource;
 import org.apache.asterix.common.exceptions.ACIDException;
 import org.apache.asterix.common.ioopcallbacks.AbstractLSMIOOperationCallback;
 import org.apache.asterix.common.replication.IReplicationStrategy;
 import org.apache.asterix.common.transactions.ILogManager;
 import org.apache.asterix.common.transactions.LogRecord;
-import org.apache.asterix.common.transactions.Resource;
 import org.apache.asterix.common.utils.TransactionUtil;
+import org.apache.hyracks.api.exceptions.ErrorCode;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.apache.hyracks.api.lifecycle.ILifeCycleComponent;
-import org.apache.hyracks.storage.am.common.api.IIndex;
 import org.apache.hyracks.storage.am.common.impls.NoOpOperationCallback;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMIndex;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMIndexAccessor;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMOperationTracker;
 import org.apache.hyracks.storage.am.lsm.common.api.IVirtualBufferCache;
 import org.apache.hyracks.storage.am.lsm.common.impls.AbstractLSMIndex;
-import org.apache.hyracks.storage.common.file.ILocalResourceRepository;
-import org.apache.hyracks.storage.common.file.LocalResource;
+import org.apache.hyracks.storage.common.IIndex;
+import org.apache.hyracks.storage.common.ILocalResourceRepository;
+import org.apache.hyracks.storage.common.LocalResource;
 
 public class DatasetLifecycleManager implements IDatasetLifecycleManager, ILifeCycleComponent {
     private final Map<Integer, DatasetResource> datasets = new ConcurrentHashMap<>();
@@ -59,9 +60,8 @@ public class DatasetLifecycleManager implements IDatasetLifecycleManager, ILifeC
     private final int numPartitions;
     private volatile boolean stopped = false;
 
-    public DatasetLifecycleManager(StorageProperties storageProperties,
-            ILocalResourceRepository resourceRepository, int firstAvilableUserDatasetID, ILogManager logManager,
-            int numPartitions) {
+    public DatasetLifecycleManager(StorageProperties storageProperties, ILocalResourceRepository resourceRepository,
+            int firstAvilableUserDatasetID, ILogManager logManager, int numPartitions) {
         this.logManager = logManager;
         this.storageProperties = storageProperties;
         this.resourceRepository = resourceRepository;
@@ -94,23 +94,23 @@ public class DatasetLifecycleManager implements IDatasetLifecycleManager, ILifeC
     public synchronized void register(String resourcePath, IIndex index) throws HyracksDataException {
         validateDatasetLifecycleManagerState();
         int did = getDIDfromResourcePath(resourcePath);
-        long resourceID = getResourceIDfromResourcePath(resourcePath);
+        LocalResource resource = resourceRepository.get(resourcePath);
         DatasetResource datasetResource = datasets.get(did);
         if (datasetResource == null) {
             datasetResource = getDatasetLifecycle(did);
         }
-        datasetResource.register(resourceID, index);
+        datasetResource.register(resource, index);
     }
 
-    public int getDIDfromResourcePath(String resourcePath) throws HyracksDataException {
+    private int getDIDfromResourcePath(String resourcePath) throws HyracksDataException {
         LocalResource lr = resourceRepository.get(resourcePath);
         if (lr == null) {
             return -1;
         }
-        return ((Resource) lr.getResource()).datasetId();
+        return ((DatasetLocalResource) lr.getResource()).getDatasetId();
     }
 
-    public long getResourceIDfromResourcePath(String resourcePath) throws HyracksDataException {
+    private long getResourceIDfromResourcePath(String resourcePath) throws HyracksDataException {
         LocalResource lr = resourceRepository.get(resourcePath);
         if (lr == null) {
             return -1;
@@ -133,35 +133,24 @@ public class DatasetLifecycleManager implements IDatasetLifecycleManager, ILifeC
 
         PrimaryIndexOperationTracker opTracker = dsr.getOpTracker();
         if (iInfo.getReferenceCount() != 0 || (opTracker != null && opTracker.getNumActiveOperations() != 0)) {
-            throw new HyracksDataException("Cannot remove index while it is open. (Dataset reference count = "
-                    + iInfo.getReferenceCount() + ", Operation tracker number of active operations = "
-                    + opTracker.getNumActiveOperations() + ")");
+            throw new HyracksDataException(
+                    "Cannot remove index while it is open. (Dataset reference count = " + iInfo.getReferenceCount()
+                            + ", Operation tracker number of active operations = " + opTracker.getNumActiveOperations()
+                            + ")");
         }
 
         // TODO: use fine-grained counters, one for each index instead of a single counter per dataset.
-        // First wait for any ongoing IO operations
         DatasetInfo dsInfo = dsr.getDatasetInfo();
-        synchronized (dsInfo) {
-            while (dsInfo.getNumActiveIOOps() > 0) {
-                try {
-                    //notification will come from DatasetInfo class (undeclareActiveIOOperation)
-                    dsInfo.wait();
-                } catch (InterruptedException e) {
-                    throw new HyracksDataException(e);
-                }
-            }
-        }
-
+        dsInfo.waitForIO();
         if (iInfo.isOpen()) {
             ILSMOperationTracker indexOpTracker = iInfo.getIndex().getOperationTracker();
             synchronized (indexOpTracker) {
                 iInfo.getIndex().deactivate(false);
             }
         }
-
         dsInfo.getIndexes().remove(resourceID);
-        if (dsInfo.getReferenceCount() == 0 && dsInfo.isOpen() && dsInfo.getIndexes().isEmpty()
-                && !dsInfo.isExternal()) {
+        if (dsInfo.getReferenceCount() == 0 && dsInfo.isOpen() && dsInfo.getIndexes().isEmpty() && !dsInfo
+                .isExternal()) {
             removeDatasetFromCache(dsInfo.getDatasetID());
         }
     }
@@ -209,8 +198,7 @@ public class DatasetLifecycleManager implements IDatasetLifecycleManager, ILifeC
         for (DatasetResource dsr : datasetsResources) {
             PrimaryIndexOperationTracker opTracker = dsr.getOpTracker();
             if (opTracker != null && opTracker.getNumActiveOperations() == 0
-                    && dsr.getDatasetInfo().getReferenceCount() == 0
-                    && dsr.getDatasetInfo().isOpen()
+                    && dsr.getDatasetInfo().getReferenceCount() == 0 && dsr.getDatasetInfo().isOpen()
                     && dsr.getDatasetInfo().getDatasetID() >= getFirstAvilableUserDatasetID()) {
                 closeDataset(dsr.getDatasetInfo());
                 return true;
@@ -221,22 +209,13 @@ public class DatasetLifecycleManager implements IDatasetLifecycleManager, ILifeC
 
     private static void flushAndWaitForIO(DatasetInfo dsInfo, IndexInfo iInfo) throws HyracksDataException {
         if (iInfo.isOpen()) {
-            ILSMIndexAccessor accessor = iInfo.getIndex().createAccessor(NoOpOperationCallback.INSTANCE,
-                    NoOpOperationCallback.INSTANCE);
+            ILSMIndexAccessor accessor =
+                    iInfo.getIndex().createAccessor(NoOpOperationCallback.INSTANCE, NoOpOperationCallback.INSTANCE);
             accessor.scheduleFlush(iInfo.getIndex().getIOOperationCallback());
         }
 
         // Wait for the above flush op.
-        synchronized (dsInfo) {
-            while (dsInfo.getNumActiveIOOps() > 0) {
-                try {
-                    //notification will come from DatasetInfo class (undeclareActiveIOOperation)
-                    dsInfo.wait();
-                } catch (InterruptedException e) {
-                    throw new HyracksDataException(e);
-                }
-            }
-        }
+        dsInfo.waitForIO();
     }
 
     public DatasetResource getDatasetLifecycle(int did) {
@@ -250,8 +229,7 @@ public class DatasetLifecycleManager implements IDatasetLifecycleManager, ILifeC
                 DatasetInfo dsInfo = new DatasetInfo(did);
                 PrimaryIndexOperationTracker opTracker = new PrimaryIndexOperationTracker(did, logManager, dsInfo);
                 DatasetVirtualBufferCaches vbcs = new DatasetVirtualBufferCaches(did, storageProperties,
-                        getFirstAvilableUserDatasetID(),
-                        getNumPartitions());
+                        getFirstAvilableUserDatasetID(), getNumPartitions());
                 dsr = new DatasetResource(dsInfo, opTracker, vbcs);
                 datasets.put(did, dsr);
             }
@@ -266,19 +244,30 @@ public class DatasetLifecycleManager implements IDatasetLifecycleManager, ILifeC
 
     @Override
     public synchronized void close(String resourcePath) throws HyracksDataException {
-        validateDatasetLifecycleManagerState();
-        int did = getDIDfromResourcePath(resourcePath);
-        long resourceID = getResourceIDfromResourcePath(resourcePath);
-        DatasetResource dsr = datasets.get(did);
-        if (dsr == null) {
-            throw new HyracksDataException("No index found with resourceID " + resourceID);
+        DatasetResource dsr = null;
+        IndexInfo iInfo = null;
+        try {
+            validateDatasetLifecycleManagerState();
+            int did = getDIDfromResourcePath(resourcePath);
+            long resourceID = getResourceIDfromResourcePath(resourcePath);
+            dsr = datasets.get(did);
+            if (dsr == null) {
+                throw HyracksDataException.create(ErrorCode.NO_INDEX_FOUND_WITH_RESOURCE_ID, resourceID);
+            }
+            iInfo = dsr.getIndexInfo(resourceID);
+            if (iInfo == null) {
+                throw HyracksDataException.create(ErrorCode.NO_INDEX_FOUND_WITH_RESOURCE_ID, resourceID);
+            }
+        } finally {
+            // Regardless of what exception is thrown in the try-block (e.g., line 279),
+            // we have to un-touch the index and dataset.
+            if (iInfo != null) {
+                iInfo.untouch();
+            }
+            if (dsr != null) {
+                dsr.untouch();
+            }
         }
-        IndexInfo iInfo = dsr.getIndexInfo(resourceID);
-        if (iInfo == null) {
-            throw new HyracksDataException("No index found with resourceID " + resourceID);
-        }
-        iInfo.untouch();
-        dsr.untouch();
     }
 
     @Override
@@ -320,8 +309,8 @@ public class DatasetLifecycleManager implements IDatasetLifecycleManager, ILifeC
     }
 
     @Override
-    public PrimaryIndexOperationTracker getOperationTracker(int datasetID) {
-        return datasets.get(datasetID).getOpTracker();
+    public PrimaryIndexOperationTracker getOperationTracker(int datasetId) {
+        return datasets.get(datasetId).getOpTracker();
     }
 
     private void validateDatasetLifecycleManagerState() throws HyracksDataException {
@@ -357,8 +346,8 @@ public class DatasetLifecycleManager implements IDatasetLifecycleManager, ILifeC
             PrimaryIndexOperationTracker opTracker = dsr.getOpTracker();
             synchronized (opTracker) {
                 for (IndexInfo iInfo : dsr.getIndexes().values()) {
-                    AbstractLSMIOOperationCallback ioCallback = (AbstractLSMIOOperationCallback) iInfo.getIndex()
-                            .getIOOperationCallback();
+                    AbstractLSMIOOperationCallback ioCallback =
+                            (AbstractLSMIOOperationCallback) iInfo.getIndex().getIOOperationCallback();
                     if (!(((AbstractLSMIndex) iInfo.getIndex()).isCurrentMutableComponentEmpty()
                             || ioCallback.hasPendingFlush() || opTracker.isFlushLogCreated()
                             || opTracker.isFlushOnExit())) {
@@ -400,16 +389,16 @@ public class DatasetLifecycleManager implements IDatasetLifecycleManager, ILifeC
             }
             for (IndexInfo iInfo : dsInfo.getIndexes().values()) {
                 //update resource lsn
-                AbstractLSMIOOperationCallback ioOpCallback = (AbstractLSMIOOperationCallback) iInfo.getIndex()
-                        .getIOOperationCallback();
+                AbstractLSMIOOperationCallback ioOpCallback =
+                        (AbstractLSMIOOperationCallback) iInfo.getIndex().getIOOperationCallback();
                 ioOpCallback.updateLastLSN(logRecord.getLSN());
             }
         }
 
         if (asyncFlush) {
             for (IndexInfo iInfo : dsInfo.getIndexes().values()) {
-                ILSMIndexAccessor accessor = iInfo.getIndex().createAccessor(NoOpOperationCallback.INSTANCE,
-                        NoOpOperationCallback.INSTANCE);
+                ILSMIndexAccessor accessor =
+                        iInfo.getIndex().createAccessor(NoOpOperationCallback.INSTANCE, NoOpOperationCallback.INSTANCE);
                 accessor.scheduleFlush(iInfo.getIndex().getIOOperationCallback());
             }
         } else {
@@ -424,19 +413,11 @@ public class DatasetLifecycleManager implements IDatasetLifecycleManager, ILifeC
 
     private void closeDataset(DatasetInfo dsInfo) throws HyracksDataException {
         // First wait for any ongoing IO operations
-        synchronized (dsInfo) {
-            while (dsInfo.getNumActiveIOOps() > 0) {
-                try {
-                    dsInfo.wait();
-                } catch (InterruptedException e) {
-                    throw new HyracksDataException(e);
-                }
-            }
-        }
+        dsInfo.waitForIO();
         try {
             flushDatasetOpenIndexes(dsInfo, false);
         } catch (Exception e) {
-            throw new HyracksDataException(e);
+            throw HyracksDataException.create(e);
         }
         for (IndexInfo iInfo : dsInfo.getIndexes().values()) {
             if (iInfo.isOpen()) {
@@ -501,9 +482,8 @@ public class DatasetLifecycleManager implements IDatasetLifecycleManager, ILifeC
         sb.append(String.format(dsHeaderFormat, "DatasetID", "Open", "Reference Count", "Last Access"));
         for (DatasetResource dsr : datasets.values()) {
             DatasetInfo dsInfo = dsr.getDatasetInfo();
-            sb.append(
-                    String.format(dsFormat, dsInfo.getDatasetID(), dsInfo.isOpen(), dsInfo.getReferenceCount(),
-                            dsInfo.getLastAccess()));
+            sb.append(String.format(dsFormat, dsInfo.getDatasetID(), dsInfo.isOpen(), dsInfo.getReferenceCount(),
+                    dsInfo.getLastAccess()));
         }
         sb.append("\n");
 
@@ -514,8 +494,7 @@ public class DatasetLifecycleManager implements IDatasetLifecycleManager, ILifeC
             for (Map.Entry<Long, IndexInfo> entry : dsInfo.getIndexes().entrySet()) {
                 IndexInfo iInfo = entry.getValue();
                 sb.append(String.format(idxFormat, dsInfo.getDatasetID(), entry.getKey(), iInfo.isOpen(),
-                        iInfo.getReferenceCount(),
-                        iInfo.getIndex()));
+                        iInfo.getReferenceCount(), iInfo.getIndex()));
             }
         }
         outputStream.write(sb.toString().getBytes());
@@ -557,7 +536,7 @@ public class DatasetLifecycleManager implements IDatasetLifecycleManager, ILifeC
                 while (used + additionalSize > capacity) {
                     if (!evictCandidateDataset()) {
                         throw new HyracksDataException("Cannot allocate dataset " + dsInfo.getDatasetID()
-                        + " memory since memory budget would be exceeded.");
+                                + " memory since memory budget would be exceeded.");
                     }
                 }
                 used += additionalSize;

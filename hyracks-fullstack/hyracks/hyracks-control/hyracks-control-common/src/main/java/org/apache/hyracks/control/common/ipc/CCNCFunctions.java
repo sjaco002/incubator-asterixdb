@@ -83,11 +83,11 @@ public class CCNCFunctions {
         REGISTER_PARTITION_REQUEST,
         REGISTER_RESULT_PARTITION_LOCATION,
         REPORT_RESULT_PARTITION_WRITE_COMPLETION,
-        REPORT_RESULT_PARTITION_FAILURE,
 
         NODE_REGISTRATION_RESULT,
         START_TASKS,
         ABORT_TASKS,
+        ABORT_ALL_JOBS,
         CLEANUP_JOBLET,
         REPORT_PARTITION_AVAILABILITY,
         SEND_APPLICATION_MESSAGE,
@@ -640,39 +640,6 @@ public class CCNCFunctions {
         }
     }
 
-    public static class ReportResultPartitionFailureFunction extends Function {
-        private static final long serialVersionUID = 1L;
-
-        private final JobId jobId;
-
-        private final ResultSetId rsId;
-
-        private final int partition;
-
-        public ReportResultPartitionFailureFunction(JobId jobId, ResultSetId rsId, int partition) {
-            this.jobId = jobId;
-            this.rsId = rsId;
-            this.partition = partition;
-        }
-
-        @Override
-        public FunctionId getFunctionId() {
-            return FunctionId.REPORT_RESULT_PARTITION_FAILURE;
-        }
-
-        public JobId getJobId() {
-            return jobId;
-        }
-
-        public ResultSetId getResultSetId() {
-            return rsId;
-        }
-
-        public int getPartition() {
-            return partition;
-        }
-    }
-
     public static class NodeRegistrationResult extends Function {
         private static final long serialVersionUID = 1L;
 
@@ -696,6 +663,16 @@ public class CCNCFunctions {
 
         public Exception getException() {
             return exception;
+        }
+    }
+
+    //TODO: Add CC id to this job to only abort jobs by this CC: https://issues.apache.org/jira/browse/ASTERIXDB-2110
+    public static class AbortCCJobsFunction extends Function {
+        private static final long serialVersionUID = 1L;
+
+        @Override
+        public FunctionId getFunctionId() {
+            return FunctionId.ABORT_ALL_JOBS;
         }
     }
 
@@ -816,7 +793,7 @@ public class CCNCFunctions {
 
             // read task attempt descriptors
             int tadSize = dis.readInt();
-            List<TaskAttemptDescriptor> taskDescriptors = new ArrayList<TaskAttemptDescriptor>();
+            List<TaskAttemptDescriptor> taskDescriptors = new ArrayList<>();
             for (int i = 0; i < tadSize; i++) {
                 TaskAttemptDescriptor tad = TaskAttemptDescriptor.create(dis);
                 taskDescriptors.add(tad);
@@ -824,7 +801,7 @@ public class CCNCFunctions {
 
             //read connector policies
             int cpSize = dis.readInt();
-            Map<ConnectorDescriptorId, IConnectorPolicy> connectorPolicies = new HashMap<ConnectorDescriptorId, IConnectorPolicy>();
+            Map<ConnectorDescriptorId, IConnectorPolicy> connectorPolicies = new HashMap<>();
             for (int i = 0; i < cpSize; i++) {
                 ConnectorDescriptorId cid = ConnectorDescriptorId.create(dis);
                 IConnectorPolicy policy = ConnectorPolicyFactory.INSTANCE.getConnectorPolicy(dis);
@@ -1396,7 +1373,8 @@ public class CCNCFunctions {
         int cdid = dis.readInt();
         int senderIndex = dis.readInt();
         int receiverIndex = dis.readInt();
-        PartitionId pid = new PartitionId(new JobId(jobId), new ConnectorDescriptorId(cdid), senderIndex, receiverIndex);
+        PartitionId pid =
+                new PartitionId(new JobId(jobId), new ConnectorDescriptorId(cdid), senderIndex, receiverIndex);
         return pid;
     }
 
@@ -1412,8 +1390,8 @@ public class CCNCFunctions {
         int aid = dis.readInt();
         int partition = dis.readInt();
         int attempt = dis.readInt();
-        TaskAttemptId taId = new TaskAttemptId(new TaskId(new ActivityId(new OperatorDescriptorId(odid), aid),
-                partition), attempt);
+        TaskAttemptId taId =
+                new TaskAttemptId(new TaskId(new ActivityId(new OperatorDescriptorId(odid), aid), partition), attempt);
         return taId;
     }
 

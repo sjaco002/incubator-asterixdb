@@ -27,7 +27,7 @@ import org.apache.asterix.common.transactions.ITransactionContext;
 import org.apache.asterix.transaction.management.service.transaction.TransactionManagementConstants.LockManagerConstants.LockMode;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.apache.hyracks.dataflow.common.data.accessors.ITupleReference;
-import org.apache.hyracks.storage.am.common.api.ISearchOperationCallback;
+import org.apache.hyracks.storage.common.ISearchOperationCallback;
 
 /**
  * Assumes LSM-BTrees as primary indexes. Implements try/locking and unlocking on primary keys.
@@ -56,7 +56,7 @@ public class PrimaryIndexInstantSearchOperationCallback extends AbstractOperatio
         try {
             lockManager.lock(datasetId, pkHash, LockMode.S, txnCtx);
         } catch (ACIDException e) {
-            throw new HyracksDataException(e);
+            throw HyracksDataException.create(e);
         }
     }
 
@@ -70,7 +70,7 @@ public class PrimaryIndexInstantSearchOperationCallback extends AbstractOperatio
         try {
             lockManager.unlock(datasetId, pkHash, LockMode.S, txnCtx);
         } catch (ACIDException e) {
-            throw new HyracksDataException(e);
+            throw HyracksDataException.create(e);
         }
     }
 
@@ -80,7 +80,7 @@ public class PrimaryIndexInstantSearchOperationCallback extends AbstractOperatio
         try {
             lockManager.unlock(datasetId, pkHash, LockMode.S, txnCtx);
         } catch (ACIDException e) {
-            throw new HyracksDataException(e);
+            throw HyracksDataException.create(e);
         }
     }
 

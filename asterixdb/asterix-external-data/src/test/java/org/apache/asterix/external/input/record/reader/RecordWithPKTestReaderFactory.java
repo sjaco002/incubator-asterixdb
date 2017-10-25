@@ -18,9 +18,12 @@
  */
 package org.apache.asterix.external.input.record.reader;
 
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 
-import org.apache.asterix.common.api.IApplicationContext;
+import org.apache.asterix.common.dataflow.ICcApplicationContext;
 import org.apache.asterix.external.api.IExternalDataSourceFactory;
 import org.apache.asterix.external.api.IRecordReader;
 import org.apache.asterix.external.api.IRecordReaderFactory;
@@ -35,11 +38,12 @@ public class RecordWithPKTestReaderFactory implements IRecordReaderFactory<Recor
     private static final long serialVersionUID = 1L;
     private transient AlgebricksAbsolutePartitionConstraint clusterLocations;
     private transient IServiceContext serviceCtx;
+    private static final List<String> recordReaderNames = Collections.unmodifiableList(Arrays.asList());
 
     @Override
     public AlgebricksAbsolutePartitionConstraint getPartitionConstraint() throws AlgebricksException {
-        clusterLocations = IExternalDataSourceFactory
-                .getPartitionConstraints((IApplicationContext) serviceCtx.getApplicationContext(), clusterLocations, 1);
+        clusterLocations = IExternalDataSourceFactory.getPartitionConstraints(
+                (ICcApplicationContext) serviceCtx.getApplicationContext(), clusterLocations, 1);
         return clusterLocations;
     }
 
@@ -57,5 +61,10 @@ public class RecordWithPKTestReaderFactory implements IRecordReaderFactory<Recor
     @Override
     public Class<?> getRecordClass() {
         return RecordWithPK.class;
+    }
+
+    @Override
+    public List<String> getRecordReaderNames() {
+        return recordReaderNames;
     }
 }

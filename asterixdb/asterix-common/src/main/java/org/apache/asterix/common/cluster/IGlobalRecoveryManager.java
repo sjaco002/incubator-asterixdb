@@ -24,7 +24,14 @@ import org.apache.asterix.common.dataflow.ICcApplicationContext;
 public interface IGlobalRecoveryManager extends IClusterEventsSubscriber {
 
     /**
-     * Starts the global recovery process if the cluster state changed to ACTIVE.
+     * Starts the global recovery process after the cluster state has changed to ACTIVE.
+     *
+     * @param appCtx the application context
      */
-    public void startGlobalRecovery(ICcApplicationContext appCtx);
+    void startGlobalRecovery(ICcApplicationContext appCtx);
+
+    /**
+     * @return true, if global recovery has been completed successfully
+     */
+    boolean isRecoveryCompleted();
 }

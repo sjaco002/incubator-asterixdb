@@ -19,58 +19,87 @@
 package org.apache.asterix.common.dataflow;
 
 import org.apache.asterix.common.api.IApplicationContext;
+import org.apache.asterix.common.api.IMetadataLockManager;
+import org.apache.asterix.common.cluster.IClusterStateManager;
 import org.apache.asterix.common.cluster.IGlobalRecoveryManager;
+import org.apache.asterix.common.context.IStorageComponentProvider;
+import org.apache.asterix.common.metadata.IMetadataBootstrap;
+import org.apache.asterix.common.replication.IFaultToleranceStrategy;
 import org.apache.asterix.common.transactions.IResourceIdManager;
 import org.apache.hyracks.api.application.ICCServiceContext;
-import org.apache.hyracks.api.client.IHyracksClientConnection;
 import org.apache.hyracks.api.job.IJobLifecycleListener;
-import org.apache.hyracks.storage.am.common.api.IIndexLifecycleManagerProvider;
 import org.apache.hyracks.storage.common.IStorageManager;
 
 /**
  * Provides methods for obtaining
- * {@link org.apache.hyracks.storage.am.common.api.IIndexLifecycleManagerProvider},
  * {@link org.apache.hyracks.storage.common.IStorageManager},
  * {@link org.apache.hyracks.api.application.ICCServiceContext},
  * {@link org.apache.asterix.common.cluster.IGlobalRecoveryManager},
- * and {@link org.apache.asterix.common.library.ILibraryManager}
+ * {@link org.apache.asterix.common.library.ILibraryManager},
+ * {@link org.apache.asterix.common.transactions.IResourceIdManager}
+ *
  * at the cluster controller side.
  */
 public interface ICcApplicationContext extends IApplicationContext {
 
     /**
-     * Returns an instance of the implementation for IIndexLifecycleManagerProvider.
-     *
-     * @return IIndexLifecycleManagerProvider implementation instance
-     */
-    public IIndexLifecycleManagerProvider getIndexLifecycleManagerProvider();
-
-    /**
      * @return an instance which implements {@link org.apache.hyracks.storage.common.IStorageManager}
      */
-    public IStorageManager getStorageManager();
+    IStorageManager getStorageManager();
 
     /**
      * @return an instance which implements {@link org.apache.hyracks.api.application.ICCServiceContext}
      */
     @Override
-    public ICCServiceContext getServiceContext();
+    ICCServiceContext getServiceContext();
 
     /**
      * @return the global recovery manager which implements
      *         {@link org.apache.asterix.common.cluster.IGlobalRecoveryManager}
      */
-    public IGlobalRecoveryManager getGlobalRecoveryManager();
+    IGlobalRecoveryManager getGlobalRecoveryManager();
 
     /**
-     * @return the active lifecycle listener at Cluster controller
+     * @return the fault tolerance strategy in use for the cluster
      */
-    public IJobLifecycleListener getActiveLifecycleListener();
+    IFaultToleranceStrategy getFaultToleranceStrategy();
 
     /**
-     * @return a new instance of {@link IHyracksClientConnection}
+     * @return the active notification handler at Cluster controller
      */
-    public IHyracksClientConnection getHcc();
+    IJobLifecycleListener getActiveNotificationHandler();
 
-    public IResourceIdManager getResourceIdManager();
+    /**
+     * @return the cluster wide resource id manager
+     */
+    IResourceIdManager getResourceIdManager();
+
+    /**
+     * Returns the storage component provider
+     *
+     * @return {@link IStorageComponentProvider} implementation instance
+     */
+    IStorageComponentProvider getStorageComponentProvider();
+
+    /**
+     * Returns the extension manager
+     *
+     * @return the extension manager instance
+     */
+    Object getExtensionManager();
+
+    /**
+     * @return the metadata lock manager
+     */
+    IMetadataLockManager getMetadataLockManager();
+
+    /**
+     * @return the metadata bootstrap
+     */
+    IMetadataBootstrap getMetadataBootstrap();
+
+    /**
+     * @return the cluster state manager
+     */
+    IClusterStateManager getClusterStateManager();
 }

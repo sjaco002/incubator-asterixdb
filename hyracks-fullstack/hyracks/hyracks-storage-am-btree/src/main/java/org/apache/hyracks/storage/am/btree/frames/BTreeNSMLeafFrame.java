@@ -34,7 +34,7 @@ import org.apache.hyracks.storage.am.common.frames.FrameOpSpaceStatus;
 import org.apache.hyracks.storage.am.common.frames.TreeIndexNSMFrame;
 import org.apache.hyracks.storage.am.common.ophelpers.FindTupleMode;
 import org.apache.hyracks.storage.am.common.ophelpers.FindTupleNoExactMatchPolicy;
-import org.apache.hyracks.storage.am.common.ophelpers.MultiComparator;
+import org.apache.hyracks.storage.common.MultiComparator;
 import org.apache.hyracks.storage.common.buffercache.IBufferCache;
 import org.apache.hyracks.storage.common.buffercache.IExtraPageBlockHelper;
 
@@ -304,11 +304,6 @@ public class BTreeNSMLeafFrame extends TreeIndexNSMFrame implements IBTreeLeafFr
         // fixup total free space counter
         buf.putInt(TOTAL_FREE_SPACE_OFFSET,
                 buf.getInt(TOTAL_FREE_SPACE_OFFSET) + (bufferCache.getPageSize() * deltaPages));
-    }
-
-    @Override
-    public ITreeIndexTupleReference createTupleReference() {
-        return tupleWriter.createTupleReference();
     }
 
     @Override

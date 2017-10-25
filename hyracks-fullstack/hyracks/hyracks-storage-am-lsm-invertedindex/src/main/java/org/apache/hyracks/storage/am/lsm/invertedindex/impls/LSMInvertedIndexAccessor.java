@@ -19,13 +19,14 @@
 package org.apache.hyracks.storage.am.lsm.invertedindex.impls;
 
 import java.util.List;
+import java.util.function.Predicate;
 
+import org.apache.hyracks.api.exceptions.ErrorCode;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.apache.hyracks.data.std.api.IValueReference;
 import org.apache.hyracks.dataflow.common.data.accessors.ITupleReference;
-import org.apache.hyracks.storage.am.common.api.IIndexCursor;
-import org.apache.hyracks.storage.am.common.api.ISearchPredicate;
 import org.apache.hyracks.storage.am.common.ophelpers.IndexOperation;
+import org.apache.hyracks.storage.am.lsm.common.api.ILSMComponent;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMDiskComponent;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMHarness;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMIOOperation;
@@ -35,6 +36,8 @@ import org.apache.hyracks.storage.am.lsm.common.api.ILSMIndexOperationContext;
 import org.apache.hyracks.storage.am.lsm.common.api.LSMOperationType;
 import org.apache.hyracks.storage.am.lsm.invertedindex.api.IInvertedIndexAccessor;
 import org.apache.hyracks.storage.am.lsm.invertedindex.api.IInvertedListCursor;
+import org.apache.hyracks.storage.common.IIndexCursor;
+import org.apache.hyracks.storage.common.ISearchPredicate;
 
 public class LSMInvertedIndexAccessor implements ILSMIndexAccessor, IInvertedIndexAccessor {
 
@@ -203,4 +206,23 @@ public class LSMInvertedIndexAccessor implements ILSMIndexAccessor, IInvertedInd
         throw new UnsupportedOperationException("Upsert not supported by lsm inverted index.");
     }
 
+    @Override
+    public void scanDiskComponents(IIndexCursor cursor) throws HyracksDataException {
+        throw HyracksDataException.create(ErrorCode.DISK_COMPONENT_SCAN_NOT_ALLOWED_FOR_SECONDARY_INDEX);
+    }
+
+    @Override
+    public String toString() {
+        return getClass().getSimpleName() + ':' + lsmHarness.toString();
+    }
+
+    @Override
+    public void deleteComponents(Predicate<ILSMComponent> predicate) throws HyracksDataException {
+        lsmHarness.deleteComponents(ctx, predicate);
+    }
+
+    @Override
+    public ILSMIndexOperationContext getOpContext() {
+        return ctx;
+    }
 }

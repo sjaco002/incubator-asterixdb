@@ -18,18 +18,17 @@
  */
 package org.apache.asterix.om.base;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-
-import com.fasterxml.jackson.databind.node.ObjectNode;
-
 import org.apache.asterix.om.types.BuiltinType;
 import org.apache.asterix.om.types.IAType;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 
 public class AInt64 implements IAObject {
 
     protected long value;
 
-    public AInt64(Long value) {
+    public AInt64(long value) {
         this.value = value;
     }
 
@@ -57,7 +56,7 @@ public class AInt64 implements IAObject {
 
     @Override
     public String toString() {
-        return "AInt64: {" + value + "}";
+        return Long.toString(value);
     }
 
     @Override

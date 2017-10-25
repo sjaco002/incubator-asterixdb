@@ -18,11 +18,10 @@
  */
 package org.apache.asterix.api.http.server;
 
-import static org.apache.asterix.api.http.servlet.ServletConstants.HYRACKS_CONNECTION_ATTR;
-import static org.apache.asterix.api.http.servlet.ServletConstants.HYRACKS_DATASET_ATTR;
+import static org.apache.asterix.api.http.server.ServletConstants.HYRACKS_CONNECTION_ATTR;
+import static org.apache.asterix.api.http.server.ServletConstants.HYRACKS_DATASET_ATTR;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.concurrent.ConcurrentMap;
 import java.util.logging.Level;
@@ -30,6 +29,7 @@ import java.util.logging.Logger;
 
 import org.apache.asterix.app.result.ResultReader;
 import org.apache.asterix.app.translator.QueryTranslator;
+import org.apache.asterix.app.translator.RequestParameters;
 import org.apache.asterix.common.config.GlobalConfig;
 import org.apache.asterix.common.context.IStorageComponentProvider;
 import org.apache.asterix.common.dataflow.ICcApplicationContext;
@@ -40,11 +40,13 @@ import org.apache.asterix.lang.common.base.IParser;
 import org.apache.asterix.lang.common.base.IParserFactory;
 import org.apache.asterix.lang.common.base.Statement;
 import org.apache.asterix.metadata.MetadataManager;
+import org.apache.asterix.translator.IRequestParameters;
 import org.apache.asterix.translator.IStatementExecutor;
 import org.apache.asterix.translator.IStatementExecutor.ResultDelivery;
 import org.apache.asterix.translator.IStatementExecutorFactory;
 import org.apache.asterix.translator.SessionConfig;
 import org.apache.asterix.translator.SessionConfig.OutputFormat;
+import org.apache.asterix.translator.SessionOutput;
 import org.apache.hyracks.api.client.IHyracksClientConnection;
 import org.apache.hyracks.api.dataset.IHyracksDataset;
 import org.apache.hyracks.client.dataset.HyracksDataset;
@@ -54,7 +56,6 @@ import org.apache.hyracks.http.server.AbstractServlet;
 import org.apache.hyracks.http.server.utils.HttpUtil;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import io.netty.handler.codec.http.HttpMethod;
@@ -84,7 +85,7 @@ public abstract class RestApiServlet extends AbstractServlet {
      * SessionConfig with the appropriate output writer and output-format
      * based on the Accept: header and other servlet parameters.
      */
-    static SessionConfig initResponse(IServletRequest request, IServletResponse response) throws IOException {
+    static SessionOutput initResponse(IServletRequest request, IServletResponse response) throws IOException {
         HttpUtil.setContentType(response, HttpUtil.ContentType.TEXT_PLAIN, HttpUtil.Encoding.UTF8);
         // CLEAN_JSON output is the default; most generally useful for a
         // programmatic HTTP API
@@ -114,9 +115,9 @@ public abstract class RestApiServlet extends AbstractServlet {
             format = OutputFormat.LOSSLESS_JSON;
         }
 
-        SessionConfig.ResultAppender appendHandle = (app, handle) -> app.append("{ \"").append("handle")
+        SessionOutput.ResultAppender appendHandle = (app, handle) -> app.append("{ \"").append("handle")
                 .append("\":" + " \"").append(handle).append("\" }");
-        SessionConfig sessionConfig = new SessionConfig(response.writer(), format, null, null, appendHandle, null);
+        SessionConfig sessionConfig = new SessionConfig(format);
 
         // If it's JSON or ADM, check for the "wrapper-array" flag. Default is
         // "true" for JSON and "false" for ADM. (Not applicable for CSV.)
@@ -152,7 +153,7 @@ public abstract class RestApiServlet extends AbstractServlet {
             default:
                 throw new IOException("Unknown format " + format);
         }
-        return sessionConfig;
+        return new SessionOutput(sessionConfig, response.writer(), null, null, appendHandle, null);
     }
 
     @Override
@@ -171,9 +172,9 @@ public abstract class RestApiServlet extends AbstractServlet {
             // enable cross-origin resource sharing
             response.setHeader("Access-Control-Allow-Origin", "*");
             response.setHeader("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept");
-            SessionConfig sessionConfig = initResponse(request, response);
+            SessionOutput sessionOutput = initResponse(request, response);
             QueryTranslator.ResultDelivery resultDelivery = whichResultDelivery(request);
-            doHandle(response, query, sessionConfig, resultDelivery);
+            doHandle(response, query, sessionOutput, resultDelivery);
         } catch (Exception e) {
             response.setStatus(HttpResponseStatus.INTERNAL_SERVER_ERROR);
             LOGGER.log(Level.WARNING, "Failure handling request", e);
@@ -181,7 +182,7 @@ public abstract class RestApiServlet extends AbstractServlet {
         }
     }
 
-    private void doHandle(IServletResponse response, String query, SessionConfig sessionConfig,
+    private void doHandle(IServletResponse response, String query, SessionOutput sessionOutput,
             ResultDelivery resultDelivery) throws JsonProcessingException {
         try {
             response.setStatus(HttpResponseStatus.OK);
@@ -201,27 +202,29 @@ public abstract class RestApiServlet extends AbstractServlet {
             List<Statement> aqlStatements = parser.parse();
             validate(aqlStatements);
             MetadataManager.INSTANCE.init();
-            IStatementExecutor translator = statementExecutorFactory.create(appCtx, aqlStatements, sessionConfig,
+            IStatementExecutor translator = statementExecutorFactory.create(appCtx, aqlStatements, sessionOutput,
                     compilationProvider, componentProvider);
-            translator.compileAndExecute(hcc, hds, resultDelivery, new IStatementExecutor.Stats());
+            final IRequestParameters requestParameters =
+                    new RequestParameters(hds, resultDelivery, new IStatementExecutor.Stats(), null, null, null);
+            translator.compileAndExecute(hcc, null, requestParameters);
         } catch (AsterixException | TokenMgrError | org.apache.asterix.aqlplus.parser.TokenMgrError pe) {
             response.setStatus(HttpResponseStatus.INTERNAL_SERVER_ERROR);
             GlobalConfig.ASTERIX_LOGGER.log(Level.SEVERE, pe.getMessage(), pe);
             String errorMessage = ResultUtil.buildParseExceptionMessage(pe, query);
             ObjectNode errorResp =
                     ResultUtil.getErrorResponse(2, errorMessage, "", ResultUtil.extractFullStackTrace(pe));
-            sessionConfig.out().write(new ObjectMapper().writeValueAsString(errorResp));
+            sessionOutput.out().write(OBJECT_MAPPER.writeValueAsString(errorResp));
         } catch (Exception e) {
             GlobalConfig.ASTERIX_LOGGER.log(Level.SEVERE, e.getMessage(), e);
             response.setStatus(HttpResponseStatus.INTERNAL_SERVER_ERROR);
-            ResultUtil.apiErrorHandler(sessionConfig.out(), e);
+            ResultUtil.apiErrorHandler(sessionOutput.out(), e);
         }
     }
 
     //TODO: Both Get and Post of this API must use the same parameter names
     private String query(IServletRequest request) {
         if (request.getHttpRequest().method() == HttpMethod.POST) {
-            return request.getHttpRequest().content().toString(StandardCharsets.UTF_8);
+            return HttpUtil.getRequestBody(request);
         } else {
             return getQueryParameter(request);
         }

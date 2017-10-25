@@ -71,7 +71,8 @@ public class ConfigManager implements IConfigManager, Serializable {
     private CompositeMap<IOption, Object> configurationMap = new CompositeMap<>(definedMap, defaultMap,
             new NoOpMapMutator());
     private EnumMap<Section, Map<String, IOption>> sectionMap = new EnumMap<>(Section.class);
-    private TreeMap<String, Map<IOption, Object>> nodeSpecificMap = new TreeMap<>();
+    @SuppressWarnings("squid:S1948") // TreeMap is serializable, and therefore so is its synchronized map
+    private Map<String, Map<IOption, Object>> nodeSpecificMap = Collections.synchronizedMap(new TreeMap<>());
     private transient ArrayListValuedHashMap<IOption, IConfigSetter> optionSetters = new ArrayListValuedHashMap<>();
     private final String[] args;
     private ConfigManagerApplicationConfig appConfig = new ConfigManagerApplicationConfig(this);
@@ -142,7 +143,10 @@ public class ConfigManager implements IConfigManager, Serializable {
                 }
             } else {
                 registeredOptions.add(option);
-                optionSetters.put(option, (node, value, isDefault) -> correctedMap(node, isDefault).put(option, value));
+                optionSetters.put(option,
+                        (node, value,
+                                isDefault) -> correctedMap(option.section() == Section.NC ? node : null, isDefault)
+                                        .put(option, value));
                 if (LOGGER.isLoggable(Level.FINE)) {
                     optionSetters.put(option, (node, value, isDefault) -> LOGGER
                             .fine((isDefault ? "defaulting" : "setting ") + option.toIniString() + " to " + value));
@@ -156,14 +160,14 @@ public class ConfigManager implements IConfigManager, Serializable {
                 : nodeSpecificMap.computeIfAbsent(node, this::createNodeSpecificMap);
     }
 
-    public void registerVirtualNode(String nodeId) {
-        LOGGER.fine("registerVirtualNode: " + nodeId);
+    public void ensureNode(String nodeId) {
+        LOGGER.fine("ensureNode: " + nodeId);
         nodeSpecificMap.computeIfAbsent(nodeId, this::createNodeSpecificMap);
     }
 
     private Map<IOption, Object> createNodeSpecificMap(String nodeId) {
         LOGGER.fine("createNodeSpecificMap: " + nodeId);
-        return new HashMap<>();
+        return Collections.synchronizedMap(new HashMap<>());
     }
 
     @Override
@@ -184,8 +188,7 @@ public class ConfigManager implements IConfigManager, Serializable {
         return map == null ? null : map.get(key);
     }
 
-    public void processConfig()
-            throws CmdLineException, IOException {
+    public void processConfig() throws CmdLineException, IOException {
         if (!configured) {
             for (List<IConfigurator> configuratorList : configurators.values()) {
                 for (IConfigurator configurator : configuratorList) {
@@ -222,8 +225,7 @@ public class ConfigManager implements IConfigManager, Serializable {
 
     @SuppressWarnings({ "squid:S106", "squid:S1147" }) // use of System.err, System.exit()
     private List<String> processCommandLine(Collection<Section> sections, OptionHandlerFilter usageFilter,
-            BiConsumer<IOption, Object> setAction)
-            throws CmdLineException {
+            BiConsumer<IOption, Object> setAction) throws CmdLineException {
         final Args4jBean bean = new Args4jBean();
         CmdLineParser cmdLineParser = new CmdLineParser(bean);
         final List<String> appArgs = new ArrayList<>();
@@ -277,12 +279,12 @@ public class ConfigManager implements IConfigManager, Serializable {
         for (IOption option : iniPointerOptions) {
             Object pointer = get(option);
             if (pointer instanceof String) {
-                ini = ConfigUtils.loadINIFile((String)pointer);
+                ini = ConfigUtils.loadINIFile((String) pointer);
             } else if (pointer instanceof URL) {
-                ini = ConfigUtils.loadINIFile((URL)pointer);
+                ini = ConfigUtils.loadINIFile((URL) pointer);
             } else if (pointer != null) {
-                throw new IllegalArgumentException("config file pointer options must be of type String (for file) or " +
-                        "URL, instead of " + option.type().targetType());
+                throw new IllegalArgumentException("config file pointer options must be of type String (for file) or "
+                        + "URL, instead of " + option.type().targetType());
             }
         }
         if (ini == null) {
@@ -424,7 +426,7 @@ public class ConfigManager implements IConfigManager, Serializable {
     }
 
     public List<String> getNodeNames() {
-        return Collections.unmodifiableList(new ArrayList(nodeSpecificMap.keySet()));
+        return Collections.unmodifiableList(new ArrayList<>(nodeSpecificMap.keySet()));
     }
 
     public IApplicationConfig getNodeEffectiveConfig(String nodeId) {
@@ -456,10 +458,13 @@ public class ConfigManager implements IConfigManager, Serializable {
         }
         for (Map.Entry<String, Map<IOption, Object>> nodeMapEntry : nodeSpecificMap.entrySet()) {
             String section = Section.NC.sectionName() + "/" + nodeMapEntry.getKey();
-            for (Map.Entry<IOption, Object> entry : nodeMapEntry.getValue().entrySet()) {
-                if (entry.getValue() != null) {
-                    final IOption option = entry.getKey();
-                    ini.add(section, option.ini(), option.type().serializeToIni(entry.getValue()));
+            final Map<IOption, Object> nodeValueMap = nodeMapEntry.getValue();
+            synchronized (nodeValueMap) {
+                for (Map.Entry<IOption, Object> entry : nodeValueMap.entrySet()) {
+                    if (entry.getValue() != null) {
+                        final IOption option = entry.getKey();
+                        ini.add(section, option.ini(), option.type().serializeToIni(entry.getValue()));
+                    }
                 }
             }
         }

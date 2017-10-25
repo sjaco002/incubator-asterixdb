@@ -29,9 +29,9 @@ import java.util.Calendar;
 import org.apache.asterix.builders.IARecordBuilder;
 import org.apache.asterix.builders.OrderedListBuilder;
 import org.apache.asterix.builders.RecordBuilder;
+import org.apache.asterix.common.exceptions.MetadataException;
 import org.apache.asterix.common.transactions.JobId;
 import org.apache.asterix.formats.nontagged.SerializerDeserializerProvider;
-import org.apache.asterix.metadata.MetadataException;
 import org.apache.asterix.metadata.MetadataNode;
 import org.apache.asterix.metadata.bootstrap.MetadataPrimaryIndexes;
 import org.apache.asterix.metadata.bootstrap.MetadataRecordTypes;
@@ -234,13 +234,13 @@ public class DatatypeTupleTranslator extends AbstractTupleTranslator<Datatype> {
         IARecordBuilder derivedRecordBuilder = new RecordBuilder();
         ArrayBackedValueStorage fieldValue = new ArrayBackedValueStorage();
         switch (derivedDatatype.getTypeTag()) {
-            case ORDEREDLIST:
+            case ARRAY:
                 tag = DerivedTypeTag.ORDEREDLIST;
                 break;
-            case UNORDEREDLIST:
+            case MULTISET:
                 tag = DerivedTypeTag.UNORDEREDLIST;
                 break;
-            case RECORD:
+            case OBJECT:
                 tag = DerivedTypeTag.RECORD;
                 break;
             default:

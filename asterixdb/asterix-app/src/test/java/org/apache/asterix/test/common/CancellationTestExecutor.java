@@ -22,16 +22,21 @@ package org.apache.asterix.test.common;
 import java.io.InputStream;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
+import java.util.Iterator;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.function.Predicate;
 
+import org.apache.asterix.common.exceptions.ExceptionUtils;
 import org.apache.asterix.common.utils.Servlets;
+import org.apache.asterix.test.runtime.SqlppExecutionWithCancellationTest;
 import org.apache.asterix.testframework.context.TestCaseContext;
 import org.apache.asterix.testframework.xml.TestCase;
+import org.apache.commons.lang3.mutable.MutableInt;
 import org.apache.http.HttpResponse;
 import org.apache.http.client.methods.HttpUriRequest;
 import org.apache.http.client.methods.RequestBuilder;
@@ -43,14 +48,15 @@ public class CancellationTestExecutor extends TestExecutor {
 
     @Override
     public InputStream executeQueryService(String str, TestCaseContext.OutputFormat fmt, URI uri,
-            List<TestCase.CompilationUnit.Parameter> params, boolean jsonEncoded, boolean cancellable)
-            throws Exception {
+            List<TestCase.CompilationUnit.Parameter> params, boolean jsonEncoded,
+            Predicate<Integer> responseCodeValidator, boolean cancellable) throws Exception {
         String clientContextId = UUID.randomUUID().toString();
         final List<TestCase.CompilationUnit.Parameter> newParams =
                 cancellable ? upsertParam(params, "client_context_id", clientContextId) : params;
         Callable<InputStream> query = () -> {
             try {
-                return CancellationTestExecutor.super.executeQueryService(str, fmt, uri, newParams, jsonEncoded, true);
+                return CancellationTestExecutor.super.executeQueryService(str, fmt, uri, newParams, jsonEncoded,
+                        responseCodeValidator, true);
             } catch (Exception e) {
                 e.printStackTrace();
                 throw e;
@@ -86,5 +92,28 @@ public class CancellationTestExecutor extends TestExecutor {
         }
         builder.setCharset(StandardCharsets.UTF_8);
         return builder.build();
+    }
+
+    @Override
+    protected boolean isUnExpected(Exception e, List<String> expectedErrors, int numOfErrors, MutableInt queryCount) {
+        // Get the expected exception
+        for (Iterator<String> iter = expectedErrors.iterator(); iter.hasNext();) {
+            String expectedError = iter.next();
+            if (e.toString().contains(expectedError)) {
+                System.err.println("...but that was expected.");
+                iter.remove();
+                return false;
+            }
+        }
+        String errorMsg = ExceptionUtils.getErrorMessage(e);
+        // Expected, "HYR0025" means a user cancelled the query.)
+        if (errorMsg.startsWith("HYR0025")) {
+            SqlppExecutionWithCancellationTest.numCancelledQueries++;
+            queryCount.increment();
+            return false;
+        } else {
+            System.err.println("Expected to find one of the following in error text:\n+++++\n" + expectedErrors + "\n+++++");
+            return true;
+        }
     }
 }

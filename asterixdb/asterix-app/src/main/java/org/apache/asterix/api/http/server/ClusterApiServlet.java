@@ -18,7 +18,7 @@
  */
 package org.apache.asterix.api.http.server;
 
-import static org.apache.asterix.api.http.servlet.ServletConstants.ASTERIX_APP_CONTEXT_INFO_ATTR;
+import static org.apache.asterix.api.http.server.ServletConstants.ASTERIX_APP_CONTEXT_INFO_ATTR;
 
 import java.io.IOException;
 import java.io.PrintWriter;
@@ -26,10 +26,9 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.function.Predicate;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import java.util.regex.Pattern;
 
+import org.apache.asterix.common.dataflow.ICcApplicationContext;
 import org.apache.asterix.runtime.utils.CcApplicationContext;
-import org.apache.asterix.runtime.utils.ClusterStateManager;
 import org.apache.hyracks.api.config.IOption;
 import org.apache.hyracks.api.config.Section;
 import org.apache.hyracks.control.common.config.ConfigUtils;
@@ -40,7 +39,6 @@ import org.apache.hyracks.http.server.AbstractServlet;
 import org.apache.hyracks.http.server.utils.HttpUtil;
 import org.apache.hyracks.util.JSONUtil;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
@@ -50,7 +48,6 @@ import io.netty.handler.codec.http.HttpResponseStatus;
 public class ClusterApiServlet extends AbstractServlet {
 
     private static final Logger LOGGER = Logger.getLogger(ClusterApiServlet.class.getName());
-    private static final Pattern PARENT_DIR = Pattern.compile("/[^./]+/\\.\\./");
     protected static final String NODE_ID_KEY = "node_id";
     protected static final String CONFIG_URI_KEY = "configUri";
     protected static final String STATS_URI_KEY = "statsUri";
@@ -59,10 +56,11 @@ public class ClusterApiServlet extends AbstractServlet {
     protected static final String FULL_SHUTDOWN_URI_KEY = "fullShutdownUri";
     protected static final String VERSION_URI_KEY = "versionUri";
     protected static final String DIAGNOSTICS_URI_KEY = "diagnosticsUri";
-    private final ObjectMapper om = new ObjectMapper();
+    protected final ICcApplicationContext appCtx;
 
-    public ClusterApiServlet(ConcurrentMap<String, Object> ctx, String... paths) {
+    public ClusterApiServlet(ICcApplicationContext appCtx, ConcurrentMap<String, Object> ctx, String... paths) {
         super(ctx, paths);
+        this.appCtx = appCtx;
     }
 
     @Override
@@ -82,7 +80,7 @@ public class ClusterApiServlet extends AbstractServlet {
                 default:
                     throw new IllegalArgumentException();
             }
-            responseWriter.write(JSONUtil.convertNode(json));
+            JSONUtil.writeNode(responseWriter, json);
         } catch (IllegalArgumentException e) { // NOSONAR - exception not logged or rethrown
             response.setStatus(HttpResponseStatus.NOT_FOUND);
         } catch (Exception e) {
@@ -94,25 +92,18 @@ public class ClusterApiServlet extends AbstractServlet {
     }
 
     protected ObjectNode getClusterStateSummaryJSON() {
-        return ClusterStateManager.INSTANCE.getClusterStateSummary();
+        return appCtx.getClusterStateManager().getClusterStateSummary();
     }
 
     protected ObjectNode getClusterStateJSON(IServletRequest request, String pathToNode) {
-        ObjectNode json = ClusterStateManager.INSTANCE.getClusterStateDescription();
+        ObjectNode json = appCtx.getClusterStateManager().getClusterStateDescription();
         CcApplicationContext appConfig = (CcApplicationContext) ctx.get(ASTERIX_APP_CONTEXT_INFO_ATTR);
         json.putPOJO("config", ConfigUtils.getSectionOptionsForJSON(appConfig.getServiceContext().getAppConfig(),
                 Section.COMMON, getConfigSelector()));
 
         ArrayNode ncs = (ArrayNode) json.get("ncs");
-        final StringBuilder requestURL = new StringBuilder("http://");
-        requestURL.append(request.getHeader(HttpHeaderNames.HOST));
-        requestURL.append(request.getHttpRequest().uri());
-        if (requestURL.charAt(requestURL.length() - 1) != '/') {
-            requestURL.append('/');
-        }
-        requestURL.append(pathToNode);
-        String clusterURL = canonicalize(requestURL);
-        String adminURL = canonicalize(clusterURL + "../");
+        String clusterURL = resolveClusterUrl(request, pathToNode);
+        String adminURL = HttpUtil.canonicalize(clusterURL + "../");
         String nodeURL = clusterURL + "node/";
         for (int i = 0; i < ncs.size(); i++) {
             ObjectNode nc = (ObjectNode) ncs.get(i);
@@ -124,7 +115,7 @@ public class ClusterApiServlet extends AbstractServlet {
         if (json.has("cc")) {
             cc = (ObjectNode) json.get("cc");
         } else {
-            cc = om.createObjectNode();
+            cc = OBJECT_MAPPER.createObjectNode();
             json.set("cc", cc);
         }
         cc.put(CONFIG_URI_KEY, clusterURL + "cc/config");
@@ -137,18 +128,20 @@ public class ClusterApiServlet extends AbstractServlet {
         return json;
     }
 
+    protected String resolveClusterUrl(IServletRequest request, String pathToNode) {
+        final StringBuilder requestURL = new StringBuilder("http://");
+        requestURL.append(request.getHeader(HttpHeaderNames.HOST));
+        requestURL.append(request.getHttpRequest().uri());
+        if (requestURL.charAt(requestURL.length() - 1) != '/') {
+            requestURL.append('/');
+        }
+        requestURL.append(pathToNode);
+        return HttpUtil.canonicalize(requestURL);
+    }
+
     protected Predicate<IOption> getConfigSelector() {
         return option -> !option.hidden() && option != ControllerConfig.Option.CONFIG_FILE
                 && option != ControllerConfig.Option.CONFIG_FILE_URL;
     }
 
-    private String canonicalize(CharSequence requestURL) {
-        String clusterURL = "";
-        String newClusterURL = requestURL.toString();
-        while (!clusterURL.equals(newClusterURL)) {
-            clusterURL = newClusterURL;
-            newClusterURL = PARENT_DIR.matcher(clusterURL).replaceAll("/");
-        }
-        return clusterURL;
-    }
 }

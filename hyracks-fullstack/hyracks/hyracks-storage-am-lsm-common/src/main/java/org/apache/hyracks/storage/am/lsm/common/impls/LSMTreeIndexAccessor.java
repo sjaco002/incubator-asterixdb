@@ -20,13 +20,18 @@
 package org.apache.hyracks.storage.am.lsm.common.impls;
 
 import java.util.List;
+import java.util.function.Predicate;
 
 import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.apache.hyracks.data.std.api.IValueReference;
+import org.apache.hyracks.dataflow.common.comm.io.FrameTupleAccessor;
+import org.apache.hyracks.dataflow.common.data.accessors.FrameTupleReference;
 import org.apache.hyracks.dataflow.common.data.accessors.ITupleReference;
-import org.apache.hyracks.storage.am.common.api.IIndexCursor;
-import org.apache.hyracks.storage.am.common.api.ISearchPredicate;
+import org.apache.hyracks.storage.am.common.api.ITreeIndexCursor;
 import org.apache.hyracks.storage.am.common.ophelpers.IndexOperation;
+import org.apache.hyracks.storage.am.lsm.common.api.IFrameOperationCallback;
+import org.apache.hyracks.storage.am.lsm.common.api.IFrameTupleProcessor;
+import org.apache.hyracks.storage.am.lsm.common.api.ILSMComponent;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMDiskComponent;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMHarness;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMIOOperation;
@@ -34,14 +39,27 @@ import org.apache.hyracks.storage.am.lsm.common.api.ILSMIOOperationCallback;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMIndexAccessor;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMIndexOperationContext;
 import org.apache.hyracks.storage.am.lsm.common.api.LSMOperationType;
+import org.apache.hyracks.storage.common.IIndexCursor;
+import org.apache.hyracks.storage.common.ISearchPredicate;
 
-public abstract class LSMTreeIndexAccessor implements ILSMIndexAccessor {
-    protected ILSMHarness lsmHarness;
-    protected ILSMIndexOperationContext ctx;
+public class LSMTreeIndexAccessor implements ILSMIndexAccessor {
+    @FunctionalInterface
+    public interface ICursorFactory {
+        ITreeIndexCursor create(ILSMIndexOperationContext ctx);
+    }
 
-    public LSMTreeIndexAccessor(ILSMHarness lsmHarness, ILSMIndexOperationContext ctx) {
+    protected final ILSMHarness lsmHarness;
+    protected final ILSMIndexOperationContext ctx;
+    protected final ICursorFactory cursorFactory;
+
+    public LSMTreeIndexAccessor(ILSMHarness lsmHarness, ILSMIndexOperationContext ctx, ICursorFactory cursorFactory) {
         this.lsmHarness = lsmHarness;
         this.ctx = ctx;
+        this.cursorFactory = cursorFactory;
+    }
+
+    public ILSMIndexOperationContext getCtx() {
+        return ctx;
     }
 
     @Override
@@ -107,7 +125,6 @@ public abstract class LSMTreeIndexAccessor implements ILSMIndexAccessor {
 
     @Override
     public void merge(ILSMIOOperation operation) throws HyracksDataException {
-        ctx.setOperation(IndexOperation.MERGE);
         lsmHarness.merge(ctx, operation);
     }
 
@@ -173,15 +190,49 @@ public abstract class LSMTreeIndexAccessor implements ILSMIndexAccessor {
 
     @Override
     public void updateMeta(IValueReference key, IValueReference value) throws HyracksDataException {
-        // a hack because delete only gets the memory component
-        ctx.setOperation(IndexOperation.DELETE);
+        ctx.setOperation(IndexOperation.UPSERT);
         lsmHarness.updateMeta(ctx, key, value);
     }
 
     @Override
     public void forceUpdateMeta(IValueReference key, IValueReference value) throws HyracksDataException {
-        // a hack because delete only gets the memory component
-        ctx.setOperation(IndexOperation.DELETE);
+        ctx.setOperation(IndexOperation.UPSERT);
         lsmHarness.forceUpdateMeta(ctx, key, value);
+    }
+
+    @Override
+    public ITreeIndexCursor createSearchCursor(boolean exclusive) {
+        return cursorFactory.create(ctx);
+    }
+
+    public void updateFilter(ITupleReference tuple) throws HyracksDataException {
+        ctx.setOperation(IndexOperation.UPSERT);
+        lsmHarness.updateFilter(ctx, tuple);
+    }
+
+    public void batchOperate(FrameTupleAccessor accessor, FrameTupleReference tuple, IFrameTupleProcessor processor,
+            IFrameOperationCallback frameOpCallback) throws HyracksDataException {
+        lsmHarness.batchOperate(ctx, accessor, tuple, processor, frameOpCallback);
+    }
+
+    @Override
+    public void scanDiskComponents(IIndexCursor cursor) throws HyracksDataException {
+        ctx.setOperation(IndexOperation.DISK_COMPONENT_SCAN);
+        lsmHarness.scanDiskComponents(ctx, cursor);
+    }
+
+    @Override
+    public String toString() {
+        return getClass().getSimpleName() + ':' + lsmHarness.toString();
+    }
+
+    @Override
+    public void deleteComponents(Predicate<ILSMComponent> predicate) throws HyracksDataException {
+        lsmHarness.deleteComponents(ctx, predicate);
+    }
+
+    @Override
+    public ILSMIndexOperationContext getOpContext() {
+        return ctx;
     }
 }

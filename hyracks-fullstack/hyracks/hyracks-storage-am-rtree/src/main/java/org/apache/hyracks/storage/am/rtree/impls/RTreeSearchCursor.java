@@ -21,13 +21,13 @@ package org.apache.hyracks.storage.am.rtree.impls;
 
 import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.apache.hyracks.dataflow.common.data.accessors.ITupleReference;
-import org.apache.hyracks.storage.am.common.api.ICursorInitialState;
-import org.apache.hyracks.storage.am.common.api.ISearchPredicate;
 import org.apache.hyracks.storage.am.common.api.ITreeIndexCursor;
 import org.apache.hyracks.storage.am.common.api.ITreeIndexTupleReference;
-import org.apache.hyracks.storage.am.common.ophelpers.MultiComparator;
 import org.apache.hyracks.storage.am.rtree.api.IRTreeInteriorFrame;
 import org.apache.hyracks.storage.am.rtree.api.IRTreeLeafFrame;
+import org.apache.hyracks.storage.common.ICursorInitialState;
+import org.apache.hyracks.storage.common.ISearchPredicate;
+import org.apache.hyracks.storage.common.MultiComparator;
 import org.apache.hyracks.storage.common.buffercache.IBufferCache;
 import org.apache.hyracks.storage.common.buffercache.ICachedPage;
 import org.apache.hyracks.storage.common.file.BufferedFileHandle;
@@ -97,11 +97,6 @@ public class RTreeSearchCursor implements ITreeIndexCursor {
         return pageId;
     }
 
-    @Override
-    public ICachedPage getPage() {
-        return page;
-    }
-
     protected boolean fetchNextLeafPage() throws HyracksDataException {
         boolean succeeded = false;
         if (readLatched) {
@@ -114,8 +109,12 @@ public class RTreeSearchCursor implements ITreeIndexCursor {
             int pageId = pathList.getLastPageId();
             long parentLsn = pathList.getLastPageLsn();
             pathList.moveLast();
-            if(pageId <0) throw new IllegalStateException();
-            if(fileId<0) throw new IllegalStateException();
+            if (pageId < 0) {
+                throw new IllegalStateException();
+            }
+            if (fileId < 0) {
+                throw new IllegalStateException();
+            }
             ICachedPage node = bufferCache.pin(BufferedFileHandle.getDiskPageId(fileId, pageId), false);
             node.acquireReadLatch();
             readLatched = true;
@@ -265,12 +264,7 @@ public class RTreeSearchCursor implements ITreeIndexCursor {
     }
 
     @Override
-    public boolean exclusiveLatchNodes() {
+    public boolean isExclusiveLatchNodes() {
         return false;
-    }
-
-    @Override
-    public void markCurrentTupleAsUpdated() throws HyracksDataException {
-        throw new HyracksDataException("Updating tuples is not supported with this cursor.");
     }
 }

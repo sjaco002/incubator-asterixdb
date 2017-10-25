@@ -47,7 +47,7 @@ public class GoogleDefaultMergePolicy implements ILSMMergePolicy {
         if (!isMergeOp) {
             numFlushes++;
         }
-        List<ILSMDiskComponent> immutableComponents = new ArrayList<>(index.getImmutableComponents());
+        List<ILSMDiskComponent> immutableComponents = new ArrayList<>(index.getDiskComponents());
         if (!areComponentsReadableWritableState(immutableComponents)) {
             return;
         }
@@ -66,11 +66,12 @@ public class GoogleDefaultMergePolicy implements ILSMMergePolicy {
     }
 
     private boolean scheduleMerge(final ILSMIndex index) throws HyracksDataException {
-        List<ILSMDiskComponent> immutableComponents = new ArrayList<>(index.getImmutableComponents());
+        List<ILSMDiskComponent> immutableComponents = new ArrayList<>(index.getDiskComponents());
         Collections.reverse(immutableComponents);
         int size = immutableComponents.size();
-        if (size <= numComponents)
+        if (size <= numComponents) {
             return false;
+        }
         long sum = getTotalSize(immutableComponents);
         int endIndex = size - 2;
         int mergedIndex = endIndex;
@@ -166,8 +167,9 @@ public class GoogleDefaultMergePolicy implements ILSMMergePolicy {
         }
     }
 
+    @Override
     public boolean isMergeLagging(ILSMIndex index) throws HyracksDataException {
-        List<ILSMDiskComponent> immutableComponents = index.getImmutableComponents();
+        List<ILSMDiskComponent> immutableComponents = index.getDiskComponents();
         int size = immutableComponents.size();
         if (size <= numComponents) {
             return false;

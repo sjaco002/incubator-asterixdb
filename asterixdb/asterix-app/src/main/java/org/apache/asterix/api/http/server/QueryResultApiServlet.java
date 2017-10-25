@@ -25,9 +25,9 @@ import java.util.logging.Logger;
 
 import org.apache.asterix.app.result.ResultHandle;
 import org.apache.asterix.app.result.ResultReader;
-import org.apache.asterix.common.dataflow.ICcApplicationContext;
+import org.apache.asterix.common.api.IApplicationContext;
 import org.apache.asterix.translator.IStatementExecutor.Stats;
-import org.apache.asterix.translator.SessionConfig;
+import org.apache.asterix.translator.SessionOutput;
 import org.apache.hyracks.api.dataset.DatasetJobRecord;
 import org.apache.hyracks.api.dataset.IHyracksDataset;
 import org.apache.hyracks.api.exceptions.ErrorCode;
@@ -41,7 +41,7 @@ import io.netty.handler.codec.http.HttpResponseStatus;
 public class QueryResultApiServlet extends AbstractQueryApiServlet {
     private static final Logger LOGGER = Logger.getLogger(QueryResultApiServlet.class.getName());
 
-    public QueryResultApiServlet(ConcurrentMap<String, Object> ctx, String[] paths, ICcApplicationContext appCtx) {
+    public QueryResultApiServlet(ConcurrentMap<String, Object> ctx, IApplicationContext appCtx, String... paths) {
         super(appCtx, ctx, paths);
     }
 
@@ -60,7 +60,6 @@ public class QueryResultApiServlet extends AbstractQueryApiServlet {
 
         IHyracksDataset hds = getHyracksDataset();
         ResultReader resultReader = new ResultReader(hds, handle.getJobId(), handle.getResultSetId());
-
 
         try {
             DatasetJobRecord.Status status = resultReader.getStatus();
@@ -94,11 +93,11 @@ public class QueryResultApiServlet extends AbstractQueryApiServlet {
             // way to send the same OutputFormat value here as was
             // originally determined there. Need to save this value on
             // some object that we can obtain here.
-            SessionConfig sessionConfig = RestApiServlet.initResponse(request, response);
-            ResultUtil.printResults(appCtx, resultReader, sessionConfig, new Stats(), null);
+            SessionOutput sessionOutput = RestApiServlet.initResponse(request, response);
+            ResultUtil.printResults(appCtx, resultReader, sessionOutput, new Stats(), null);
         } catch (HyracksDataException e) {
             final int errorCode = e.getErrorCode();
-            if (ErrorCode.NO_RESULTSET == errorCode) {
+            if (ErrorCode.NO_RESULT_SET == errorCode) {
                 LOGGER.log(Level.INFO, "No results for: \"" + strHandle + "\"");
                 response.setStatus(HttpResponseStatus.NOT_FOUND);
                 return;

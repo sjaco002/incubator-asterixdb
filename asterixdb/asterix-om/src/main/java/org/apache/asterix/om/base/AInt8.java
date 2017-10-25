@@ -18,18 +18,17 @@
  */
 package org.apache.asterix.om.base;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-
-import com.fasterxml.jackson.databind.node.ObjectNode;
-
 import org.apache.asterix.om.types.BuiltinType;
 import org.apache.asterix.om.types.IAType;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 
 public class AInt8 implements IAObject {
 
     protected byte value;
 
-    public AInt8(Byte value) {
+    public AInt8(byte value) {
         this.value = value;
     }
 
@@ -57,7 +56,7 @@ public class AInt8 implements IAObject {
 
     @Override
     public String toString() {
-        return "AInt8: {" + value + "}";
+        return Byte.toString(value);
     }
 
     @Override

@@ -394,7 +394,7 @@ Groupby
 
 Let Variable [ Name=$revenue ]
   :=
-  FunctionCall q5_local_supplier.sum@1[
+  FunctionCall asterix.sum@1[
     (
       SELECT ELEMENT [
       OperatorExpr [
@@ -413,7 +413,9 @@ Let Variable [ Name=$revenue ]
         ]
       ]
       ]
-      FROM [        Variable [ Name=$o1 ]
+      FROM [        FunctionCall Metadata.dataset@1[
+          LiteralExpr [STRING] [o1]
+        ]
         AS Variable [ Name=$i ]
       ]
     )

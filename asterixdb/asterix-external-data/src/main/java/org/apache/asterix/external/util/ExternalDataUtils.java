@@ -163,10 +163,10 @@ public class ExternalDataUtils {
 
     private static Map<ATypeTag, IValueParserFactory> initializeValueParserFactoryMap() {
         Map<ATypeTag, IValueParserFactory> m = new EnumMap<>(ATypeTag.class);
-        m.put(ATypeTag.INT32, IntegerParserFactory.INSTANCE);
+        m.put(ATypeTag.INTEGER, IntegerParserFactory.INSTANCE);
         m.put(ATypeTag.FLOAT, FloatParserFactory.INSTANCE);
         m.put(ATypeTag.DOUBLE, DoubleParserFactory.INSTANCE);
-        m.put(ATypeTag.INT64, LongParserFactory.INSTANCE);
+        m.put(ATypeTag.BIGINT, LongParserFactory.INSTANCE);
         m.put(ATypeTag.STRING, UTF8StringParserFactory.INSTANCE);
         return m;
     }
@@ -299,8 +299,8 @@ public class ExternalDataUtils {
         return Boolean.parseBoolean(configuration.get(ExternalDataConstants.KEY_IS_CHANGE_FEED));
     }
 
-    public static boolean isUpsertFeed(Map<String, String> configuration) {
-        return Boolean.parseBoolean(configuration.get(ExternalDataConstants.KEY_IS_UPSERT_FEED));
+    public static boolean isInsertFeed(Map<String, String> configuration) {
+        return Boolean.parseBoolean(configuration.get(ExternalDataConstants.KEY_IS_INSERT_FEED));
     }
 
     public static int getNumberOfKeys(Map<String, String> configuration) throws AsterixException {

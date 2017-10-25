@@ -53,7 +53,7 @@ public class BMCAlphaMergePolicy implements ILSMMergePolicy {
             return;
         }
         numFlushes++;
-        List<ILSMDiskComponent> immutableComponents = new ArrayList<>(index.getImmutableComponents());
+        List<ILSMDiskComponent> immutableComponents = new ArrayList<>(index.getDiskComponents());
         if (!areComponentsReadableWritableState(immutableComponents)) {
             return;
         }
@@ -73,7 +73,7 @@ public class BMCAlphaMergePolicy implements ILSMMergePolicy {
     }
 
     private boolean scheduleMerge(final ILSMIndex index) throws HyracksDataException {
-        List<ILSMDiskComponent> immutableComponents = new ArrayList<>(index.getImmutableComponents());
+        List<ILSMDiskComponent> immutableComponents = new ArrayList<>(index.getDiskComponents());
         Collections.reverse(immutableComponents);
         int size = immutableComponents.size();
         int mergedIndex = td.right_depth(numFlushes - 1);
@@ -116,7 +116,7 @@ public class BMCAlphaMergePolicy implements ILSMMergePolicy {
     @Override
     public boolean isMergeLagging(ILSMIndex index) throws HyracksDataException {
 
-        List<ILSMDiskComponent> immutableComponents = index.getImmutableComponents();
+        List<ILSMDiskComponent> immutableComponents = index.getDiskComponents();
         boolean isMergeOngoing = isMergeOngoing(immutableComponents);
         if (isMergeOngoing) {
             return true;

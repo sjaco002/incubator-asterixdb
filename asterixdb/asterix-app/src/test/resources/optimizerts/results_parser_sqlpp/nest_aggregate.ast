@@ -168,7 +168,7 @@ RecordConstructor [
 
       Let Variable [ Name=$sum ]
         :=
-        FunctionCall tpch.sum@1[
+        FunctionCall asterix.sum@1[
           (
             SELECT ELEMENT [
             FieldAccessor [
@@ -176,7 +176,9 @@ RecordConstructor [
               Field=o_totalprice
             ]
             ]
-            FROM [              Variable [ Name=$orders ]
+            FROM [              FunctionCall Metadata.dataset@1[
+                LiteralExpr [STRING] [orders]
+              ]
               AS Variable [ Name=$o ]
             ]
           )

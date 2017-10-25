@@ -21,8 +21,8 @@ package org.apache.hyracks.storage.am.lsm.common.api;
 import java.util.List;
 
 import org.apache.hyracks.api.exceptions.HyracksDataException;
-import org.apache.hyracks.storage.am.common.api.IIndexBulkLoader;
-import org.apache.hyracks.storage.am.common.api.ISearchOperationCallback;
+import org.apache.hyracks.storage.common.IIndexBulkLoader;
+import org.apache.hyracks.storage.common.ISearchOperationCallback;
 
 // An interface containing the new methods introduced for bulk transactions
 public interface ITwoPCIndex {
@@ -30,8 +30,8 @@ public interface ITwoPCIndex {
      * This function is used to create a BulkLoader for a transaction that is capable of insertions and deletions
      * and the bulk loaded component is hidden from the index
      */
-    public IIndexBulkLoader createTransactionBulkLoader(float fillLevel, boolean verifyInput, long numElementsHint,
-            boolean checkIfEmptyIndex) throws HyracksDataException;
+    public IIndexBulkLoader createTransactionBulkLoader(float fillLevel, boolean verifyInput, long numElementsHint)
+            throws HyracksDataException;
 
     /**
      * This function is used to commit the previous transaction if it was resulted in creating any components
@@ -73,4 +73,9 @@ public interface ITwoPCIndex {
      * This function is used to get the current version id of the index
      */
     public int getCurrentVersion();
+
+    /**
+     * This function is used to set the current version id of the index
+     */
+    public void setCurrentVersion(int version);
 }

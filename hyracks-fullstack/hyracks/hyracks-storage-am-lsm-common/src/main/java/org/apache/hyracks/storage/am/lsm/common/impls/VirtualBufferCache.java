@@ -25,6 +25,8 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.logging.Level;
@@ -40,8 +42,9 @@ import org.apache.hyracks.storage.common.buffercache.IExtraPageBlockHelper;
 import org.apache.hyracks.storage.common.buffercache.IFIFOPageQueue;
 import org.apache.hyracks.storage.common.buffercache.VirtualPage;
 import org.apache.hyracks.storage.common.file.BufferedFileHandle;
+import org.apache.hyracks.storage.common.file.FileMapManager;
 import org.apache.hyracks.storage.common.file.IFileMapManager;
-import org.apache.hyracks.storage.common.file.TransientFileMapManager;
+import org.apache.hyracks.util.JSONUtil;
 
 public class VirtualBufferCache implements IVirtualBufferCache {
     private static final Logger LOGGER = Logger.getLogger(VirtualBufferCache.class.getName());
@@ -68,7 +71,7 @@ public class VirtualBufferCache implements IVirtualBufferCache {
 
     public VirtualBufferCache(ICacheMemoryAllocator allocator, int pageSize, int numPages) {
         this.allocator = allocator;
-        this.fileMapManager = new TransientFileMapManager();
+        this.fileMapManager = new FileMapManager();
         this.pageSize = pageSize;
         this.numPages = 2 * (numPages / 2) + 1;
 
@@ -87,12 +90,19 @@ public class VirtualBufferCache implements IVirtualBufferCache {
     }
 
     @Override
-    public void createFile(FileReference fileRef) throws HyracksDataException {
+    public int createFile(FileReference fileRef) throws HyracksDataException {
+        synchronized (fileMapManager) {
+            return fileMapManager.registerFile(fileRef);
+        }
+    }
+
+    @Override
+    public int openFile(FileReference fileRef) throws HyracksDataException {
         synchronized (fileMapManager) {
             if (fileMapManager.isMapped(fileRef)) {
-                throw new HyracksDataException("File " + fileRef + " is already mapped");
+                return fileMapManager.lookupFileId(fileRef);
             }
-            fileMapManager.registerFile(fileRef);
+            return fileMapManager.registerFile(fileRef);
         }
     }
 
@@ -105,14 +115,18 @@ public class VirtualBufferCache implements IVirtualBufferCache {
     }
 
     @Override
-    public void deleteFile(int fileId, boolean flushDirtyPages) throws HyracksDataException {
+    public void deleteFile(FileReference fileRef) throws HyracksDataException {
         synchronized (fileMapManager) {
-            if (!fileMapManager.isMapped(fileId)) {
-                throw new HyracksDataException("File with id " + fileId + " is not mapped");
-            }
+            int fileId = fileMapManager.lookupFileId(fileRef);
+            deleteFile(fileId);
+        }
+    }
+
+    @Override
+    public void deleteFile(int fileId) throws HyracksDataException {
+        synchronized (fileMapManager) {
             fileMapManager.unregisterFile(fileId);
         }
-
         for (int i = 0; i < buckets.length; i++) {
             final CacheBucket bucket = buckets[i];
             bucket.bucketLock.lock();
@@ -201,8 +215,11 @@ public class VirtualBufferCache implements IVirtualBufferCache {
             }
 
             if (!newPage) {
-                throw new HyracksDataException("Page " + BufferedFileHandle.getPageId(dpid) + " does not exist in file "
-                        + fileMapManager.lookupFileName(BufferedFileHandle.getFileId(dpid)));
+                synchronized (fileMapManager) {
+                    throw new HyracksDataException(
+                            "Page " + BufferedFileHandle.getPageId(dpid) + " does not exist in file "
+                                    + fileMapManager.lookupFileName(BufferedFileHandle.getFileId(dpid)));
+                }
             }
 
             page = getOrAllocPage(dpid);
@@ -382,12 +399,7 @@ public class VirtualBufferCache implements IVirtualBufferCache {
 
     @Override
     public int getNumPagesOfFile(int fileId) throws HyracksDataException {
-        synchronized (fileMapManager) {
-            if (fileMapManager.isMapped(fileId)) {
-                return numPages;
-            }
-        }
-        return 0;
+        return -1;
     }
 
     @Override
@@ -451,7 +463,12 @@ public class VirtualBufferCache implements IVirtualBufferCache {
 
     @Override
     public void purgeHandle(int fileId) throws HyracksDataException {
+        deleteFile(fileId);
+    }
 
+    @Override
+    public String toString() {
+        return JSONUtil.fromMap(toMap());
     }
 
     private void initializeFlushSizes() {
@@ -470,5 +487,15 @@ public class VirtualBufferCache implements IVirtualBufferCache {
             e.printStackTrace();
         }
 
+    }
+
+    private Map<String, Object> toMap() {
+        HashMap<String, Object> map = new HashMap<>();
+        map.put("class", getClass().getSimpleName());
+        map.put("allocator", allocator.toString());
+        map.put("pageSize", pageSize);
+        map.put("numPages", numPages);
+        map.put("open", open);
+        return map;
     }
 }

@@ -24,26 +24,26 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.io.StringWriter;
-import java.util.AbstractMap;
+import java.util.Arrays;
 import java.util.Collections;
-import java.util.Map;
-import java.util.Map.Entry;
+import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 import org.apache.asterix.app.result.ResultHandle;
 import org.apache.asterix.app.result.ResultPrinter;
 import org.apache.asterix.app.result.ResultReader;
-import org.apache.asterix.common.dataflow.ICcApplicationContext;
+import org.apache.asterix.common.api.IApplicationContext;
+import org.apache.asterix.lang.aql.parser.TokenMgrError;
 import org.apache.asterix.om.types.ARecordType;
 import org.apache.asterix.translator.IStatementExecutor.Stats;
-import org.apache.asterix.translator.SessionConfig;
+import org.apache.asterix.translator.SessionOutput;
+import org.apache.commons.lang3.tuple.Pair;
 import org.apache.http.ParseException;
 import org.apache.hyracks.algebricks.common.exceptions.AlgebricksException;
 import org.apache.hyracks.algebricks.core.algebra.prettyprint.AlgebricksAppendable;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
+import org.apache.hyracks.api.exceptions.HyracksException;
 import org.apache.hyracks.util.JSONUtil;
 import org.apache.log4j.Logger;
 
@@ -53,10 +53,9 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 
 public class ResultUtil {
     private static final Logger LOGGER = Logger.getLogger(ResultUtil.class.getName());
-    public static final Map<Character, String> HTML_ENTITIES = Collections.unmodifiableMap(Stream.of(
-            new AbstractMap.SimpleImmutableEntry<>('"', "&quot;"), new AbstractMap.SimpleImmutableEntry<>('&', "&amp;"),
-            new AbstractMap.SimpleImmutableEntry<>('<', "&lt;"), new AbstractMap.SimpleImmutableEntry<>('>', "&gt;"))
-            .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue)));
+    public static final List<Pair<Character, String>> HTML_ENTITIES = Collections.unmodifiableList(
+            Arrays.asList(Pair.of('&', "&amp;"), Pair.of('"', "&quot;"), Pair.of('<', "&lt;"), Pair.of('>', "&gt;"),
+                    Pair.of('\'', "&apos;")));
 
     private ResultUtil() {
     }
@@ -69,7 +68,7 @@ public class ResultUtil {
      */
     public static String escapeHTML(String aString) {
         String escaped = aString;
-        for (Entry<Character, String> entry : HTML_ENTITIES.entrySet()) {
+        for (Pair<Character, String> entry : HTML_ENTITIES) {
             if (escaped.indexOf(entry.getKey()) >= 0) {
                 escaped = escaped.replace(entry.getKey().toString(), entry.getValue());
             }
@@ -77,29 +76,29 @@ public class ResultUtil {
         return escaped;
     }
 
-    public static void printResults(ICcApplicationContext appCtx, ResultReader resultReader, SessionConfig conf,
+    public static void printResults(IApplicationContext appCtx, ResultReader resultReader, SessionOutput output,
             Stats stats, ARecordType recordType) throws HyracksDataException {
-        new ResultPrinter(appCtx, conf, stats, recordType).print(resultReader);
+        new ResultPrinter(appCtx, output, stats, recordType).print(resultReader);
     }
 
-    public static void printResults(ICcApplicationContext appCtx, String record, SessionConfig conf, Stats stats,
+    public static void printResults(IApplicationContext appCtx, String record, SessionOutput output, Stats stats,
             ARecordType recordType) throws HyracksDataException {
-        new ResultPrinter(appCtx, conf, stats, recordType).print(record);
+        new ResultPrinter(appCtx, output, stats, recordType).print(record);
     }
 
-    public static void printResultHandle(SessionConfig conf, ResultHandle handle) throws HyracksDataException {
+    public static void printResultHandle(SessionOutput output, ResultHandle handle) throws HyracksDataException {
         try {
-            final AlgebricksAppendable app = new AlgebricksAppendable(conf.out());
-            conf.appendHandle(app, handle.toString());
+            final AlgebricksAppendable app = new AlgebricksAppendable(output.out());
+            output.appendHandle(app, handle.toString());
         } catch (AlgebricksException e) {
             LOGGER.warn("error printing handle", e);
         }
     }
 
-    public static void printStatus(SessionConfig conf, AbstractQueryApiServlet.ResultStatus rs) {
+    public static void printStatus(SessionOutput output, AbstractQueryApiServlet.ResultStatus rs) {
         try {
-            final AlgebricksAppendable app = new AlgebricksAppendable(conf.out());
-            conf.appendStatus(app, rs.str());
+            final AlgebricksAppendable app = new AlgebricksAppendable(output.out());
+            output.appendStatus(app, rs.str());
         } catch (AlgebricksException e) {
             LOGGER.warn("error printing status", e);
         }
@@ -114,22 +113,34 @@ public class ResultUtil {
     }
 
     public static void printError(PrintWriter pw, Throwable e, boolean comma) {
+        printError(pw, e, 1, comma);
+    }
+
+    public static void printError(PrintWriter pw, Throwable e, int code, boolean comma) {
         Throwable rootCause = getRootCause(e);
-        if (rootCause == null) {
-            rootCause = e;
+        String msg = rootCause.getMessage();
+        if (!(rootCause instanceof AlgebricksException || rootCause instanceof HyracksException
+                || rootCause instanceof TokenMgrError
+                || rootCause instanceof org.apache.asterix.aqlplus.parser.TokenMgrError)) {
+            msg = rootCause.getClass().getSimpleName() + (msg == null ? "" : ": " + msg);
         }
-        final boolean addStack = false;
+        printError(pw, msg, code, comma);
+    }
+
+    public static void printError(PrintWriter pw, String msg, int code, boolean comma) {
         pw.print("\t\"");
         pw.print(AbstractQueryApiServlet.ResultFields.ERRORS.str());
         pw.print("\": [{ \n");
-        printField(pw, QueryServiceServlet.ErrorField.CODE.str(), "1");
-        final String msg = rootCause.getMessage();
-        printField(pw, QueryServiceServlet.ErrorField.MSG.str(),
-                JSONUtil.escape(msg != null ? msg : rootCause.getClass().getSimpleName()), addStack);
+        printField(pw, QueryServiceServlet.ErrorField.CODE.str(), code);
+        printField(pw, QueryServiceServlet.ErrorField.MSG.str(), JSONUtil.escape(msg), false);
         pw.print(comma ? "\t}],\n" : "\t}]\n");
     }
 
     public static void printField(PrintWriter pw, String name, String value) {
+        printField(pw, name, value, true);
+    }
+
+    public static void printField(PrintWriter pw, String name, long value) {
         printField(pw, name, value, true);
     }
 
@@ -195,8 +206,8 @@ public class ResultUtil {
             errorCode = 4;
         }
 
-        ObjectNode errorResp = ResultUtil.getErrorResponse(errorCode, extractErrorMessage(e), extractErrorSummary(e),
-                extractFullStackTrace(e));
+        ObjectNode errorResp = ResultUtil
+                .getErrorResponse(errorCode, extractErrorMessage(e), extractErrorSummary(e), extractFullStackTrace(e));
         out.write(errorResp.toString());
     }
 
@@ -290,10 +301,8 @@ public class ResultUtil {
      * Read the template file which is stored as a resource and return its content. If the file does not exist or is
      * not readable return the default template string.
      *
-     * @param path
-     *            The path to the resource template file
-     * @param defaultTemplate
-     *            The default template string if the template file does not exist or is not readable
+     * @param path            The path to the resource template file
+     * @param defaultTemplate The default template string if the template file does not exist or is not readable
      * @return The template string to be used to render the output.
      */
     //TODO(till|amoudi|mblow|yingyi|ceej|imaxon): path is ignored completely!!
@@ -318,4 +327,35 @@ public class ResultUtil {
         return errorTemplate;
     }
 
+    public static SessionOutput.ResultDecorator createPreResultDecorator() {
+        return new SessionOutput.ResultDecorator() {
+            int resultNo = -1;
+
+            @Override
+            public AlgebricksAppendable append(AlgebricksAppendable app) throws AlgebricksException {
+                app.append("\t\"");
+                app.append(AbstractQueryApiServlet.ResultFields.RESULTS.str());
+                if (resultNo >= 0) {
+                    app.append('-').append(String.valueOf(resultNo));
+                }
+                ++resultNo;
+                app.append("\": ");
+                return app;
+            }
+        };
+    }
+
+    public static SessionOutput.ResultDecorator createPostResultDecorator() {
+        return app -> app.append("\t,\n");
+    }
+
+    public static SessionOutput.ResultAppender createResultHandleAppender(String handleUrl) {
+        return (app, handle) -> app.append("\t\"").append(AbstractQueryApiServlet.ResultFields.HANDLE.str())
+                .append("\": \"").append(handleUrl).append(handle).append("\",\n");
+    }
+
+    public static SessionOutput.ResultAppender createResultStatusAppender() {
+        return (app, status) -> app.append("\t\"").append(AbstractQueryApiServlet.ResultFields.STATUS.str())
+                .append("\": \"").append(status).append("\",\n");
+    }
 }

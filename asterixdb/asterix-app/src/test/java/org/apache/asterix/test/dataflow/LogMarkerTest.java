@@ -18,12 +18,14 @@
  */
 package org.apache.asterix.test.dataflow;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 
 import org.apache.asterix.app.bootstrap.TestNodeController;
+import org.apache.asterix.app.bootstrap.TestNodeController.PrimaryIndexInfo;
 import org.apache.asterix.app.data.gen.TestTupleCounterFrameWriter;
 import org.apache.asterix.app.data.gen.TupleGenerator;
 import org.apache.asterix.app.data.gen.TupleGenerator.GenerationFunction;
@@ -57,9 +59,10 @@ import org.apache.hyracks.dataflow.common.data.accessors.ITupleReference;
 import org.apache.hyracks.dataflow.common.io.MessagingFrameTupleAppender;
 import org.apache.hyracks.dataflow.common.utils.TaskUtil;
 import org.apache.hyracks.storage.am.common.api.IIndexDataflowHelper;
+import org.apache.hyracks.storage.am.common.dataflow.IndexDataflowHelperFactory;
 import org.apache.hyracks.storage.am.lsm.btree.impls.LSMBTree;
 import org.apache.hyracks.storage.am.lsm.common.impls.NoMergePolicyFactory;
-import org.apache.hyracks.storage.am.lsm.common.utils.ComponentMetadataUtil;
+import org.apache.hyracks.storage.am.lsm.common.util.ComponentUtils;
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
@@ -105,13 +108,15 @@ public class LogMarkerTest {
             TestNodeController nc = new TestNodeController(null, false);
             nc.init();
             StorageComponentProvider storageManager = new StorageComponentProvider();
+            List<List<String>> partitioningKeys = new ArrayList<>();
+            partitioningKeys.add(Collections.singletonList("key"));
             Dataset dataset = new Dataset(DATAVERSE_NAME, DATASET_NAME, DATAVERSE_NAME, DATA_TYPE_NAME,
                     NODE_GROUP_NAME, null, null, new InternalDatasetDetails(null, PartitioningStrategy.HASH,
-                            Collections.emptyList(), null, null, null, false, null, false),
+                            partitioningKeys, null, null, null, false, null, false),
                     null, DatasetType.INTERNAL, DATASET_ID, 0);
             try {
-                nc.createPrimaryIndex(dataset, KEY_TYPES, RECORD_TYPE, META_TYPE, new NoMergePolicyFactory(), null,
-                        null, storageManager, KEY_INDEXES, KEY_INDICATORS_LIST);
+                PrimaryIndexInfo indexInfo = nc.createPrimaryIndex(dataset, KEY_TYPES, RECORD_TYPE, META_TYPE,
+                        new NoMergePolicyFactory(), null, null, storageManager, KEY_INDEXES, KEY_INDICATORS_LIST);
                 IHyracksTaskContext ctx = nc.createTestContext(true);
                 nc.newJobId();
                 ITransactionContext txnCtx = nc.getTransactionManager().getTransactionContext(nc.getTxnJobId(), true);
@@ -133,7 +138,7 @@ public class LogMarkerTest {
                         marker.getBuffer().putLong(markerId);
                         marker.getBuffer().flip();
                         markerId++;
-                        TaskUtil.putInSharedMap(HyracksConstants.KEY_MESSAGE, marker, ctx);
+                        TaskUtil.put(HyracksConstants.KEY_MESSAGE, marker, ctx);
                         tupleAppender.flush(insertOp);
                     }
                     ITupleReference tuple = tupleGenerator.next();
@@ -144,13 +149,14 @@ public class LogMarkerTest {
                 }
                 insertOp.close();
                 nc.getTransactionManager().completedTransaction(txnCtx, DatasetId.NULL, -1, true);
-                IIndexDataflowHelper dataflowHelper = nc.getPrimaryIndexDataflowHelper(dataset, KEY_TYPES, RECORD_TYPE,
-                        META_TYPE, new NoMergePolicyFactory(), null, null, storageManager, KEY_INDEXES,
-                        KEY_INDICATORS_LIST);
+                IndexDataflowHelperFactory iHelperFactory =
+                        new IndexDataflowHelperFactory(nc.getStorageManager(), indexInfo.getFileSplitProvider());
+                IIndexDataflowHelper dataflowHelper =
+                        iHelperFactory.create(ctx.getJobletContext().getServiceContext(), 0);
                 dataflowHelper.open();
                 LSMBTree btree = (LSMBTree) dataflowHelper.getIndexInstance();
                 LongPointable longPointable = LongPointable.FACTORY.createPointable();
-                ComponentMetadataUtil.get(btree, ComponentMetadataUtil.MARKER_LSN_KEY, longPointable);
+                ComponentUtils.get(btree, ComponentUtils.MARKER_LSN_KEY, longPointable);
                 long lsn = longPointable.getLong();
                 int numOfMarkers = 0;
                 LogReader logReader = (LogReader) nc.getTransactionSubsystem().getLogManager().getLogReader(false);

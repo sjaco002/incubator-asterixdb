@@ -18,6 +18,8 @@
  */
 package org.apache.hyracks.control.cc.work;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Set;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -49,12 +51,14 @@ public class JobletCleanupNotificationWork extends AbstractHeartbeatWork {
     public void runWork() {
         IJobManager jobManager = ccs.getJobManager();
         final JobRun run = jobManager.get(jobId);
+        if (run == null) {
+            LOGGER.log(Level.WARNING, () -> "ignoring unknown job " + jobId + " on notification from " + nodeId);
+            return;
+        }
         Set<String> cleanupPendingNodes = run.getCleanupPendingNodeIds();
         if (!cleanupPendingNodes.remove(nodeId)) {
-            if (LOGGER.isLoggable(Level.WARNING)) {
-                LOGGER.warning(
-                        nodeId + " not in pending cleanup nodes set: " + cleanupPendingNodes + " for Job: " + jobId);
-            }
+            LOGGER.log(Level.WARNING, () -> nodeId + " not in pending cleanup nodes set: " + cleanupPendingNodes +
+                    " for job " + jobId);
             return;
         }
         INodeManager nodeManager = ccs.getNodeManager();
@@ -67,8 +71,12 @@ public class JobletCleanupNotificationWork extends AbstractHeartbeatWork {
                 jobManager.finalComplete(run);
             } catch (HyracksException e) {
                 // Fail the job with the caught exception during final completion.
-                run.getExceptions().add(e);
-                run.setStatus(JobStatus.FAILURE, run.getExceptions());
+                List<Exception> completionException = new ArrayList<>();
+                if (run.getExceptions() != null && !run.getExceptions().isEmpty()) {
+                    completionException.addAll(run.getExceptions());
+                }
+                completionException.add(0, e);
+                run.setStatus(JobStatus.FAILURE, completionException);
             }
         }
     }

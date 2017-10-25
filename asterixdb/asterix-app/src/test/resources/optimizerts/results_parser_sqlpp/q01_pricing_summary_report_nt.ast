@@ -37,7 +37,7 @@ RecordConstructor [
   (
     LiteralExpr [STRING] [sum_qty]
     :
-    FunctionCall tpch.sum@1[
+    FunctionCall asterix.sum@1[
       (
         SELECT ELEMENT [
         FieldAccessor [
@@ -45,7 +45,9 @@ RecordConstructor [
           Field=l_quantity
         ]
         ]
-        FROM [          Variable [ Name=$l ]
+        FROM [          FunctionCall Metadata.dataset@1[
+            LiteralExpr [STRING] [l]
+          ]
           AS Variable [ Name=$i ]
         ]
       )
@@ -54,7 +56,7 @@ RecordConstructor [
   (
     LiteralExpr [STRING] [sum_base_price]
     :
-    FunctionCall tpch.sum@1[
+    FunctionCall asterix.sum@1[
       (
         SELECT ELEMENT [
         FieldAccessor [
@@ -62,7 +64,9 @@ RecordConstructor [
           Field=l_extendedprice
         ]
         ]
-        FROM [          Variable [ Name=$l ]
+        FROM [          FunctionCall Metadata.dataset@1[
+            LiteralExpr [STRING] [l]
+          ]
           AS Variable [ Name=$i ]
         ]
       )
@@ -71,7 +75,7 @@ RecordConstructor [
   (
     LiteralExpr [STRING] [sum_disc_price]
     :
-    FunctionCall tpch.sum@1[
+    FunctionCall asterix.sum@1[
       (
         SELECT ELEMENT [
         OperatorExpr [
@@ -90,7 +94,9 @@ RecordConstructor [
           ]
         ]
         ]
-        FROM [          Variable [ Name=$l ]
+        FROM [          FunctionCall Metadata.dataset@1[
+            LiteralExpr [STRING] [l]
+          ]
           AS Variable [ Name=$i ]
         ]
       )
@@ -99,7 +105,7 @@ RecordConstructor [
   (
     LiteralExpr [STRING] [sum_charge]
     :
-    FunctionCall tpch.sum@1[
+    FunctionCall asterix.sum@1[
       (
         SELECT ELEMENT [
         OperatorExpr [
@@ -127,7 +133,9 @@ RecordConstructor [
           ]
         ]
         ]
-        FROM [          Variable [ Name=$l ]
+        FROM [          FunctionCall Metadata.dataset@1[
+            LiteralExpr [STRING] [l]
+          ]
           AS Variable [ Name=$i ]
         ]
       )
@@ -136,7 +144,7 @@ RecordConstructor [
   (
     LiteralExpr [STRING] [ave_qty]
     :
-    FunctionCall tpch.avg@1[
+    FunctionCall asterix.avg@1[
       (
         SELECT ELEMENT [
         FieldAccessor [
@@ -144,7 +152,9 @@ RecordConstructor [
           Field=l_quantity
         ]
         ]
-        FROM [          Variable [ Name=$l ]
+        FROM [          FunctionCall Metadata.dataset@1[
+            LiteralExpr [STRING] [l]
+          ]
           AS Variable [ Name=$i ]
         ]
       )
@@ -153,7 +163,7 @@ RecordConstructor [
   (
     LiteralExpr [STRING] [ave_price]
     :
-    FunctionCall tpch.avg@1[
+    FunctionCall asterix.avg@1[
       (
         SELECT ELEMENT [
         FieldAccessor [
@@ -161,7 +171,9 @@ RecordConstructor [
           Field=l_extendedprice
         ]
         ]
-        FROM [          Variable [ Name=$l ]
+        FROM [          FunctionCall Metadata.dataset@1[
+            LiteralExpr [STRING] [l]
+          ]
           AS Variable [ Name=$i ]
         ]
       )
@@ -170,7 +182,7 @@ RecordConstructor [
   (
     LiteralExpr [STRING] [ave_disc]
     :
-    FunctionCall tpch.avg@1[
+    FunctionCall asterix.avg@1[
       (
         SELECT ELEMENT [
         FieldAccessor [
@@ -178,7 +190,9 @@ RecordConstructor [
           Field=l_discount
         ]
         ]
-        FROM [          Variable [ Name=$l ]
+        FROM [          FunctionCall Metadata.dataset@1[
+            LiteralExpr [STRING] [l]
+          ]
           AS Variable [ Name=$i ]
         ]
       )
@@ -187,8 +201,13 @@ RecordConstructor [
   (
     LiteralExpr [STRING] [count_order]
     :
-    FunctionCall tpch.count@1[
-      Variable [ Name=$l ]
+    FunctionCall asterix.count@1[
+      FunctionCall Metadata.resolve@-1[
+        LiteralExpr [STRING] [l]
+        Variable [ Name=$l_linestatus ]
+        Variable [ Name=$l_returnflag ]
+        Variable [ Name=#1 ]
+      ]
     ]
   )
 ]

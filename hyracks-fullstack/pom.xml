@@ -21,7 +21,7 @@
   <modelVersion>4.0.0</modelVersion>
   <groupId>org.apache.hyracks</groupId>
   <artifactId>apache-hyracks</artifactId>
-  <version>0.3.2-SNAPSHOT</version>
+  <version>0.3.3-SNAPSHOT</version>
   <packaging>pom</packaging>
   <name>hyracks-ecosystem-full-stack</name>
   <url>https://asterixdb.apache.org/</url>
@@ -51,9 +51,12 @@
 
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <file.encoding>UTF-8</file.encoding>
     <jdk.version>1.8</jdk.version>
     <jvm.extraargs />
     <sonar.jacoco.reportPath>${env.PWD}/target/jacoco-merged.exec</sonar.jacoco.reportPath>
+    <source-format.skip>false</source-format.skip>
+    <skip.surefire.tests>${skipTests}</skip.surefire.tests>
 
     <!-- Definition of tests in various categories which may be excluded -->
     <hanging.pregelix.tests>**/pregelix/**/FailureRecovery*.java</hanging.pregelix.tests>
@@ -160,6 +163,11 @@
         <version>0.12</version>
       </dependency>
       <dependency>
+        <groupId>net.revelc.code.formatter</groupId>
+        <artifactId>formatter-maven-plugin</artifactId>
+        <version>2.0.1</version>
+      </dependency>
+      <dependency>
         <groupId>args4j</groupId>
         <artifactId>args4j</artifactId>
         <version>2.33</version>
@@ -233,7 +241,6 @@
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-surefire-plugin</artifactId>
-        <version>2.16</version>
         <configuration>
           <failIfNoTests>false</failIfNoTests>
           <forkCount>1</forkCount>
@@ -251,6 +258,7 @@
           <excludes combine.children="append">
             <exclude>${global.test.excludes},${test.excludes}</exclude>
           </excludes>
+          <skipTests>${skip.surefire.tests}</skipTests>
         </configuration>
       </plugin>
       <plugin>
@@ -363,6 +371,11 @@
           <artifactId>apache-rat-plugin</artifactId>
           <version>0.12</version>
         </plugin>
+        <plugin>
+          <groupId>net.revelc.code.formatter</groupId>
+          <artifactId>formatter-maven-plugin</artifactId>
+          <version>2.0.1</version>
+        </plugin>
         <!--This plugin's configuration is used to store Eclipse m2e settings only. It has no influence on the Maven build itself.-->
         <plugin>
           <groupId>org.eclipse.m2e</groupId>
@@ -375,7 +388,7 @@
                   <pluginExecutionFilter>
                     <groupId>org.apache.rat</groupId>
                     <artifactId>apache-rat-plugin</artifactId>
-                    <versionRange>[0.11,)</versionRange>
+                    <versionRange>[0.0,)</versionRange>
                     <goals>
                       <goal>check</goal>
                     </goals>
@@ -388,7 +401,7 @@
                   <pluginExecutionFilter>
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-checkstyle-plugin</artifactId>
-                    <versionRange>[2.17,)</versionRange>
+                    <versionRange>[0.0,)</versionRange>
                     <goals>
                       <goal>check</goal>
                     </goals>
@@ -401,7 +414,7 @@
                   <pluginExecutionFilter>
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-dependency-plugin</artifactId>
-                    <versionRange>[2.10,)</versionRange>
+                    <versionRange>[0.0,)</versionRange>
                     <goals>
                       <goal>analyze-only</goal>
                     </goals>
@@ -429,6 +442,21 @@
           <artifactId>appassembler-maven-plugin</artifactId>
           <version>2.0.0</version>
         </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-surefire-plugin</artifactId>
+          <version>2.20</version>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-failsafe-plugin</artifactId>
+          <version>2.20</version>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.hyracks</groupId>
+          <artifactId>license-automation-plugin</artifactId>
+          <version>${project.version}</version>
+        </plugin>
       </plugins>
     </pluginManagement>
   </build>
@@ -441,12 +469,46 @@
       </properties>
     </profile>
     <profile>
-      <id>source-assembly</id>
+      <id>source-format</id>
+      <activation>
+        <activeByDefault>false</activeByDefault>
+      </activation>
+      <properties>
+        <source-format.goal>format</source-format.goal>
+      </properties>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>net.revelc.code.formatter</groupId>
+            <artifactId>formatter-maven-plugin</artifactId>
+            <executions>
+              <execution>
+                <goals>
+                  <goal>${source-format.goal}</goal>
+                </goals>
+              </execution>
+            </executions>
+            <configuration>
+              <configFile>${root.dir}/AsterixCodeFormatProfile.xml</configFile>
+              <skipFormatting>${source-format.skip}</skipFormatting>
+            </configuration>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+    <profile>
+      <id>skip-assembly</id>
       <activation>
         <file>
-          <exists>src/main/assembly/source.xml</exists>
+          <missing>src/main/assembly/source.xml</missing>
         </file>
       </activation>
+      <properties>
+        <skip.assembly>true</skip.assembly>
+      </properties>
+    </profile>
+    <profile>
+      <id>release</id>
       <build>
         <plugins>
           <plugin>
@@ -469,17 +531,11 @@
                   <descriptors>
                     <descriptor>src/main/assembly/source.xml</descriptor>
                   </descriptors>
+                  <skipAssembly>${skip.assembly}</skipAssembly>
                 </configuration>
               </execution>
             </executions>
           </plugin>
-        </plugins>
-      </build>
-    </profile>
-    <profile>
-      <id>release</id>
-      <build>
-        <plugins>
           <plugin>
             <groupId>org.apache.maven.plugins</groupId>
             <artifactId>maven-gpg-plugin</artifactId>

@@ -25,6 +25,7 @@ import org.apache.hyracks.storage.am.lsm.common.api.ILSMComponentFilter;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMMemoryComponent;
 import org.apache.hyracks.storage.am.lsm.common.api.IVirtualBufferCache;
 import org.apache.hyracks.storage.am.lsm.common.api.LSMOperationType;
+import org.apache.hyracks.storage.common.buffercache.IBufferCache;
 
 public abstract class AbstractLSMMemoryComponent extends AbstractLSMComponent implements ILSMMemoryComponent {
 
@@ -144,6 +145,11 @@ public abstract class AbstractLSMMemoryComponent extends AbstractLSMComponent im
                     throw new IllegalStateException("Flush sees an illegal LSM memory compoenent state: " + state);
                 }
                 readerCount--;
+                if (failedOperation) {
+                    // if flush failed, return the component state to READABLE_UNWRITABLE
+                    state = ComponentState.READABLE_UNWRITABLE;
+                    return;
+                }
                 if (readerCount == 0) {
                     state = ComponentState.INACTIVE;
                 } else {
@@ -173,7 +179,7 @@ public abstract class AbstractLSMMemoryComponent extends AbstractLSMComponent im
     }
 
     @Override
-    public void activate() {
+    public void requestActivation() {
         requestedToBeActive = true;
     }
 
@@ -193,12 +199,20 @@ public abstract class AbstractLSMMemoryComponent extends AbstractLSMComponent im
     }
 
     @Override
-    public void reset() throws HyracksDataException {
+    public final void reset() throws HyracksDataException {
         isModified.set(false);
         metadata.reset();
         if (filter != null) {
             filter.reset();
         }
+        doReset();
+    }
+
+    protected void doReset() throws HyracksDataException {
+        getIndex().deactivate();
+        getIndex().destroy();
+        getIndex().create();
+        getIndex().activate();
     }
 
     @Override
@@ -209,5 +223,38 @@ public abstract class AbstractLSMMemoryComponent extends AbstractLSMComponent im
     @Override
     public MemoryComponentMetadata getMetadata() {
         return metadata;
+    }
+
+    @Override
+    public final void allocate() throws HyracksDataException {
+        ((IVirtualBufferCache) getIndex().getBufferCache()).open();
+        doAllocate();
+    }
+
+    protected void doAllocate() throws HyracksDataException {
+        getIndex().create();
+        getIndex().activate();
+    }
+
+    @Override
+    public final void deallocate() throws HyracksDataException {
+        doDeallocate();
+        getIndex().getBufferCache().close();
+    }
+
+    protected void doDeallocate() throws HyracksDataException {
+        getIndex().deactivate();
+        getIndex().destroy();
+    }
+
+    @Override
+    public void validate() throws HyracksDataException {
+        getIndex().validate();
+    }
+
+    @Override
+    public long getSize() {
+        IBufferCache virtualBufferCache = getIndex().getBufferCache();
+        return virtualBufferCache.getNumPages() * (long) virtualBufferCache.getPageSize();
     }
 }

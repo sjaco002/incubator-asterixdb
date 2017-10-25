@@ -155,7 +155,7 @@ public class OptimizedHybridHashJoinOperatorDescriptor extends AbstractOperatorD
         this.comparatorFactories = comparatorFactories;
         this.tuplePairComparatorFactoryProbe2Build = tupPaircomparatorFactory01;
         this.tuplePairComparatorFactoryBuild2Probe = tupPaircomparatorFactory10;
-        recordDescriptors[0] = recordDescriptor;
+        outRecDescs[0] = recordDescriptor;
         this.predEvaluatorFactory = predEvaluatorFactory;
         this.isLeftOuter = isLeftOuter;
         this.nonMatchWriterFactories = nonMatchWriterFactories;
@@ -480,8 +480,8 @@ public class OptimizedHybridHashJoinOperatorDescriptor extends AbstractOperatorD
                             hashFunctionGeneratorFactories).createPartitioner(level);
 
                     int frameSize = ctx.getInitialFrameSize();
-                    long buildPartSize = buildSideReader.getFileSize() / frameSize;
-                    long probePartSize = probeSideReader.getFileSize() / frameSize;
+                    long buildPartSize = (long) Math.ceil((double) buildSideReader.getFileSize() / (double) frameSize);
+                    long probePartSize = (long) Math.ceil((double) probeSideReader.getFileSize() / (double) frameSize);
                     int beforeMax = Math.max(buildSizeInTuple, probeSizeInTuple);
 
                     if (LOGGER.isLoggable(Level.FINE)) {
@@ -717,7 +717,7 @@ public class OptimizedHybridHashJoinOperatorDescriptor extends AbstractOperatorD
                     ISimpleFrameBufferManager bufferManager = new FramePoolBackedFrameBufferManager(framePool);
 
                     ISerializableTable table = new SerializableHashTable(tabSize, ctx, bufferManager);
-                    InMemoryHashJoin joiner = new InMemoryHashJoin(ctx, tabSize, new FrameTupleAccessor(probeRDesc),
+                    InMemoryHashJoin joiner = new InMemoryHashJoin(ctx, new FrameTupleAccessor(probeRDesc),
                             hpcRepProbe, new FrameTupleAccessor(buildRDesc), buildRDesc, hpcRepBuild,
                             new FrameTuplePairComparator(pKeys, bKeys, comparators), isLeftOuter, nonMatchWriter, table,
                             predEvaluator, isReversed, bufferManager);

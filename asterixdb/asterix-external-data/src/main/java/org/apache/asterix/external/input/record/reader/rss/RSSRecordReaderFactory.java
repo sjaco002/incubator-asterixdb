@@ -20,10 +20,12 @@ package org.apache.asterix.external.input.record.reader.rss;
 
 import java.net.MalformedURLException;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
-import org.apache.asterix.common.api.IApplicationContext;
+import org.apache.asterix.common.dataflow.ICcApplicationContext;
 import org.apache.asterix.external.api.IExternalDataSourceFactory;
 import org.apache.asterix.external.api.IRecordReader;
 import org.apache.asterix.external.api.IRecordReaderFactory;
@@ -34,14 +36,15 @@ import org.apache.hyracks.api.application.IServiceContext;
 import org.apache.hyracks.api.context.IHyracksTaskContext;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
 
-import com.sun.syndication.feed.synd.SyndEntryImpl;
+import com.rometools.rome.feed.synd.SyndEntry;
 
-public class RSSRecordReaderFactory implements IRecordReaderFactory<SyndEntryImpl> {
+public class RSSRecordReaderFactory implements IRecordReaderFactory<SyndEntry> {
 
     private static final long serialVersionUID = 1L;
     private final List<String> urls = new ArrayList<>();
     private transient AlgebricksAbsolutePartitionConstraint clusterLocations;
     private transient IServiceContext serviceContext;
+    private static final List<String> recordReaderNames = Collections.unmodifiableList(Arrays.asList("rss_feed"));
 
     @Override
     public DataSourceType getDataSourceType() {
@@ -52,7 +55,7 @@ public class RSSRecordReaderFactory implements IRecordReaderFactory<SyndEntryImp
     public AlgebricksAbsolutePartitionConstraint getPartitionConstraint() throws AlgebricksException {
         int count = urls.size();
         clusterLocations = IExternalDataSourceFactory.getPartitionConstraints(
-                (IApplicationContext) serviceContext.getApplicationContext(), clusterLocations, count);
+                (ICcApplicationContext) serviceContext.getApplicationContext(), clusterLocations, count);
         return clusterLocations;
     }
 
@@ -75,12 +78,17 @@ public class RSSRecordReaderFactory implements IRecordReaderFactory<SyndEntryImp
     }
 
     @Override
+    public List<String> getRecordReaderNames() {
+        return recordReaderNames;
+    }
+
+    @Override
     public boolean isIndexible() {
         return false;
     }
 
     @Override
-    public IRecordReader<? extends SyndEntryImpl> createRecordReader(IHyracksTaskContext ctx, int partition)
+    public IRecordReader<? extends SyndEntry> createRecordReader(IHyracksTaskContext ctx, int partition)
             throws HyracksDataException {
         try {
             return new RSSRecordReader(urls.get(partition));
@@ -90,8 +98,8 @@ public class RSSRecordReaderFactory implements IRecordReaderFactory<SyndEntryImp
     }
 
     @Override
-    public Class<? extends SyndEntryImpl> getRecordClass() {
-        return SyndEntryImpl.class;
+    public Class<? extends SyndEntry> getRecordClass() {
+        return SyndEntry.class;
     }
 
 }

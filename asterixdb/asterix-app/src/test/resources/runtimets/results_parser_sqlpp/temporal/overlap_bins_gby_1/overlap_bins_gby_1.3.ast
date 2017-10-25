@@ -10,16 +10,20 @@ RecordConstructor [
   (
     LiteralExpr [STRING] [count]
     :
-    FunctionCall test.sql-count@1[
+    FunctionCall asterix.sql-count@1[
       (
         SELECT ELEMENT [
-        FieldAccessor [
-          Variable [ Name=#2 ]
-          Field=i2
+        (
+          SELECT ELEMENT [
+          LiteralExpr [LONG] [1]
+          ]
+          FROM [            Variable [ Name=$g ]
+            AS Variable [ Name=$g ]
+          ]
+        )
         ]
-        ]
-        FROM [          Variable [ Name=#1 ]
-          AS Variable [ Name=#2 ]
+        FROM [          Variable [ Name=$g ]
+          AS Variable [ Name=#1 ]
         ]
       )
     ]
@@ -27,7 +31,7 @@ RecordConstructor [
   (
     LiteralExpr [STRING] [total_ms]
     :
-    FunctionCall test.sum@1[
+    FunctionCall asterix.sum@1[
       (
         SELECT ELEMENT [
         FunctionCall test.ms-from-day-time-duration@1[
@@ -35,15 +39,18 @@ RecordConstructor [
             FunctionCall test.get-overlapping-interval@2[
               Variable [ Name=$bin ]
               FieldAccessor [
-                Variable [ Name=$i3 ]
+                FieldAccessor [
+                  Variable [ Name=$g ]
+                  Field=i2
+                ]
                 Field=interval
               ]
             ]
           ]
         ]
         ]
-        FROM [          Variable [ Name=$i2 ]
-          AS Variable [ Name=$i3 ]
+        FROM [          Variable [ Name=$g ]
+          AS Variable [ Name=$g ]
         ]
       )
     ]
@@ -102,7 +109,7 @@ Groupby
   Variable [ Name=$bin ]
   :=
   Variable [ Name=$j ]
-  GROUP AS Variable [ Name=#1 ]
+  GROUP AS Variable [ Name=$g ]
   (
     i2:=Variable [ Name=$i2 ]
     j:=Variable [ Name=$j ]

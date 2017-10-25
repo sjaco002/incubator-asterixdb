@@ -18,6 +18,7 @@
  */
 package org.apache.hyracks.control.cc.work;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -28,6 +29,7 @@ import org.apache.hyracks.api.job.JobStatus;
 import org.apache.hyracks.control.cc.job.IJobManager;
 import org.apache.hyracks.control.cc.job.JobRun;
 import org.apache.hyracks.control.common.work.AbstractWork;
+import org.apache.hyracks.control.common.work.IResultCallback;
 
 public class JobCleanupWork extends AbstractWork {
     private static final Logger LOGGER = Logger.getLogger(JobCleanupWork.class.getName());
@@ -36,12 +38,15 @@ public class JobCleanupWork extends AbstractWork {
     private JobId jobId;
     private JobStatus status;
     private List<Exception> exceptions;
+    private IResultCallback<Void> callback;
 
-    public JobCleanupWork(IJobManager jobManager, JobId jobId, JobStatus status, List<Exception> exceptions) {
+    public JobCleanupWork(IJobManager jobManager, JobId jobId, JobStatus status, List<Exception> exceptions,
+            IResultCallback<Void> callback) {
         this.jobManager = jobManager;
         this.jobId = jobId;
         this.status = status;
         this.exceptions = exceptions;
+        this.callback = callback;
     }
 
     @Override
@@ -52,11 +57,17 @@ public class JobCleanupWork extends AbstractWork {
         try {
             JobRun jobRun = jobManager.get(jobId);
             jobManager.prepareComplete(jobRun, status, exceptions);
+            callback.setValue(null);
         } catch (HyracksException e) {
             // Fail the job with the caught exception during final completion.
             JobRun run = jobManager.get(jobId);
-            run.getExceptions().add(e);
-            run.setStatus(JobStatus.FAILURE, run.getExceptions());
+            List<Exception> completionException = new ArrayList<>();
+            if (run.getExceptions() != null && !run.getExceptions().isEmpty()) {
+                completionException.addAll(run.getExceptions());
+            }
+            completionException.add(0, e);
+            run.setStatus(JobStatus.FAILURE, completionException);
+            callback.setException(e);
         }
     }
 

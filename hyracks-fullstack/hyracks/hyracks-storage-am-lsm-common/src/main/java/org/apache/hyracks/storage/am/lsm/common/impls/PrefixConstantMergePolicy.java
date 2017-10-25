@@ -51,7 +51,7 @@ public class PrefixConstantMergePolicy implements ILSMMergePolicy {
         if (!isMergeOp) {
             numFlushes++;
         }
-        List<ILSMDiskComponent> immutableComponents = new ArrayList<>(index.getImmutableComponents());
+        List<ILSMDiskComponent> immutableComponents = new ArrayList<>(index.getDiskComponents());
 
         if (!areComponentsReadableWritableState(immutableComponents)) {
             return;
@@ -82,7 +82,7 @@ public class PrefixConstantMergePolicy implements ILSMMergePolicy {
     @Override
     public boolean isMergeLagging(ILSMIndex index) throws HyracksDataException {
 
-        List<ILSMDiskComponent> immutableComponents = index.getImmutableComponents();
+        List<ILSMDiskComponent> immutableComponents = index.getDiskComponents();
         int totalImmutableComponentCount = immutableComponents.size();
 
         // [case 1]
@@ -176,7 +176,7 @@ public class PrefixConstantMergePolicy implements ILSMMergePolicy {
         // all such components for which the sum of their sizes exceeds MaxMrgCompSz.  Schedule a merge of those components into a new component.
         // 2.  If a merge from 1 doesn't happen, see if the set of candidate components for merging exceeds MaxTolCompCnt.  If so, schedule
         // a merge all of the current candidates into a new single component.
-        List<ILSMDiskComponent> immutableComponents = new ArrayList<>(index.getImmutableComponents());
+        List<ILSMDiskComponent> immutableComponents = new ArrayList<>(index.getDiskComponents());
         // Reverse the components order so that we look at components from oldest to newest.
         Collections.reverse(immutableComponents);
         boolean merged = false;

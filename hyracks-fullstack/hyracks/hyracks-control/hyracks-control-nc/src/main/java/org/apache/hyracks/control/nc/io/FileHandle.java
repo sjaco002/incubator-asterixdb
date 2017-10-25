@@ -22,43 +22,48 @@ import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.nio.channels.FileChannel;
 
+import org.apache.hyracks.api.exceptions.ErrorCode;
+import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.apache.hyracks.api.io.FileReference;
 import org.apache.hyracks.api.io.IFileHandle;
 import org.apache.hyracks.api.io.IIOManager;
 
 public class FileHandle implements IFileHandle {
+
     private final FileReference fileRef;
-
     private RandomAccessFile raf;
-
-    private FileChannel channel;
+    private String mode;
 
     public FileHandle(FileReference fileRef) {
         this.fileRef = fileRef;
     }
 
+    /**
+     * Open the file
+     *
+     * @param rwMode
+     * @param syncMode
+     * @throws IOException
+     */
     public void open(IIOManager.FileReadWriteMode rwMode, IIOManager.FileSyncMode syncMode) throws IOException {
-        String mode;
+        if (!fileRef.getFile().exists()) {
+            throw HyracksDataException.create(ErrorCode.FILE_DOES_NOT_EXIST, fileRef.getAbsolutePath());
+        }
         switch (rwMode) {
             case READ_ONLY:
                 mode = "r";
                 break;
-
             case READ_WRITE:
-                fileRef.getFile().getAbsoluteFile().getParentFile().mkdirs();
                 switch (syncMode) {
                     case METADATA_ASYNC_DATA_ASYNC:
                         mode = "rw";
                         break;
-
                     case METADATA_ASYNC_DATA_SYNC:
                         mode = "rwd";
                         break;
-
                     case METADATA_SYNC_DATA_SYNC:
                         mode = "rws";
                         break;
-
                     default:
                         throw new IllegalArgumentException();
                 }
@@ -67,7 +72,7 @@ public class FileHandle implements IFileHandle {
             default:
                 throw new IllegalArgumentException();
         }
-        raf = new RandomAccessFile(fileRef.getFile(), mode);
+        ensureOpen();
     }
 
     public void close() throws IOException {
@@ -78,15 +83,22 @@ public class FileHandle implements IFileHandle {
         raf = null;
     }
 
+    @Override
     public FileReference getFileReference() {
         return fileRef;
     }
 
     public FileChannel getFileChannel() {
-        if (channel == null) {
-            channel = raf.getChannel();
-        }
-        return channel;
+        return raf.getChannel();
     }
 
+    public synchronized void ensureOpen() throws HyracksDataException {
+        if (raf == null || !raf.getChannel().isOpen()) {
+            try {
+                raf = new RandomAccessFile(fileRef.getFile(), mode);
+            } catch (IOException e) {
+                throw HyracksDataException.create(e);
+            }
+        }
+    }
 }

@@ -22,16 +22,27 @@ import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.apache.hyracks.storage.am.common.api.IMetadataPageManager;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMComponentFilter;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMDiskComponent;
+import org.apache.hyracks.storage.am.lsm.common.api.ILSMDiskComponentId;
 import org.apache.hyracks.storage.am.lsm.common.api.LSMOperationType;
+import org.apache.hyracks.storage.am.lsm.common.util.ComponentUtils;
+import org.apache.hyracks.storage.common.MultiComparator;
 
 public abstract class AbstractLSMDiskComponent extends AbstractLSMComponent implements ILSMDiskComponent {
 
     private final DiskComponentMetadata metadata;
+    private final AbstractLSMIndex lsmIndex;
 
-    public AbstractLSMDiskComponent(IMetadataPageManager mdPageManager, ILSMComponentFilter filter) {
+    public AbstractLSMDiskComponent(AbstractLSMIndex lsmIndex, IMetadataPageManager mdPageManager,
+            ILSMComponentFilter filter) {
         super(filter);
+        this.lsmIndex = lsmIndex;
         state = ComponentState.READABLE_UNWRITABLE;
         metadata = new DiskComponentMetadata(mdPageManager);
+    }
+
+    @Override
+    public AbstractLSMIndex getLsmIndex() {
+        return lsmIndex;
     }
 
     @Override
@@ -45,6 +56,7 @@ public abstract class AbstractLSMDiskComponent extends AbstractLSMComponent impl
             case MODIFICATION:
             case REPLICATE:
             case SEARCH:
+            case DISK_COMPONENT_SCAN:
                 readerCount++;
                 break;
             case MERGE:
@@ -78,6 +90,7 @@ public abstract class AbstractLSMDiskComponent extends AbstractLSMComponent impl
             case MODIFICATION:
             case REPLICATE:
             case SEARCH:
+            case DISK_COMPONENT_SCAN:
                 readerCount--;
                 if (readerCount == 0 && state == ComponentState.READABLE_MERGING) {
                     state = ComponentState.INACTIVE;
@@ -95,5 +108,93 @@ public abstract class AbstractLSMDiskComponent extends AbstractLSMComponent impl
     @Override
     public DiskComponentMetadata getMetadata() {
         return metadata;
+    }
+
+    @Override
+    public ILSMDiskComponentId getComponentId() throws HyracksDataException {
+        long minID = ComponentUtils.getLong(metadata, ILSMDiskComponentId.COMPONENT_ID_MIN_KEY,
+                ILSMDiskComponentId.NOT_FOUND);
+        long maxID = ComponentUtils.getLong(metadata, ILSMDiskComponentId.COMPONENT_ID_MAX_KEY,
+                ILSMDiskComponentId.NOT_FOUND);
+        //TODO: do we need to throw an exception when ID is not found?
+        return new LSMDiskComponentId(minID, maxID);
+    }
+
+    /**
+     * Mark the component as valid
+     *
+     * @param persist
+     *            whether the call should force data to disk before returning
+     * @throws HyracksDataException
+     */
+    @Override
+    public void markAsValid(boolean persist) throws HyracksDataException {
+        ComponentUtils.markAsValid(getMetadataHolder(), persist);
+    }
+
+    @Override
+    public void activate(boolean createNewComponent) throws HyracksDataException {
+        if (createNewComponent) {
+            getIndex().create();
+        }
+        getIndex().activate();
+        if (getLSMComponentFilter() != null && !createNewComponent) {
+            getLsmIndex().getFilterManager().readFilter(getLSMComponentFilter(), getMetadataHolder());
+        }
+    }
+
+    @Override
+    public void deactivateAndDestroy() throws HyracksDataException {
+        getIndex().deactivate();
+        getIndex().destroy();
+    }
+
+    @Override
+    public void destroy() throws HyracksDataException {
+        getIndex().destroy();
+    }
+
+    @Override
+    public void deactivate() throws HyracksDataException {
+        getIndex().deactivate();
+    }
+
+    @Override
+    public void deactivateAndPurge() throws HyracksDataException {
+        getIndex().deactivate();
+        getIndex().purge();
+    }
+
+    @Override
+    public void validate() throws HyracksDataException {
+        getIndex().validate();
+    }
+
+    @Override
+    public IChainedComponentBulkLoader createFilterBulkLoader() throws HyracksDataException {
+        return new FilterBulkLoader(getLSMComponentFilter(), getMetadataHolder(), getLsmIndex().getFilterManager(),
+                getLsmIndex().getTreeFields(), getLsmIndex().getFilterFields(),
+                MultiComparator.create(getLSMComponentFilter().getFilterCmpFactories()));
+    }
+
+    @Override
+    public IChainedComponentBulkLoader createIndexBulkLoader(float fillFactor, boolean verifyInput,
+            long numElementsHint, boolean checkIfEmptyIndex) throws HyracksDataException {
+        return new LSMIndexBulkLoader(
+                getIndex().createBulkLoader(fillFactor, verifyInput, numElementsHint, checkIfEmptyIndex));
+    }
+
+    @Override
+    public ChainedLSMDiskComponentBulkLoader createBulkLoader(float fillFactor, boolean verifyInput,
+            long numElementsHint, boolean checkIfEmptyIndex, boolean withFilter, boolean cleanupEmptyComponent)
+            throws HyracksDataException {
+        ChainedLSMDiskComponentBulkLoader chainedBulkLoader =
+                new ChainedLSMDiskComponentBulkLoader(this, cleanupEmptyComponent);
+        if (withFilter && getLsmIndex().getFilterFields() != null) {
+            chainedBulkLoader.addBulkLoader(createFilterBulkLoader());
+        }
+        chainedBulkLoader
+                .addBulkLoader(createIndexBulkLoader(fillFactor, verifyInput, numElementsHint, checkIfEmptyIndex));
+        return chainedBulkLoader;
     }
 }

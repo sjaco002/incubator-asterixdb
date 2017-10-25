@@ -69,7 +69,7 @@ public class DatasetPartitionWriter implements IFrameWriter {
         this.datasetMemoryManager = datasetMemoryManager;
 
         resultSetPartitionId = new ResultSetPartitionId(jobId, rsId, partition);
-        resultState = new ResultState(resultSetPartitionId, asyncMode, ctx.getIOManager(), fileFactory,
+        resultState = new ResultState(resultSetPartitionId, asyncMode, ctx.getIoManager(), fileFactory,
                 ctx.getInitialFrameSize());
     }
 
@@ -98,15 +98,9 @@ public class DatasetPartitionWriter implements IFrameWriter {
 
     @Override
     public void fail() throws HyracksDataException {
-        try {
-            failed = true;
-            resultState.closeAndDelete();
-            resultState.abort();
-            registerResultPartitionLocation(false);
-            manager.reportPartitionFailure(jobId, resultSetId, partition);
-        } catch (HyracksException e) {
-            throw new HyracksDataException(e);
-        }
+        failed = true;
+        resultState.closeAndDelete();
+        resultState.abort();
     }
 
     @Override
@@ -122,9 +116,11 @@ public class DatasetPartitionWriter implements IFrameWriter {
             resultState.close();
         }
         try {
-            manager.reportPartitionWriteCompletion(jobId, resultSetId, partition);
+            if (partitionRegistered) {
+                manager.reportPartitionWriteCompletion(jobId, resultSetId, partition);
+            }
         } catch (HyracksException e) {
-            throw new HyracksDataException(e);
+            throw HyracksDataException.create(e);
         }
     }
 

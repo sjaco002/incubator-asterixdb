@@ -30,6 +30,9 @@ import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.apache.commons.io.IOUtils;
@@ -37,57 +40,179 @@ import org.apache.http.HttpResponse;
 import org.apache.http.client.HttpClient;
 import org.apache.http.client.methods.HttpUriRequest;
 import org.apache.http.client.methods.RequestBuilder;
+import org.apache.http.entity.StringEntity;
 import org.apache.http.impl.client.HttpClients;
 import org.apache.http.impl.client.StandardHttpRequestRetryHandler;
 import org.apache.hyracks.http.server.HttpServer;
 import org.apache.hyracks.http.server.WebManager;
-import org.apache.hyracks.http.servlet.SlowServlet;
+import org.apache.hyracks.http.server.utils.HttpUtil;
+import org.apache.hyracks.http.servlet.ChattyServlet;
+import org.apache.hyracks.http.servlet.SleepyServlet;
 import org.junit.Assert;
+import org.junit.Before;
 import org.junit.Test;
 
 import io.netty.handler.codec.http.HttpResponseStatus;
 
 public class HttpServerTest {
+    static final boolean PRINT_TO_CONSOLE = false;
     static final int PORT = 9898;
-    static final int NUM_EXECUTOR_THREADS = 16;
-    static final int SERVER_QUEUE_SIZE = 16;
-    static final int NUM_OF_REQUESTS = 48;
     static final String HOST = "localhost";
     static final String PROTOCOL = "http";
     static final String PATH = "/";
     static final AtomicInteger SUCCESS_COUNT = new AtomicInteger();
     static final AtomicInteger UNAVAILABLE_COUNT = new AtomicInteger();
     static final AtomicInteger OTHER_COUNT = new AtomicInteger();
-    static final List<Thread> THREADS = new ArrayList<>();
+    static final AtomicInteger EXCEPTION_COUNT = new AtomicInteger();
+    static final List<Future<Void>> FUTURES = new ArrayList<>();
+    static final ExecutorService executor = Executors.newCachedThreadPool();
+
+    @Before
+    public void setUp() {
+        SUCCESS_COUNT.set(0);
+        UNAVAILABLE_COUNT.set(0);
+        OTHER_COUNT.set(0);
+        EXCEPTION_COUNT.set(0);
+    }
 
     @Test
     public void testOverloadingServer() throws Exception {
         WebManager webMgr = new WebManager();
+        int numExecutors = 16;
+        int serverQueueSize = 16;
+        int numRequests = 128;
         HttpServer server =
-                new HttpServer(webMgr.getBosses(), webMgr.getWorkers(), PORT, NUM_EXECUTOR_THREADS, SERVER_QUEUE_SIZE);
-        SlowServlet servlet = new SlowServlet(server.ctx(), new String[] { PATH });
+                new HttpServer(webMgr.getBosses(), webMgr.getWorkers(), PORT, numExecutors, serverQueueSize);
+        SleepyServlet servlet = new SleepyServlet(server.ctx(), new String[] { PATH });
         server.addServlet(servlet);
         webMgr.add(server);
         webMgr.start();
+        int expectedSuccess = numExecutors + serverQueueSize;
+        int expectedUnavailable = numRequests - expectedSuccess;
         try {
-            request(NUM_OF_REQUESTS);
-            for (Thread thread : THREADS) {
-                thread.join();
+            request(expectedSuccess);
+            waitTillQueued(server, serverQueueSize);
+            ArrayList<Future<Void>> successSet = started();
+            request(expectedUnavailable);
+            ArrayList<Future<Void>> rejectedSet = started();
+            for (Future<Void> f : rejectedSet) {
+                f.get();
             }
-            Assert.assertEquals(32, SUCCESS_COUNT.get());
-            Assert.assertEquals(16, UNAVAILABLE_COUNT.get());
+            servlet.wakeUp();
+            for (Future<Void> f : successSet) {
+                f.get();
+            }
+            Assert.assertEquals(expectedSuccess, SUCCESS_COUNT.get());
+            Assert.assertEquals(expectedUnavailable, UNAVAILABLE_COUNT.get() + EXCEPTION_COUNT.get());
+            System.err.println("Number of rejections: " + UNAVAILABLE_COUNT.get());
+            System.err.println("Number of exceptions: " + EXCEPTION_COUNT.get());
             Assert.assertEquals(0, OTHER_COUNT.get());
+        } catch (Throwable th) {
+            th.printStackTrace();
+            throw th;
         } finally {
             webMgr.stop();
         }
     }
 
+    private void waitTillQueued(HttpServer server, int expectedQueued) throws Exception {
+        int maxAttempts = 15;
+        int attempt = 0;
+        int queued = server.getWorkQueueSize();
+        while (queued != expectedQueued) {
+            attempt++;
+            if (attempt > maxAttempts) {
+                throw new Exception("Number of queued requests (" + queued + ") didn't match the expected number ("
+                        + expectedQueued + ")");
+            }
+            Thread.sleep(1000); // NOSONAR polling is the clean way
+            queued = server.getWorkQueueSize();
+        }
+    }
+
     @Test
-    public void testMalformedString() throws Exception {
+    public void testReleaseRejectedRequest() throws Exception {
+        WebManager webMgr = new WebManager();
+        int numRequests = 64;
+        int numExecutors = 2;
+        int serverQueueSize = 2;
+        int numPatches = 60;
+        HttpServer server =
+                new HttpServer(webMgr.getBosses(), webMgr.getWorkers(), PORT, numExecutors, serverQueueSize);
+        SleepyServlet servlet = new SleepyServlet(server.ctx(), new String[] { PATH });
+        server.addServlet(servlet);
+        webMgr.add(server);
+        webMgr.start();
+        request(numExecutors + serverQueueSize);
+        ArrayList<Future<Void>> stuck = started();
+        waitTillQueued(server, serverQueueSize);
+        try {
+            try {
+                for (int i = 0; i < numPatches; i++) {
+                    HttpUtil.printMemUsage();
+                    request(numRequests);
+                    for (Future<Void> f : FUTURES) {
+                        f.get();
+                    }
+                    FUTURES.clear();
+                }
+            } finally {
+                HttpUtil.printMemUsage();
+                servlet.wakeUp();
+                for (Future<Void> f : stuck) {
+                    f.get();
+                }
+            }
+        } finally {
+            System.err.println("Number of rejections: " + UNAVAILABLE_COUNT.get());
+            System.err.println("Number of exceptions: " + EXCEPTION_COUNT.get());
+            webMgr.stop();
+            HttpUtil.printMemUsage();
+        }
+    }
+
+    private ArrayList<Future<Void>> started() {
+        ArrayList<Future<Void>> started = new ArrayList<>(FUTURES);
+        FUTURES.clear();
+        return started;
+    }
+
+    @Test
+    public void testChattyServer() throws Exception {
+        int numRequests = 48;
+        int numExecutors = 24;
+        int serverQueueSize = 24;
+        HttpUtil.printMemUsage();
         WebManager webMgr = new WebManager();
         HttpServer server =
-                new HttpServer(webMgr.getBosses(), webMgr.getWorkers(), PORT, NUM_EXECUTOR_THREADS, SERVER_QUEUE_SIZE);
-        SlowServlet servlet = new SlowServlet(server.ctx(), new String[] { PATH });
+                new HttpServer(webMgr.getBosses(), webMgr.getWorkers(), PORT, numExecutors, serverQueueSize);
+        ChattyServlet servlet = new ChattyServlet(server.ctx(), new String[] { PATH });
+        server.addServlet(servlet);
+        webMgr.add(server);
+        webMgr.start();
+        try {
+            request(numRequests);
+            for (Future<Void> thread : FUTURES) {
+                thread.get();
+            }
+            Assert.assertEquals(numRequests, SUCCESS_COUNT.get());
+            Assert.assertEquals(0, UNAVAILABLE_COUNT.get());
+            Assert.assertEquals(0, OTHER_COUNT.get());
+        } finally {
+            HttpUtil.printMemUsage();
+            webMgr.stop();
+            HttpUtil.printMemUsage();
+        }
+    }
+
+    @Test
+    public void testMalformedString() throws Exception {
+        int numExecutors = 16;
+        int serverQueueSize = 16;
+        WebManager webMgr = new WebManager();
+        HttpServer server =
+                new HttpServer(webMgr.getBosses(), webMgr.getWorkers(), PORT, numExecutors, serverQueueSize);
+        SleepyServlet servlet = new SleepyServlet(server.ctx(), new String[] { PATH });
         server.addServlet(servlet);
         webMgr.add(server);
         webMgr.start();
@@ -124,9 +249,9 @@ public class HttpServerTest {
 
     private void request(int count) {
         for (int i = 0; i < count; i++) {
-            Thread next = new Thread(() -> {
+            Future<Void> next = executor.submit(() -> {
                 try {
-                    HttpUriRequest request = request(null);
+                    HttpUriRequest request = post(null);
                     HttpResponse response = executeHttpRequest(request);
                     if (response.getStatusLine().getStatusCode() == HttpResponseStatus.OK.code()) {
                         SUCCESS_COUNT.incrementAndGet();
@@ -136,14 +261,22 @@ public class HttpServerTest {
                     } else {
                         OTHER_COUNT.incrementAndGet();
                     }
-                    InputStream responseStream = response.getEntity().getContent();
-                    IOUtils.closeQuietly(responseStream);
+                    InputStream in = response.getEntity().getContent();
+                    if (PRINT_TO_CONSOLE) {
+                        BufferedReader reader = new BufferedReader(new InputStreamReader(in));
+                        String line = null;
+                        while ((line = reader.readLine()) != null) {
+                            System.out.println(line);
+                        }
+                    }
+                    IOUtils.closeQuietly(in);
                 } catch (Throwable th) {
-                    th.printStackTrace();
+                    // Server closed connection before we complete writing..
+                    EXCEPTION_COUNT.incrementAndGet();
                 }
+                return null;
             });
-            THREADS.add(next);
-            next.start();
+            FUTURES.add(next);
         }
     }
 
@@ -157,9 +290,25 @@ public class HttpServerTest {
         }
     }
 
-    protected HttpUriRequest request(String query) throws URISyntaxException {
+    protected HttpUriRequest get(String query) throws URISyntaxException {
         URI uri = new URI(PROTOCOL, null, HOST, PORT, PATH, query, null);
         RequestBuilder builder = RequestBuilder.get(uri);
+        builder.setCharset(StandardCharsets.UTF_8);
+        return builder.build();
+    }
+
+    protected HttpUriRequest post(String query) throws URISyntaxException {
+        URI uri = new URI(PROTOCOL, null, HOST, PORT, PATH, query, null);
+        RequestBuilder builder = RequestBuilder.post(uri);
+        StringBuilder str = new StringBuilder();
+        for (int i = 0; i < 2046; i++) {
+            str.append("This is a string statement that will be ignored");
+            str.append('\n');
+        }
+        String statement = str.toString();
+        builder.setHeader("Content-type", "application/x-www-form-urlencoded");
+        builder.addParameter("statement", statement);
+        builder.setEntity(new StringEntity(statement, StandardCharsets.UTF_8));
         builder.setCharset(StandardCharsets.UTF_8);
         return builder.build();
     }

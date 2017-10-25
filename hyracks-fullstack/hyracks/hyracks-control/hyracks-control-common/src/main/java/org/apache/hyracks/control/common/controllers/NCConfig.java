@@ -18,7 +18,6 @@
  */
 package org.apache.hyracks.control.common.controllers;
 
-import static org.apache.hyracks.control.common.config.OptionTypes.BOOLEAN;
 import static org.apache.hyracks.control.common.config.OptionTypes.INTEGER;
 import static org.apache.hyracks.control.common.config.OptionTypes.INTEGER_BYTE_UNIT;
 import static org.apache.hyracks.control.common.config.OptionTypes.LONG;
@@ -28,7 +27,7 @@ import static org.apache.hyracks.control.common.config.OptionTypes.STRING_ARRAY;
 import java.net.InetAddress;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.function.Supplier;
+import java.util.function.Function;
 
 import org.apache.hyracks.api.config.IApplicationConfig;
 import org.apache.hyracks.api.config.IOption;
@@ -40,8 +39,6 @@ import org.apache.hyracks.util.file.FileUtil;
 public class NCConfig extends ControllerConfig {
     private static final long serialVersionUID = 3L;
 
-    public static String defaultAppClass;
-
     public enum Option implements IOption {
         ADDRESS(STRING, InetAddress.getLoopbackAddress().getHostAddress()),
         PUBLIC_ADDRESS(STRING, ADDRESS),
@@ -49,11 +46,11 @@ public class NCConfig extends ControllerConfig {
         CLUSTER_LISTEN_PORT(INTEGER, 0),
         NCSERVICE_ADDRESS(STRING, PUBLIC_ADDRESS),
         NCSERVICE_PORT(INTEGER, 9090),
-        CLUSTER_ADDRESS(STRING, (String)null),
+        CLUSTER_ADDRESS(STRING, (String) null),
         CLUSTER_PORT(INTEGER, 1099),
         CLUSTER_PUBLIC_ADDRESS(STRING, PUBLIC_ADDRESS),
         CLUSTER_PUBLIC_PORT(INTEGER, CLUSTER_LISTEN_PORT),
-        NODE_ID(STRING, (String)null),
+        NODE_ID(STRING, (String) null),
         DATA_LISTEN_ADDRESS(STRING, ADDRESS),
         DATA_LISTEN_PORT(INTEGER, 0),
         DATA_PUBLIC_ADDRESS(STRING, PUBLIC_ADDRESS),
@@ -67,36 +64,44 @@ public class NCConfig extends ControllerConfig {
         MESSAGING_PUBLIC_ADDRESS(STRING, PUBLIC_ADDRESS),
         MESSAGING_PUBLIC_PORT(INTEGER, MESSAGING_LISTEN_PORT),
         CLUSTER_CONNECT_RETRIES(INTEGER, 5),
-        @SuppressWarnings("RedundantCast") // not redundant- false positive from IDEA
-        IODEVICES(STRING_ARRAY, (Supplier<String []>)() -> new String [] { FileUtil.joinPath(defaultDir, "iodevice") }),
+        IODEVICES(
+                STRING_ARRAY,
+                appConfig -> new String[] {
+                        FileUtil.joinPath(appConfig.getString(ControllerConfig.Option.DEFAULT_DIR), "iodevice") },
+                "<value of " + ControllerConfig.Option.DEFAULT_DIR.cmdline() + ">/iodevice"),
         NET_THREAD_COUNT(INTEGER, 1),
         NET_BUFFER_COUNT(INTEGER, 1),
         RESULT_TTL(LONG, 86400000L),
         RESULT_SWEEP_THRESHOLD(LONG, 60000L),
         RESULT_MANAGER_MEMORY(INTEGER_BYTE_UNIT, -1),
         @SuppressWarnings("RedundantCast") // not redundant- false positive from IDEA
-        APP_CLASS(STRING, (Supplier<String>)() -> defaultAppClass),
+        APP_CLASS(STRING, (String) null),
         NCSERVICE_PID(INTEGER, -1),
         COMMAND(STRING, "hyracksnc"),
-        JVM_ARGS(STRING, (String)null),
-        VIRTUAL_NC(BOOLEAN, false);
+        JVM_ARGS(STRING, (String) null),
+        TRACE_CATEGORIES(STRING_ARRAY, new String[0]);
 
         private final IOptionType parser;
-        private final Object defaultValue;
+        private final String defaultValueDescription;
+        private Object defaultValue;
 
         <T> Option(IOptionType<T> parser, Option defaultOption) {
             this.parser = parser;
             this.defaultValue = defaultOption;
+            defaultValueDescription = null;
         }
 
         <T> Option(IOptionType<T> parser, T defaultValue) {
             this.parser = parser;
             this.defaultValue = defaultValue;
+            defaultValueDescription = null;
         }
 
-        <T> Option(IOptionType<T> parser, Supplier<T> defaultValue) {
+        <T> Option(IOptionType<T> parser, Function<IApplicationConfig, T> defaultValue,
+                String defaultValueDescription) {
             this.parser = parser;
             this.defaultValue = defaultValue;
+            this.defaultValueDescription = defaultValueDescription;
         }
 
         @Override
@@ -113,17 +118,18 @@ public class NCConfig extends ControllerConfig {
         public String description() {
             switch (this) {
                 case ADDRESS:
-                    return "Default IP Address to bind listeners on this NC.  All services will bind on this address " +
-                            "unless a service-specific listen address is supplied.";
+                    return "Default IP Address to bind listeners on this NC.  All services will bind on this address "
+                            + "unless a service-specific listen address is supplied.";
                 case CLUSTER_LISTEN_ADDRESS:
                     return "IP Address to bind cluster listener on this NC";
                 case PUBLIC_ADDRESS:
-                    return "Default public address that other processes should use to contact this NC.  All services " +
-                            "will advertise this address unless a service-specific public address is supplied.";
+                    return "Default public address that other processes should use to contact this NC.  All services "
+                            + "will advertise this address unless a service-specific public address is supplied.";
                 case NCSERVICE_ADDRESS:
                     return "Address the CC should use to contact the NCService associated with this NC";
                 case NCSERVICE_PORT:
-                    return "Port the CC should use to contact the NCService associated with this NC";
+                    return "Port the CC should use to contact the NCService associated with this NC (-1 to not use " +
+                            "NCService to start this NC)";
                 case CLUSTER_ADDRESS:
                     return "Cluster Controller address (required unless specified in config file)";
                 case CLUSTER_PORT:
@@ -135,8 +141,8 @@ public class NCConfig extends ControllerConfig {
                 case CLUSTER_PUBLIC_PORT:
                     return "Public IP port to announce cluster listener";
                 case NODE_ID:
-                    return "Logical name of node controller unique within the cluster (required unless specified in " +
-                            "config file)";
+                    return "Logical name of node controller unique within the cluster (required unless specified in "
+                            + "config file)";
                 case DATA_LISTEN_ADDRESS:
                     return "IP Address to bind data listener";
                 case DATA_LISTEN_PORT:
@@ -162,7 +168,7 @@ public class NCConfig extends ControllerConfig {
                 case MESSAGING_PUBLIC_PORT:
                     return "Public IP port to announce messaging listener";
                 case CLUSTER_CONNECT_RETRIES:
-                    return "Number of attempts to contact CC before giving up";
+                    return "Number of attempts to retry contacting CC before giving up";
                 case IODEVICES:
                     return "Comma separated list of IO Device mount points";
                 case NET_THREAD_COUNT:
@@ -170,11 +176,11 @@ public class NCConfig extends ControllerConfig {
                 case NET_BUFFER_COUNT:
                     return "Number of network buffers per input/output channel";
                 case RESULT_TTL:
-                    return "Limits the amount of time results for asynchronous jobs should be retained by the system " +
-                            "in milliseconds";
+                    return "Limits the amount of time results for asynchronous jobs should be retained by the system "
+                            + "in milliseconds";
                 case RESULT_SWEEP_THRESHOLD:
-                    return "The duration within which an instance of the result cleanup should be invoked in " +
-                            "milliseconds";
+                    return "The duration within which an instance of the result cleanup should be invoked in "
+                            + "milliseconds";
                 case RESULT_MANAGER_MEMORY:
                     return "Memory usable for result caching at this Node Controller in bytes";
                 case APP_CLASS:
@@ -185,13 +191,12 @@ public class NCConfig extends ControllerConfig {
                     return "Command NCService should invoke to start the NCDriver";
                 case JVM_ARGS:
                     return "JVM args to pass to the NCDriver";
-                case VIRTUAL_NC:
-                    return "A flag indicating if this NC is running on virtual cluster";
+                case TRACE_CATEGORIES:
+                    return "Categories for tracing";
                 default:
                     throw new IllegalStateException("NYI: " + this);
             }
         }
-
 
         @Override
         public IOptionType type() {
@@ -203,11 +208,18 @@ public class NCConfig extends ControllerConfig {
             return defaultValue;
         }
 
-        @Override
-        public boolean hidden() {
-            return this == VIRTUAL_NC;
+        public void setDefaultValue(Object defaultValue) {
+            this.defaultValue = defaultValue;
         }
+
+        @Override
+        public String usageDefaultOverride(IApplicationConfig accessor, Function<IOption, String> optionPrinter) {
+            return defaultValueDescription;
+        }
+
     }
+
+    public static final int NCSERVICE_PORT_DISABLED = -1;
 
     private List<String> appArgs = new ArrayList<>();
 
@@ -235,11 +247,7 @@ public class NCConfig extends ControllerConfig {
         return appArgs.toArray(new String[appArgs.size()]);
     }
 
-    public ConfigManager getConfigManager() {
-        return configManager;
-    }
-
-    public IApplicationConfig getAppConfig() {
+    public IApplicationConfig getNodeScopedAppConfig() {
         return appConfig;
     }
 
@@ -435,6 +443,14 @@ public class NCConfig extends ControllerConfig {
         configManager.set(nodeId, Option.IODEVICES, iodevices);
     }
 
+    public String[] getTraceCategories() {
+        return appConfig.getStringArray(Option.TRACE_CATEGORIES);
+    }
+
+    public void setTraceCategories(String[] traceCategories) {
+        configManager.set(nodeId, Option.TRACE_CATEGORIES, traceCategories);
+    }
+
     public int getNetThreadCount() {
         return appConfig.getInt(Option.NET_THREAD_COUNT);
     }
@@ -491,11 +507,11 @@ public class NCConfig extends ControllerConfig {
         configManager.set(nodeId, Option.NCSERVICE_PID, ncservicePid);
     }
 
-    public boolean getVirtualNC() {
-        return appConfig.getBoolean(Option.VIRTUAL_NC);
+    public boolean isVirtualNC() {
+        return appConfig.getInt(NCConfig.Option.NCSERVICE_PORT) == NCConfig.NCSERVICE_PORT_DISABLED;
     }
 
-    public void setVirtualNC(boolean virtualNC) {
-        configManager.set(nodeId, Option.VIRTUAL_NC, virtualNC);
+    public void setVirtualNC() {
+        configManager.set(nodeId, Option.NCSERVICE_PORT, NCSERVICE_PORT_DISABLED);
     }
 }

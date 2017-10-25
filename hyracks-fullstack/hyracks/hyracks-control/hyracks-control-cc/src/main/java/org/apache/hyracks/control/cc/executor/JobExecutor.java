@@ -65,7 +65,8 @@ import org.apache.hyracks.control.cc.partitions.PartitionMatchMaker;
 import org.apache.hyracks.control.cc.work.JobCleanupWork;
 import org.apache.hyracks.control.common.job.PartitionState;
 import org.apache.hyracks.control.common.job.TaskAttemptDescriptor;
-
+import org.apache.hyracks.control.common.work.NoOpCallback;
+import org.apache.hyracks.control.common.work.IResultCallback;
 
 public class JobExecutor {
     private static final Logger LOGGER = Logger.getLogger(JobExecutor.class.getName());
@@ -115,9 +116,10 @@ public class JobExecutor {
         ccs.getContext().notifyJobStart(jobRun.getJobId());
     }
 
-    public void cancelJob() throws HyracksException {
+    public void cancelJob(IResultCallback<Void> callback) throws HyracksException {
         // If the job is already terminated or failed, do nothing here.
         if (jobRun.getPendingStatus() != null) {
+            callback.setValue(null);
             return;
         }
         // Sets the cancelled flag.
@@ -125,7 +127,8 @@ public class JobExecutor {
         // Aborts on-ongoing task clusters.
         abortOngoingTaskClusters(ta -> false, ta -> null);
         // Aborts the whole job.
-        abortJob(Collections.singletonList(HyracksException.create(ErrorCode.JOB_CANCELED, jobRun.getJobId())));
+        abortJob(Collections.singletonList(HyracksException.create(ErrorCode.JOB_CANCELED, jobRun.getJobId())),
+                callback);
     }
 
     private void findRunnableTaskClusterRoots(Set<TaskCluster> frontier, Collection<ActivityCluster> roots)
@@ -190,15 +193,15 @@ public class JobExecutor {
 
     private void startRunnableActivityClusters() throws HyracksException {
         Set<TaskCluster> taskClusterRoots = new HashSet<>();
-        findRunnableTaskClusterRoots(taskClusterRoots, jobRun.getActivityClusterGraph().getActivityClusterMap()
-                .values());
-        if (LOGGER.isLoggable(Level.FINE)) {
-            LOGGER.fine("Runnable TC roots: " + taskClusterRoots + ", inProgressTaskClusters: "
-                    + inProgressTaskClusters);
+        findRunnableTaskClusterRoots(taskClusterRoots,
+                jobRun.getActivityClusterGraph().getActivityClusterMap().values());
+        if (LOGGER.isLoggable(Level.INFO)) {
+            LOGGER.log(Level.INFO,
+                    "Runnable TC roots: " + taskClusterRoots + ", inProgressTaskClusters: " + inProgressTaskClusters);
         }
         if (taskClusterRoots.isEmpty() && inProgressTaskClusters.isEmpty()) {
-            ccs.getWorkQueue()
-                    .schedule(new JobCleanupWork(ccs.getJobManager(), jobRun.getJobId(), JobStatus.TERMINATED, null));
+            ccs.getWorkQueue().schedule(new JobCleanupWork(ccs.getJobManager(), jobRun.getJobId(), JobStatus.TERMINATED,
+                    null, NoOpCallback.INSTANCE));
             return;
         }
         startRunnableTaskClusters(taskClusterRoots);
@@ -344,8 +347,8 @@ public class JobExecutor {
         for (int i = 0; i < tasks.length; ++i) {
             Task ts = tasks[i];
             TaskId tid = ts.getTaskId();
-            TaskAttempt taskAttempt = new TaskAttempt(tcAttempt, new TaskAttemptId(new TaskId(tid.getActivityId(),
-                    tid.getPartition()), attempts), ts);
+            TaskAttempt taskAttempt = new TaskAttempt(tcAttempt,
+                    new TaskAttemptId(new TaskId(tid.getActivityId(), tid.getPartition()), attempts), ts);
             taskAttempt.setStatus(TaskAttempt.TaskStatus.INITIALIZED, null);
             locationMap.put(tid,
                     new PartitionLocationExpression(tid.getActivityId().getOperatorDescriptorId(), tid.getPartition()));
@@ -496,8 +499,8 @@ public class JobExecutor {
         final DeploymentId deploymentId = jobRun.getDeploymentId();
         final JobId jobId = jobRun.getJobId();
         final ActivityClusterGraph acg = jobRun.getActivityClusterGraph();
-        final Map<ConnectorDescriptorId, IConnectorPolicy> connectorPolicies = new HashMap<>(
-                jobRun.getConnectorPolicyMap());
+        final Map<ConnectorDescriptorId, IConnectorPolicy> connectorPolicies =
+                new HashMap<>(jobRun.getConnectorPolicyMap());
         INodeManager nodeManager = ccs.getNodeManager();
         try {
             byte[] acgBytes = predistributed ? null : JavaSerializationUtils.serialize(acg);
@@ -521,14 +524,14 @@ public class JobExecutor {
         }
     }
 
-    private void abortJob(List<Exception> exceptions) {
+    public void abortJob(List<Exception> exceptions, IResultCallback<Void> callback) {
         Set<TaskCluster> inProgressTaskClustersCopy = new HashSet<>(inProgressTaskClusters);
         for (TaskCluster tc : inProgressTaskClustersCopy) {
             abortTaskCluster(findLastTaskClusterAttempt(tc), TaskClusterAttempt.TaskClusterStatus.ABORTED);
         }
         assert inProgressTaskClusters.isEmpty();
-        ccs.getWorkQueue()
-                .schedule(new JobCleanupWork(ccs.getJobManager(), jobRun.getJobId(), JobStatus.FAILURE, exceptions));
+        ccs.getWorkQueue().schedule(
+                new JobCleanupWork(ccs.getJobManager(), jobRun.getJobId(), JobStatus.FAILURE, exceptions, callback));
     }
 
     private void abortTaskCluster(TaskClusterAttempt tcAttempt,
@@ -555,14 +558,14 @@ public class JobExecutor {
             }
         }
         final JobId jobId = jobRun.getJobId();
-        LOGGER.fine("Abort map for job: " + jobId + ": " + abortTaskAttemptMap);
+        LOGGER.info("Abort map for job: " + jobId + ": " + abortTaskAttemptMap);
         INodeManager nodeManager = ccs.getNodeManager();
         for (Map.Entry<String, List<TaskAttemptId>> entry : abortTaskAttemptMap.entrySet()) {
             final NodeControllerState node = nodeManager.getNodeControllerState(entry.getKey());
             final List<TaskAttemptId> abortTaskAttempts = entry.getValue();
             if (node != null) {
-                if (LOGGER.isLoggable(Level.FINE)) {
-                    LOGGER.fine("Aborting: " + abortTaskAttempts + " at " + entry.getKey());
+                if (LOGGER.isLoggable(Level.INFO)) {
+                    LOGGER.info("Aborting: " + abortTaskAttempts + " at " + entry.getKey());
                 }
                 try {
                     node.getNodeController().abortTasks(jobId, abortTaskAttempts);
@@ -582,6 +585,7 @@ public class JobExecutor {
     }
 
     private void abortDoomedTaskClusters() throws HyracksException {
+        LOGGER.log(Level.INFO, "aborting doomed task clusters");
         Set<TaskCluster> doomedTaskClusters = new HashSet<>();
         for (TaskCluster tc : inProgressTaskClusters) {
             // Start search at TCs that produce no outputs (sinks)
@@ -590,6 +594,7 @@ public class JobExecutor {
             }
         }
 
+        LOGGER.log(Level.INFO, "number of doomed task clusters found = " + doomedTaskClusters.size());
         for (TaskCluster tc : doomedTaskClusters) {
             TaskClusterAttempt tca = findLastTaskClusterAttempt(tc);
             if (tca != null) {
@@ -628,7 +633,7 @@ public class JobExecutor {
             if ((maxState == null
                     || (cPolicy.consumerWaitsForProducerToFinish() && maxState != PartitionState.COMMITTED))
                     && findDoomedTaskClusters(partitionProducingTaskClusterMap.get(pid), doomedTaskClusters)) {
-                    doomed = true;
+                doomed = true;
             }
         }
         if (doomed) {
@@ -663,31 +668,39 @@ public class JobExecutor {
 
     /**
      * Indicates that a single task attempt has encountered a failure.
-     * @param ta Failed Task Attempt
-     * @param exceptions exeptions thrown during the failure
+     *
+     * @param ta
+     *            Failed Task Attempt
+     * @param exceptions
+     *            exeptions thrown during the failure
      */
     public void notifyTaskFailure(TaskAttempt ta, List<Exception> exceptions) {
         try {
-            LOGGER.fine("Received failure notification for TaskAttempt " + ta.getTaskAttemptId());
+            LOGGER.log(Level.INFO, "Received failure notification for TaskAttempt " + ta.getTaskAttemptId());
             TaskAttemptId taId = ta.getTaskAttemptId();
             TaskCluster tc = ta.getTask().getTaskCluster();
             TaskClusterAttempt lastAttempt = findLastTaskClusterAttempt(tc);
             if (lastAttempt != null && taId.getAttempt() == lastAttempt.getAttempt()) {
-                LOGGER.fine("Marking TaskAttempt " + ta.getTaskAttemptId() + " as failed");
+                LOGGER.log(Level.INFO, "Marking TaskAttempt " + ta.getTaskAttemptId() + " as failed");
                 ta.setStatus(TaskAttempt.TaskStatus.FAILED, exceptions);
                 abortTaskCluster(lastAttempt, TaskClusterAttempt.TaskClusterStatus.FAILED);
                 abortDoomedTaskClusters();
-                if (lastAttempt.getAttempt() >= jobRun.getActivityClusterGraph().getMaxReattempts() || isCancelled()) {
-                    abortJob(exceptions);
+                int maxReattempts = jobRun.getActivityClusterGraph().getMaxReattempts();
+                LOGGER.log(Level.INFO, "Marking TaskAttempt " + ta.getTaskAttemptId()
+                        + " as failed and the number of max re-attempts = " + maxReattempts);
+                if (lastAttempt.getAttempt() >= maxReattempts || isCancelled()) {
+                    LOGGER.log(Level.INFO, "Aborting the job of " + ta.getTaskAttemptId());
+                    abortJob(exceptions, NoOpCallback.INSTANCE);
                     return;
                 }
+                LOGGER.log(Level.INFO, "We will try to start runnable activity clusters of " + ta.getTaskAttemptId());
                 startRunnableActivityClusters();
             } else {
-                LOGGER.warning("Ignoring task failure notification: " + taId + " -- Current last attempt = "
-                        + lastAttempt);
+                LOGGER.warning(
+                        "Ignoring task failure notification: " + taId + " -- Current last attempt = " + lastAttempt);
             }
         } catch (Exception e) {
-            abortJob(Collections.singletonList(e));
+            abortJob(Collections.singletonList(e), NoOpCallback.INSTANCE);
         }
     }
 
@@ -711,7 +724,7 @@ public class JobExecutor {
                     ta -> HyracksException.create(ErrorCode.NODE_FAILED, ta.getNodeId()));
             startRunnableActivityClusters();
         } catch (Exception e) {
-            abortJob(Collections.singletonList(e));
+            abortJob(Collections.singletonList(e), NoOpCallback.INSTANCE);
         }
     }
 

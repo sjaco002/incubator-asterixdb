@@ -30,6 +30,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -40,6 +41,8 @@ import java.util.SortedMap;
 import java.util.TreeMap;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Predicate;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import java.util.stream.Stream;
 
 import javax.xml.bind.JAXBContext;
@@ -54,6 +57,7 @@ import org.apache.asterix.common.configuration.Property;
 import org.apache.asterix.common.configuration.Store;
 import org.apache.asterix.common.configuration.TransactionLogDir;
 import org.apache.asterix.common.exceptions.AsterixException;
+import org.apache.asterix.common.exceptions.ErrorCode;
 import org.apache.asterix.common.utils.ConfigUtil;
 import org.apache.commons.lang3.mutable.MutableInt;
 import org.apache.hyracks.algebricks.common.utils.Pair;
@@ -65,8 +69,6 @@ import org.apache.hyracks.control.common.application.ConfigManagerApplicationCon
 import org.apache.hyracks.control.common.config.ConfigManager;
 import org.apache.hyracks.control.common.controllers.ControllerConfig;
 import org.apache.hyracks.control.common.controllers.NCConfig;
-import org.apache.log4j.Level;
-import org.apache.log4j.Logger;
 
 public class PropertiesAccessor implements IApplicationConfig {
     private static final Logger LOGGER = Logger.getLogger(PropertiesAccessor.class.getName());
@@ -78,7 +80,7 @@ public class PropertiesAccessor implements IApplicationConfig {
     private final Map<String, String> transactionLogDirs = new HashMap<>();
     private final Map<String, String> asterixBuildProperties = new HashMap<>();
     private final Map<String, ClusterPartition[]> nodePartitionsMap;
-    private final SortedMap<Integer, ClusterPartition> clusterPartitions = new TreeMap<>();
+    private final SortedMap<Integer, ClusterPartition> clusterPartitions;
     // For extensions
     private final List<AsterixExtension> extensions;
 
@@ -87,19 +89,20 @@ public class PropertiesAccessor implements IApplicationConfig {
      */
     private PropertiesAccessor(IApplicationConfig cfg) throws AsterixException, IOException {
         this.cfg = cfg;
-        nodePartitionsMap = new HashMap<>();
+        nodePartitionsMap = new ConcurrentHashMap<>();
+        clusterPartitions = Collections.synchronizedSortedMap(new TreeMap<>());
         extensions = new ArrayList<>();
         // Determine whether to use old-style asterix-configuration.xml or new-style configuration.
         // QQQ strip this out eventually
         // QQQ this is NOT a good way to determine whether to use config file
-        ConfigManager configManager = ((ConfigManagerApplicationConfig)cfg).getConfigManager();
+        ConfigManager configManager = ((ConfigManagerApplicationConfig) cfg).getConfigManager();
         boolean usingConfigFile = Stream
                 .of((IOption) ControllerConfig.Option.CONFIG_FILE, ControllerConfig.Option.CONFIG_FILE_URL)
                 .map(configManager::get).anyMatch(Objects::nonNull);
         AsterixConfiguration asterixConfiguration = null;
         try {
-            asterixConfiguration = configure(System.getProperty(GlobalConfig.CONFIG_FILE_PROPERTY,
-                    GlobalConfig.DEFAULT_CONFIG_FILE_NAME));
+            asterixConfiguration = configure(
+                    System.getProperty(GlobalConfig.CONFIG_FILE_PROPERTY, GlobalConfig.DEFAULT_CONFIG_FILE_NAME));
         } catch (Exception e) {
             // cannot load config file, assume new-style config
         }
@@ -123,6 +126,7 @@ public class PropertiesAccessor implements IApplicationConfig {
             // partition directory (as formed by appending the <store> subdirectory to
             // each <iodevices> path from the user's original cluster.xml).
             for (Store store : configuredStores) {
+                configManager.set(store.getNcId(), NodeProperties.Option.STARTING_PARTITION_ID, uniquePartitionId);
                 String trimmedStoreDirs = store.getStoreDirs().trim();
                 String[] nodeStores = trimmedStoreDirs.split(",");
                 ClusterPartition[] nodePartitions = new ClusterPartition[nodeStores.length];
@@ -133,9 +137,10 @@ public class PropertiesAccessor implements IApplicationConfig {
                 }
                 stores.put(store.getNcId(), nodeStores);
                 nodePartitionsMap.put(store.getNcId(), nodePartitions);
-                configManager.registerVirtualNode(store.getNcId());
+                // push the store info to the config manager
+                configManager.set(store.getNcId(), NCConfig.Option.IODEVICES, nodeStores);
                 // marking node as virtual, as we're not using NCServices with old-style config
-                configManager.set(store.getNcId(), NCConfig.Option.VIRTUAL_NC, true);
+                configManager.set(store.getNcId(), NCConfig.Option.NCSERVICE_PORT, NCConfig.NCSERVICE_PORT_DISABLED);
             }
             // Get extensions
             if (asterixConfiguration.getExtensions() != null) {
@@ -151,13 +156,13 @@ public class PropertiesAccessor implements IApplicationConfig {
                         continue;
                     }
                     if (option != null) {
-                        throw new IllegalStateException("ERROR: option found in multiple sections: " +
-                                Arrays.asList(option, optionTemp));
+                        throw new IllegalStateException(
+                                "ERROR: option found in multiple sections: " + Arrays.asList(option, optionTemp));
                     }
                     option = optionTemp;
                 }
                 if (option == null) {
-                    LOGGER.warn("Ignoring unknown property: " + p.getName());
+                    LOGGER.warning("Ignoring unknown property: " + p.getName());
                 } else {
                     configManager.set(option, option.type().parse(p.getValue()));
                 }
@@ -173,12 +178,12 @@ public class PropertiesAccessor implements IApplicationConfig {
             MutableInt uniquePartitionId = new MutableInt(0);
             // Iterate through each configured NC.
             for (String ncName : cfg.getNCNames()) {
-                configureNc(ncName, uniquePartitionId);
+                configureNc(configManager, ncName, uniquePartitionId);
             }
             for (String section : cfg.getSectionNames()) {
                 if (section.startsWith(AsterixProperties.SECTION_PREFIX_EXTENSION)) {
-                    String className = AsterixProperties.getSectionId(
-                            AsterixProperties.SECTION_PREFIX_EXTENSION, section);
+                    String className = AsterixProperties.getSectionId(AsterixProperties.SECTION_PREFIX_EXTENSION,
+                            section);
                     configureExtension(className, section);
                 }
             }
@@ -195,8 +200,9 @@ public class PropertiesAccessor implements IApplicationConfig {
         try (FileInputStream is = new FileInputStream(fileName)) {
             return configure(is, fileName);
         } catch (FileNotFoundException fnf1) {
-            LOGGER.warn("Failed to get configuration file " + fileName + " as FileInputStream. FileNotFoundException");
-            LOGGER.warn("Attempting to get default configuration file " + GlobalConfig.DEFAULT_CONFIG_FILE_NAME
+            LOGGER.warning(
+                    "Failed to get configuration file " + fileName + " as FileInputStream. FileNotFoundException");
+            LOGGER.warning("Attempting to get default configuration file " + GlobalConfig.DEFAULT_CONFIG_FILE_NAME
                     + " as FileInputStream");
             try (FileInputStream fis = new FileInputStream(GlobalConfig.DEFAULT_CONFIG_FILE_NAME)) {
                 return configure(fis, GlobalConfig.DEFAULT_CONFIG_FILE_NAME);
@@ -227,15 +233,21 @@ public class PropertiesAccessor implements IApplicationConfig {
         extensions.add(new AsterixExtension(className, kvs));
     }
 
-    private void configureNc(String ncId, MutableInt uniquePartitionId) {
+    private void configureNc(ConfigManager configManager, String ncId, MutableInt uniquePartitionId)
+            throws AsterixException {
 
         // Now we assign the coredump and txnlog directories for this node.
         // QQQ Default values? Should they be specified here? Or should there
         // be a default.ini? Certainly wherever they are, they should be platform-dependent.
         IApplicationConfig nodeCfg = cfg.getNCEffectiveConfig(ncId);
         coredumpConfig.put(ncId, nodeCfg.getString(NodeProperties.Option.CORE_DUMP_DIR));
-        transactionLogDirs.put(ncId,
-                nodeCfg.getString(NodeProperties.Option.TXN_LOG_DIR));
+        transactionLogDirs.put(ncId, nodeCfg.getString(NodeProperties.Option.TXN_LOG_DIR));
+        int partitionId = nodeCfg.getInt(NodeProperties.Option.STARTING_PARTITION_ID);
+        if (partitionId != -1) {
+            uniquePartitionId.setValue(partitionId);
+        } else {
+            configManager.set(ncId, NodeProperties.Option.STARTING_PARTITION_ID, uniquePartitionId.getValue());
+        }
 
         // Now we create an array of ClusterPartitions for all the partitions
         // on this NC.
@@ -247,9 +259,12 @@ public class PropertiesAccessor implements IApplicationConfig {
             // Construct final storage path from iodevice dir + storage subdirs
             nodeStores[i] = iodevices[i] + File.separator + storageSubdir;
             // Create ClusterPartition instances for this NC.
-            ClusterPartition partition = new ClusterPartition(uniquePartitionId.getValue(), ncId, i);
-            uniquePartitionId.increment();
-            clusterPartitions.put(partition.getPartitionId(), partition);
+            ClusterPartition partition = new ClusterPartition(uniquePartitionId.getAndIncrement(), ncId, i);
+            ClusterPartition orig = clusterPartitions.put(partition.getPartitionId(), partition);
+            if (orig != null) {
+                throw AsterixException.create(ErrorCode.DUPLICATE_PARTITION_ID, partition.getPartitionId(), ncId,
+                        orig.getNodeId());
+            }
             nodePartitions[i] = partition;
         }
         stores.put(ncId, nodeStores);
@@ -298,9 +313,9 @@ public class PropertiesAccessor implements IApplicationConfig {
         try {
             return value == null ? defaultValue : interpreter.parse(value);
         } catch (IllegalArgumentException e) {
-            if (LOGGER.isEnabledFor(Level.ERROR)) {
-                LOGGER.error("Invalid property value '" + value + "' for property '" + property + "'.\n" +
-                        "Default = " + defaultValue);
+            if (LOGGER.isLoggable(Level.SEVERE)) {
+                LOGGER.severe("Invalid property value '" + value + "' for property '" + property + "'.\n" + "Default = "
+                        + defaultValue);
             }
             throw e;
         }

@@ -216,7 +216,7 @@ public class OptimizedHybridHashJoin {
         RunFileWriter writer = runFileWriters[pid];
         if (writer == null) {
             FileReference file = ctx.getJobletContext().createManagedWorkspaceFile(refName);
-            writer = new RunFileWriter(file, ctx.getIOManager());
+            writer = new RunFileWriter(file, ctx.getIoManager());
             writer.open();
             runFileWriters[pid] = writer;
         }
@@ -452,7 +452,7 @@ public class OptimizedHybridHashJoin {
 
     private void createInMemoryJoiner(int inMemTupCount) throws HyracksDataException {
         ISerializableTable table = new SerializableHashTable(inMemTupCount, ctx, bufferManagerForHashTable);
-        this.inMemJoiner = new InMemoryHashJoin(ctx, inMemTupCount, new FrameTupleAccessor(probeRd), probeHpc,
+        this.inMemJoiner = new InMemoryHashJoin(ctx, new FrameTupleAccessor(probeRd), probeHpc,
                 new FrameTupleAccessor(buildRd), buildRd, buildHpc,
                 new FrameTuplePairComparator(probeKeys, buildKeys, comparators), isLeftOuter, nonMatchWriters, table,
                 predEvaluator, isReversed, bufferManagerForHashTable);

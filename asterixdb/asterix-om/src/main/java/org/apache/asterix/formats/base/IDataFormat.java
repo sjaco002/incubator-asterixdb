@@ -45,8 +45,6 @@ import org.apache.hyracks.api.dataflow.value.IMissingWriterFactory;
 import org.apache.hyracks.api.dataflow.value.IPredicateEvaluatorFactoryProvider;
 
 public interface IDataFormat {
-    public void registerRuntimeFunctions(List<IFunctionDescriptorFactory> funcDescriptor) throws AlgebricksException;
-
     public ISerializerDeserializerProvider getSerdeProvider();
 
     public IBinaryHashFunctionFactoryProvider getBinaryHashFunctionFactoryProvider();
@@ -82,7 +80,7 @@ public interface IDataFormat {
     public IScalarEvaluatorFactory getConstantEvalFactory(IAlgebricksConstantValue value) throws AlgebricksException;
 
     public IScalarEvaluatorFactory[] createMBRFactory(ARecordType recType, List<String> fldName, int recordColumn,
-            int dimension, List<String> filterFieldName) throws AlgebricksException;
+            int dimension, List<String> filterFieldName, boolean isPointMBR) throws AlgebricksException;
 
     public IExpressionEvalSizeComputer getExpressionEvalSizeComputer();
 

@@ -25,12 +25,15 @@ import java.util.PriorityQueue;
 
 import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.apache.hyracks.dataflow.common.data.accessors.ITupleReference;
-import org.apache.hyracks.storage.am.common.api.IIndexCursor;
 import org.apache.hyracks.storage.am.common.api.ITreeIndexCursor;
-import org.apache.hyracks.storage.am.common.ophelpers.MultiComparator;
-import org.apache.hyracks.storage.am.lsm.common.api.*;
+import org.apache.hyracks.storage.am.lsm.common.api.ILSMComponent;
+import org.apache.hyracks.storage.am.lsm.common.api.ILSMComponentFilter;
+import org.apache.hyracks.storage.am.lsm.common.api.ILSMHarness;
+import org.apache.hyracks.storage.am.lsm.common.api.ILSMIndexOperationContext;
+import org.apache.hyracks.storage.am.lsm.common.api.ILSMTreeTupleReference;
+import org.apache.hyracks.storage.common.IIndexCursor;
+import org.apache.hyracks.storage.common.MultiComparator;
 import org.apache.hyracks.storage.common.buffercache.IBufferCache;
-import org.apache.hyracks.storage.common.buffercache.ICachedPage;
 
 public abstract class LSMIndexSearchCursor implements ITreeIndexCursor {
     protected final ILSMIndexOperationContext opCtx;
@@ -129,21 +132,19 @@ public abstract class LSMIndexSearchCursor implements ITreeIndexCursor {
     }
 
     @Override
-    public ICachedPage getPage() {
-        // do nothing
-        return null;
-    }
-
-    @Override
     public void close() throws HyracksDataException {
         try {
             if (outputPriorityQueue != null) {
                 outputPriorityQueue.clear();
             }
-            for (int i = 0; i < rangeCursors.length; i++) {
-                rangeCursors[i].close();
+            if (rangeCursors != null) {
+                for (int i = 0; i < rangeCursors.length; i++) {
+                    if (rangeCursors[i] != null) {
+                        rangeCursors[i].close();
+                    }
+                }
+                rangeCursors = null;
             }
-            rangeCursors = null;
         } finally {
             if (lsmHarness != null) {
                 lsmHarness.endSearch(opCtx);
@@ -240,7 +241,7 @@ public abstract class LSMIndexSearchCursor implements ITreeIndexCursor {
     }
 
     @Override
-    public boolean exclusiveLatchNodes() {
+    public boolean isExclusiveLatchNodes() {
         return false;
     }
 
@@ -309,8 +310,4 @@ public abstract class LSMIndexSearchCursor implements ITreeIndexCursor {
         return cmp.compare(tupleA, tupleB);
     }
 
-    @Override
-    public void markCurrentTupleAsUpdated() throws HyracksDataException {
-        throw new HyracksDataException("Updating tuples is not supported with this cursor.");
-    }
 }

@@ -22,12 +22,11 @@ package org.apache.hyracks.storage.am.lsm.rtree.impls;
 import org.apache.hyracks.api.dataflow.value.IBinaryComparatorFactory;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.apache.hyracks.dataflow.common.data.accessors.ITupleReference;
-import org.apache.hyracks.storage.am.common.api.ICursorInitialState;
-import org.apache.hyracks.storage.am.common.api.ISearchPredicate;
 import org.apache.hyracks.storage.am.common.api.ITreeIndexCursor;
-import org.apache.hyracks.storage.am.common.ophelpers.MultiComparator;
+import org.apache.hyracks.storage.common.ICursorInitialState;
+import org.apache.hyracks.storage.common.ISearchPredicate;
+import org.apache.hyracks.storage.common.MultiComparator;
 import org.apache.hyracks.storage.common.buffercache.IBufferCache;
-import org.apache.hyracks.storage.common.buffercache.ICachedPage;
 
 public class LSMRTreeWithAntiMatterTuplesFlushCursor implements ITreeIndexCursor {
     private final TreeTupleSorter rTreeTupleSorter;
@@ -155,11 +154,6 @@ public class LSMRTreeWithAntiMatterTuplesFlushCursor implements ITreeIndexCursor
     }
 
     @Override
-    public ICachedPage getPage() {
-        return null;
-    }
-
-    @Override
     public void setBufferCache(IBufferCache bufferCache) {
 
     }
@@ -170,12 +164,7 @@ public class LSMRTreeWithAntiMatterTuplesFlushCursor implements ITreeIndexCursor
     }
 
     @Override
-    public boolean exclusiveLatchNodes() {
+    public boolean isExclusiveLatchNodes() {
         return false;
-    }
-
-    @Override
-    public void markCurrentTupleAsUpdated() throws HyracksDataException {
-        throw new HyracksDataException("Updating tuples is not supported with this cursor.");
     }
 }

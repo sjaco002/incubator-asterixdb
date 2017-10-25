@@ -27,8 +27,9 @@ import org.apache.hyracks.storage.am.lsm.btree.util.LSMBTreeTestHarness;
 import org.apache.hyracks.storage.am.lsm.btree.utils.LSMBTreeUtil;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMIndexAccessor;
 import org.apache.hyracks.storage.am.lsm.common.impls.BlockingIOOperationCallbackWrapper;
-import org.apache.hyracks.storage.am.lsm.common.impls.NoOpIOOperationCallback;
+import org.apache.hyracks.storage.am.lsm.common.impls.NoOpIOOperationCallbackFactory;
 import org.apache.hyracks.storage.am.lsm.common.impls.NoOpOperationTrackerFactory;
+import org.apache.hyracks.util.trace.ITracer;
 import org.junit.Test;
 
 public class LSMBTreeModificationOperationCallbackTest extends AbstractModificationOperationCallbackTest {
@@ -39,21 +40,20 @@ public class LSMBTreeModificationOperationCallbackTest extends AbstractModificat
 
     public LSMBTreeModificationOperationCallbackTest() {
         super();
-        this.ioOpCallback = new BlockingIOOperationCallbackWrapper(NoOpIOOperationCallback.INSTANCE);
+        this.ioOpCallback =
+                new BlockingIOOperationCallbackWrapper(NoOpIOOperationCallbackFactory.INSTANCE.createIoOpCallback());
         harness = new LSMBTreeTestHarness();
     }
 
     @Override
     protected void createIndexInstance() throws Exception {
-        index = LSMBTreeUtil.createLSMTree(harness.getIOManager(), harness.getVirtualBufferCaches(), harness
-                .getFileReference(),
-                harness.getDiskBufferCache(), harness.getDiskFileMapProvider(),
-                SerdeUtils.serdesToTypeTraits(keySerdes),
+        index = LSMBTreeUtil.createLSMTree(harness.getIOManager(), harness.getVirtualBufferCaches(),
+                harness.getFileReference(), harness.getDiskBufferCache(), SerdeUtils.serdesToTypeTraits(keySerdes),
                 SerdeUtils.serdesToComparatorFactories(keySerdes, keySerdes.length), bloomFilterKeyFields,
                 harness.getBoomFilterFalsePositiveRate(), harness.getMergePolicy(),
                 NoOpOperationTrackerFactory.INSTANCE.getOperationTracker(null), harness.getIOScheduler(),
-                harness.getIOOperationCallback(), true, null, null, null, null, true, harness
-                        .getMetadataPageManagerFactory());
+                harness.getIOOperationCallback(), true, null, null, null, null, true,
+                harness.getMetadataPageManagerFactory(), false, ITracer.NONE);
     }
 
     @Override

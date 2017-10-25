@@ -18,7 +18,7 @@
  */
 package org.apache.asterix.api.http.server;
 
-import static org.apache.asterix.api.http.servlet.ServletConstants.HYRACKS_CONNECTION_ATTR;
+import static org.apache.asterix.api.http.server.ServletConstants.HYRACKS_CONNECTION_ATTR;
 
 import java.io.IOException;
 import java.io.PrintWriter;
@@ -29,12 +29,10 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import org.apache.asterix.common.dataflow.ICcApplicationContext;
-import org.apache.asterix.file.StorageComponentProvider;
 import org.apache.asterix.metadata.MetadataManager;
 import org.apache.asterix.metadata.MetadataTransactionContext;
 import org.apache.asterix.metadata.declared.MetadataProvider;
 import org.apache.asterix.metadata.entities.Dataset;
-import org.apache.asterix.metadata.utils.DatasetUtil;
 import org.apache.asterix.om.types.ARecordType;
 import org.apache.asterix.utils.FlushDatasetUtil;
 import org.apache.hyracks.api.client.IHyracksClientConnection;
@@ -70,22 +68,21 @@ public class ConnectorApiServlet extends AbstractServlet {
     protected void get(IServletRequest request, IServletResponse response) {
         response.setStatus(HttpResponseStatus.OK);
         try {
-            HttpUtil.setContentType(response, HttpUtil.ContentType.TEXT_HTML, HttpUtil.Encoding.UTF8);
+            HttpUtil.setContentType(response, HttpUtil.ContentType.APPLICATION_JSON, HttpUtil.Encoding.UTF8);
         } catch (IOException e) {
             LOGGER.log(Level.WARNING, "Failure setting content type", e);
             response.setStatus(HttpResponseStatus.INTERNAL_SERVER_ERROR);
+            response.writer().write(e.toString());
             return;
         }
         PrintWriter out = response.writer();
         try {
-            ObjectMapper om = new ObjectMapper();
-            ObjectNode jsonResponse = om.createObjectNode();
+            ObjectNode jsonResponse = OBJECT_MAPPER.createObjectNode();
             String dataverseName = request.getParameter("dataverseName");
             String datasetName = request.getParameter("datasetName");
             if (dataverseName == null || datasetName == null) {
                 jsonResponse.put("error", "Parameter dataverseName or datasetName is null,");
                 out.write(jsonResponse.toString());
-                out.flush();
                 return;
             }
 
@@ -94,7 +91,7 @@ public class ConnectorApiServlet extends AbstractServlet {
             MetadataManager.INSTANCE.init();
             MetadataTransactionContext mdTxnCtx = MetadataManager.INSTANCE.beginTransaction();
             // Retrieves file splits of the dataset.
-            MetadataProvider metadataProvider = new MetadataProvider(appCtx, null, new StorageComponentProvider());
+            MetadataProvider metadataProvider = new MetadataProvider(appCtx, null);
             try {
                 metadataProvider.setMetadataTxnContext(mdTxnCtx);
                 Dataset dataset = metadataProvider.findDataset(dataverseName, datasetName);
@@ -106,11 +103,10 @@ public class ConnectorApiServlet extends AbstractServlet {
                     return;
                 }
                 boolean temp = dataset.getDatasetDetails().isTemp();
-                FileSplit[] fileSplits =
-                        metadataProvider.splitsForDataset(mdTxnCtx, dataverseName, datasetName, datasetName, temp);
+                FileSplit[] fileSplits = metadataProvider.splitsForIndex(mdTxnCtx, dataset, datasetName);
                 ARecordType recordType = (ARecordType) metadataProvider.findType(dataset.getItemTypeDataverseName(),
                         dataset.getItemTypeName());
-                List<List<String>> primaryKeys = DatasetUtil.getPartitioningKeys(dataset);
+                List<List<String>> primaryKeys = dataset.getPrimaryKeys();
                 StringBuilder pkStrBuf = new StringBuilder();
                 for (List<String> keys : primaryKeys) {
                     for (String key : keys) {
@@ -123,28 +119,27 @@ public class ConnectorApiServlet extends AbstractServlet {
                         hcc.getNodeControllerInfos());
 
                 // Flush the cached contents of the dataset to file system.
-                FlushDatasetUtil.flushDataset(hcc, metadataProvider, dataverseName, datasetName, datasetName);
+                FlushDatasetUtil.flushDataset(hcc, metadataProvider, dataverseName, datasetName);
 
                 // Metadata transaction commits.
                 MetadataManager.INSTANCE.commitTransaction(mdTxnCtx);
                 // Writes file splits.
                 out.write(jsonResponse.toString());
-                out.flush();
             } finally {
                 metadataProvider.getLocks().unlock();
             }
         } catch (Exception e) {
             LOGGER.log(Level.WARNING, "Failure handling a request", e);
-            out.println(e.getMessage());
+            response.setStatus(HttpResponseStatus.INTERNAL_SERVER_ERROR);
+            out.write(e.toString());
+        } finally {
             out.flush();
-            e.printStackTrace(out);
         }
     }
 
     private void formResponseObject(ObjectNode jsonResponse, FileSplit[] fileSplits, ARecordType recordType,
             String primaryKeys, boolean temp, Map<String, NodeControllerInfo> nodeMap) {
-        ObjectMapper om = new ObjectMapper();
-        ArrayNode partititons = om.createArrayNode();
+        ArrayNode partititons = OBJECT_MAPPER.createArrayNode();
         // Whether the dataset is temp or not
         jsonResponse.put("temp", temp);
         // Adds a primary key.

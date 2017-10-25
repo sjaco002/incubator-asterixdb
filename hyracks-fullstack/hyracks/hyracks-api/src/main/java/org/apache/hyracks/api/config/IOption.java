@@ -20,6 +20,8 @@ package org.apache.hyracks.api.config;
 
 import java.util.function.Function;
 
+import org.apache.hyracks.util.StringUtil;
+
 public interface IOption {
 
     String name();
@@ -62,6 +64,10 @@ public interface IOption {
 
     default String ini() {
         return name().toLowerCase().replace("_", ".");
+    }
+
+    default String camelCase() {
+        return StringUtil.toCamelCase(name());
     }
 
     default String toIniString() {

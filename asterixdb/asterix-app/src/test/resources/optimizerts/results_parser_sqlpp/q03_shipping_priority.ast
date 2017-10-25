@@ -173,7 +173,7 @@ Groupby
 
 Let Variable [ Name=$revenue ]
   :=
-  FunctionCall q3_shipping_priority.sum@1[
+  FunctionCall asterix.sum@1[
     (
       SELECT ELEMENT [
       OperatorExpr [
@@ -192,7 +192,9 @@ Let Variable [ Name=$revenue ]
         ]
       ]
       ]
-      FROM [        Variable [ Name=$l ]
+      FROM [        FunctionCall Metadata.dataset@1[
+          LiteralExpr [STRING] [l]
+        ]
         AS Variable [ Name=$i ]
       ]
     )

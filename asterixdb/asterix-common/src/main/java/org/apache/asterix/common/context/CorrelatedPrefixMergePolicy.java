@@ -24,29 +24,26 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import org.apache.asterix.common.api.IDatasetLifecycleManager;
+import org.apache.commons.lang3.tuple.Pair;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
-import org.apache.hyracks.storage.am.common.api.IResourceLifecycleManager;
 import org.apache.hyracks.storage.am.common.impls.NoOpOperationCallback;
-import org.apache.hyracks.storage.am.lsm.common.api.ILSMComponent;
-import org.apache.hyracks.storage.am.lsm.common.api.ILSMComponent.ComponentState;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMDiskComponent;
+import org.apache.hyracks.storage.am.lsm.common.api.ILSMDiskComponentId;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMIndex;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMIndexAccessor;
-import org.apache.hyracks.storage.am.lsm.common.api.ILSMMergePolicy;
+import org.apache.hyracks.storage.am.lsm.common.impls.PrefixMergePolicy;
 
-public class CorrelatedPrefixMergePolicy implements ILSMMergePolicy {
-
-    private long maxMergableComponentSize;
-    private int maxToleranceComponentCount;
+public class CorrelatedPrefixMergePolicy extends PrefixMergePolicy {
 
     private final IDatasetLifecycleManager datasetLifecycleManager;
-    private final int datasetID;
+    private final int datasetId;
 
-    public CorrelatedPrefixMergePolicy(IResourceLifecycleManager datasetLifecycleManager, int datasetID) {
-        this.datasetLifecycleManager = (DatasetLifecycleManager) datasetLifecycleManager;
-        this.datasetID = datasetID;
+    public CorrelatedPrefixMergePolicy(IDatasetLifecycleManager datasetLifecycleManager, int datasetId) {
+        this.datasetLifecycleManager = datasetLifecycleManager;
+        this.datasetId = datasetId;
     }
 
     @Override
@@ -59,65 +56,81 @@ public class CorrelatedPrefixMergePolicy implements ILSMMergePolicy {
         // all such components for which the sum of their sizes exceeds MaxMrgCompSz.  Schedule a merge of those components into a new component.
         // 2.  If a merge from 1 doesn't happen, see if the set of candidate components for merging exceeds MaxTolCompCnt.  If so, schedule
         // a merge all of the current candidates into a new single component.
-        List<ILSMDiskComponent> immutableComponents = new ArrayList<>(index.getImmutableComponents());
+
+        if (fullMergeIsRequested || index.isPrimaryIndex()) {
+            super.diskComponentAdded(index, fullMergeIsRequested, isMergeOp);
+        }
+    }
+
+    /**
+     * Adopts the similar logic to decide merge lagging based on {@link PrefixMergePolicy}
+     *
+     * @throws HyracksDataException
+     */
+    @Override
+    public boolean isMergeLagging(ILSMIndex index) throws HyracksDataException {
+        if (index.isPrimaryIndex()) {
+            return super.isMergeLagging(index);
+        } else {
+            return false;
+        }
+
+    }
+
+    @Override
+    protected boolean scheduleMerge(final ILSMIndex index) throws HyracksDataException {
+        List<ILSMDiskComponent> immutableComponents = new ArrayList<>(index.getDiskComponents());
         // Reverse the components order so that we look at components from oldest to newest.
         Collections.reverse(immutableComponents);
 
-        for (ILSMDiskComponent c : immutableComponents) {
-            if (c.getState() != ComponentState.READABLE_UNWRITABLE) {
-                return;
-            }
+        Pair<Integer, Integer> mergeableIndexes = getMergableComponentsIndex(immutableComponents);
+        if (mergeableIndexes == null) {
+            //nothing to merge
+            return false;
         }
-        if (fullMergeIsRequested) {
-            ILSMIndexAccessor accessor =
-                    index.createAccessor(NoOpOperationCallback.INSTANCE, NoOpOperationCallback.INSTANCE);
-            accessor.scheduleFullMerge(index.getIOOperationCallback());
-            return;
-        }
-        if (!index.isPrimaryIndex()) {
-            return;
-        }
-        long totalSize = 0;
-        int startIndex = -1;
-        int minNumComponents = Integer.MAX_VALUE;
+        long minID = immutableComponents.get(mergeableIndexes.getLeft()).getComponentId().getMinId();
+        long maxID = immutableComponents.get(mergeableIndexes.getRight()).getComponentId().getMaxId();
 
-        Set<ILSMIndex> indexes = datasetLifecycleManager.getDatasetInfo(datasetID).getDatasetIndexes();
-        for (ILSMIndex lsmIndex : indexes) {
-            minNumComponents = Math.min(minNumComponents, lsmIndex.getImmutableComponents().size());
-        }
+        Set<IndexInfo> indexInfos = datasetLifecycleManager.getDatasetInfo(datasetId).getDatsetIndexInfos();
+        int partition = getIndexPartition(index, indexInfos);
+        triggerScheduledMerge(minID, maxID,
+                indexInfos.stream().filter(info -> info.getPartition() == partition).collect(Collectors.toSet()));
+        return true;
+    }
 
-        for (int i = 0; i < minNumComponents; i++) {
-            ILSMComponent c = immutableComponents.get(i);
-            long componentSize = ((ILSMDiskComponent) c).getComponentSize();
-            if (componentSize > maxMergableComponentSize) {
-                startIndex = i;
-                totalSize = 0;
+    /**
+     * Submit merge requests for all disk components within [minID, maxID]
+     * of all indexes of a given dataset in the given partition
+     *
+     * @param minID
+     * @param maxID
+     * @param partition
+     * @param indexInfos
+     * @throws HyracksDataException
+     */
+    private void triggerScheduledMerge(long minID, long maxID, Set<IndexInfo> indexInfos) throws HyracksDataException {
+        for (IndexInfo info : indexInfos) {
+            ILSMIndex lsmIndex = info.getIndex();
+
+            List<ILSMDiskComponent> immutableComponents = new ArrayList<>(lsmIndex.getDiskComponents());
+            if (isMergeOngoing(immutableComponents)) {
                 continue;
             }
-            totalSize += componentSize;
-            boolean isLastComponent = i + 1 == minNumComponents ? true : false;
-            if (totalSize > maxMergableComponentSize
-                    || (isLastComponent && i - startIndex >= maxToleranceComponentCount)) {
-
-                for (ILSMIndex lsmIndex : indexes) {
-                    List<ILSMDiskComponent> reversedImmutableComponents =
-                            new ArrayList<>(lsmIndex.getImmutableComponents());
-                    // Reverse the components order so that we look at components from oldest to newest.
-                    Collections.reverse(reversedImmutableComponents);
-
-                    List<ILSMDiskComponent> mergableComponents = new ArrayList<>();
-                    for (int j = startIndex + 1; j <= i; j++) {
-                        mergableComponents.add(reversedImmutableComponents.get(j));
-                    }
-                    // Reverse the components order back to its original order
-                    Collections.reverse(mergableComponents);
-
-                    ILSMIndexAccessor accessor =
-                            lsmIndex.createAccessor(NoOpOperationCallback.INSTANCE, NoOpOperationCallback.INSTANCE);
-                    accessor.scheduleMerge(lsmIndex.getIOOperationCallback(), mergableComponents);
+            List<ILSMDiskComponent> mergableComponents = new ArrayList<>();
+            for (ILSMDiskComponent component : immutableComponents) {
+                ILSMDiskComponentId id = component.getComponentId();
+                if (id.getMinId() >= minID && id.getMaxId() <= maxID) {
+                    mergableComponents.add(component);
                 }
-                break;
+                if (id.getMaxId() < minID) {
+                    //disk components are ordered from latest (with largest IDs) to oldest (with smallest IDs)
+                    //if the component.maxID < minID, we can safely skip the rest disk components in the list
+                    break;
+                }
             }
+            ILSMIndexAccessor accessor =
+                    lsmIndex.createAccessor(NoOpOperationCallback.INSTANCE, NoOpOperationCallback.INSTANCE);
+            accessor.scheduleMerge(lsmIndex.getIOOperationCallback(), mergableComponents);
         }
     }
 
@@ -127,10 +140,13 @@ public class CorrelatedPrefixMergePolicy implements ILSMMergePolicy {
         maxToleranceComponentCount = Integer.parseInt(properties.get("max-tolerance-component-count"));
     }
 
-    @Override
-    public boolean isMergeLagging(ILSMIndex index) {
-
-        return false;
+    private int getIndexPartition(ILSMIndex index, Set<IndexInfo> indexInfos) {
+        for (IndexInfo info : indexInfos) {
+            if (info.getIndex() == index) {
+                return info.getPartition();
+            }
+        }
+        return -1;
     }
 
     @Override

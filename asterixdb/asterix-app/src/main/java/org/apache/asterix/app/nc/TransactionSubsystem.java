@@ -19,6 +19,7 @@
 package org.apache.asterix.app.nc;
 
 import java.util.concurrent.Callable;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import org.apache.asterix.common.config.ReplicationProperties;
@@ -36,10 +37,8 @@ import org.apache.asterix.common.transactions.ITransactionManager;
 import org.apache.asterix.common.transactions.ITransactionSubsystem;
 import org.apache.asterix.common.utils.StorageConstants;
 import org.apache.asterix.transaction.management.service.locking.ConcurrentLockManager;
-import org.apache.asterix.transaction.management.service.logging.LogBufferFactory;
 import org.apache.asterix.transaction.management.service.logging.LogManager;
 import org.apache.asterix.transaction.management.service.logging.LogManagerWithReplication;
-import org.apache.asterix.transaction.management.service.logging.ReplicatingLogBufferFactory;
 import org.apache.asterix.transaction.management.service.recovery.CheckpointManagerFactory;
 import org.apache.asterix.transaction.management.service.transaction.TransactionManager;
 import org.apache.hyracks.api.application.INCServiceContext;
@@ -49,6 +48,7 @@ import org.apache.hyracks.api.application.INCServiceContext;
  * Users of transaction sub-systems must obtain them from the provider.
  */
 public class TransactionSubsystem implements ITransactionSubsystem {
+    private static final Logger LOGGER = Logger.getLogger(TransactionSubsystem.class.getName());
     private final String id;
     private final ILogManager logManager;
     private final ILockManager lockManager;
@@ -74,24 +74,24 @@ public class TransactionSubsystem implements ITransactionSubsystem {
                 asterixAppRuntimeContextProvider.getAppContext().getReplicationProperties();
         IReplicationStrategy replicationStrategy = repProperties.getReplicationStrategy();
         final boolean replicationEnabled = repProperties.isParticipant(id);
-
         final CheckpointProperties checkpointProperties = new CheckpointProperties(txnProperties, id);
+        if (LOGGER.isLoggable(Level.INFO)) {
+            LOGGER.log(Level.INFO, "Checkpoint Properties: " + checkpointProperties);
+        }
         checkpointManager = CheckpointManagerFactory.create(this, checkpointProperties, replicationEnabled);
         final Checkpoint latestCheckpoint = checkpointManager.getLatest();
         if (latestCheckpoint != null && latestCheckpoint.getStorageVersion() != StorageConstants.VERSION) {
             throw new IllegalStateException(
                     String.format("Storage version mismatch. Current version (%s). On disk version: (%s)",
-                            latestCheckpoint.getStorageVersion(), StorageConstants.VERSION));
+                            StorageConstants.VERSION, latestCheckpoint.getStorageVersion()));
         }
 
         if (replicationEnabled) {
-            this.logManager =
-                    new LogManagerWithReplication(this, ReplicatingLogBufferFactory.INSTANCE, replicationStrategy);
+            this.logManager = new LogManagerWithReplication(this, replicationStrategy);
         } else {
-            this.logManager = new LogManager(this, LogBufferFactory.INSTANCE);
+            this.logManager = new LogManager(this);
         }
         this.recoveryManager = new RecoveryManager(this, serviceCtx);
-
         if (this.txnProperties.isCommitProfilerEnabled()) {
             ecp = new EntityCommitProfiler(this, this.txnProperties.getCommitProfilerReportInterval());
             getAsterixAppRuntimeContextProvider().getThreadExecutor().submit(ecp);

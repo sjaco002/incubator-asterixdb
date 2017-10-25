@@ -53,7 +53,7 @@ public class KSlotUniformMergePolicy implements ILSMMergePolicy {
             return;
         }
         numFlushes++;
-        List<ILSMDiskComponent> immutableComponents = new ArrayList<>(index.getImmutableComponents());
+        List<ILSMDiskComponent> immutableComponents = new ArrayList<>(index.getDiskComponents());
         if (!areComponentsReadableWritableState(immutableComponents)) {
             return;
         }
@@ -76,7 +76,7 @@ public class KSlotUniformMergePolicy implements ILSMMergePolicy {
     }
 
     private boolean scheduleMerge(final ILSMIndex index) throws HyracksDataException {
-        List<ILSMDiskComponent> immutableComponents = new ArrayList<>(index.getImmutableComponents());
+        List<ILSMDiskComponent> immutableComponents = new ArrayList<>(index.getDiskComponents());
         Collections.reverse(immutableComponents);
         int mergedIndex = -1;
         long delta = 0;
@@ -85,8 +85,9 @@ public class KSlotUniformMergePolicy implements ILSMMergePolicy {
             LOGGER.severe("KSlot Uniform Size Exceeded");
         }
         setdiskComponentsSizes(size);
-        if (size <= 1)
+        if (size <= 1) {
             return false;
+        }
         int startIndex = -1;
         if (size <= numComponents) {
             startIndex = size - 2;
@@ -225,7 +226,7 @@ public class KSlotUniformMergePolicy implements ILSMMergePolicy {
 
     @Override
     public boolean isMergeLagging(ILSMIndex index) throws HyracksDataException {
-        List<ILSMDiskComponent> immutableComponents = index.getImmutableComponents();
+        List<ILSMDiskComponent> immutableComponents = index.getDiskComponents();
         boolean isMergeOngoing = isMergeOngoing(immutableComponents);
         if (isMergeOngoing) {
             return true;

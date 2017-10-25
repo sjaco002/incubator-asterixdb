@@ -90,6 +90,7 @@ import org.apache.asterix.lang.common.expression.FieldBinding;
 import org.apache.asterix.lang.common.expression.GbyVariableExpressionPair;
 import org.apache.asterix.lang.common.expression.IfExpr;
 import org.apache.asterix.lang.common.expression.IndexAccessor;
+import org.apache.asterix.lang.common.expression.IndexedTypeExpression;
 import org.apache.asterix.lang.common.expression.ListConstructor;
 import org.apache.asterix.lang.common.expression.LiteralExpr;
 import org.apache.asterix.lang.common.expression.OperatorExpr;
@@ -576,37 +577,50 @@ CreateIndexStatement IndexSpecification() throws ParseException:
   String indexName = null;
   boolean ifNotExists = false;
   Pair<Identifier,Identifier> nameComponents = null;
-  Pair<Integer, Pair<List<String>, TypeExpression>> fieldPair = null;
+  Pair<Integer, Pair<List<String>, IndexedTypeExpression>> fieldPair = null;
   IndexParams indexType = null;
   boolean enforced = false;
+  boolean isPrimaryIdx = false;
 }
 {
-  <INDEX> indexName = Identifier()
-  ifNotExists = IfNotExists()
-  <ON> nameComponents = QualifiedName()
-  <LEFTPAREN> ( fieldPair = OpenField()
-    {
-       cis.addFieldExprPair(fieldPair.second);
-       cis.addFieldIndexIndicator(fieldPair.first);
-    }
-  ) (<COMMA> fieldPair = OpenField()
-    {
-       cis.addFieldExprPair(fieldPair.second);
-       cis.addFieldIndexIndicator(fieldPair.first);
-    }
-  )* <RIGHTPAREN> ( <TYPE> indexType = IndexType() )? ( <ENFORCED> { enforced = true; } )?
-    {
-      cis.setIndexName(new Identifier(indexName));
-      cis.setIfNotExists(ifNotExists);
-      cis.setDataverseName(nameComponents.first);
-      cis.setDatasetName(nameComponents.second);
-      if (indexType != null) {
-        cis.setIndexType(indexType.type);
-        cis.setGramLength(indexType.gramLength);
+  (
+    (<INDEX> indexName = Identifier()
+    ifNotExists = IfNotExists()
+    <ON> nameComponents = QualifiedName()
+    <LEFTPAREN> ( fieldPair = OpenField()
+      {
+        cis.addFieldExprPair(fieldPair.second);
+        cis.addFieldIndexIndicator(fieldPair.first);
       }
-      cis.setEnforced(enforced);
-      return cis;
+    ) (<COMMA> fieldPair = OpenField()
+      {
+        cis.addFieldExprPair(fieldPair.second);
+        cis.addFieldIndexIndicator(fieldPair.first);
+      }
+    )* <RIGHTPAREN> ( <TYPE> indexType = IndexType() )? ( <ENFORCED> { enforced = true; } )?)
+    |
+    (<PRIMARY> <INDEX> {isPrimaryIdx = true;}
+      (
+        (indexName = Identifier())? ifNotExists = IfNotExists()
+      )
+      <ON> nameComponents = QualifiedName() (<TYPE> <BTREE>)?
+    )
+  )
+  {
+    if (isPrimaryIdx && indexName == null) {
+      indexName = "primary_idx_" + nameComponents.second;
     }
+    cis.setIndexName(new Identifier(indexName));
+    cis.setIfNotExists(ifNotExists);
+    cis.setDataverseName(nameComponents.first);
+    cis.setDatasetName(nameComponents.second);
+    if (indexType != null) {
+      cis.setIndexType(indexType.type);
+      cis.setGramLength(indexType.gramLength);
+    }
+    cis.setEnforced(enforced);
+    return cis;
+  }
 }
 
 String CompactionPolicy() throws ParseException :
@@ -818,11 +832,10 @@ boolean IfNotExists() throws ParseException:
     }
 }
 
-List<FunctionSignature> ApplyFunction() throws ParseException:
+void ApplyFunction(List<FunctionSignature> funcSigs) throws ParseException:
 {
   FunctionName functioName = null;
   String fqFunctionName = null;
-  List<FunctionSignature> funcSigs = new ArrayList<FunctionSignature>();
 }
 {
   <APPLY> <FUNCTION> functioName = FunctionName()
@@ -837,9 +850,6 @@ List<FunctionSignature> ApplyFunction() throws ParseException:
       funcSigs.add(new FunctionSignature(functioName.dataverse, fqFunctionName, 1));
     }
   )*
-    {
-        return funcSigs;
-    }
 }
 
 String GetPolicy() throws ParseException:
@@ -1167,14 +1177,14 @@ Statement FeedStatement() throws ParseException:
   Pair<Identifier,Identifier> datasetNameComponents = null;
 
   Map<String,String> configuration = null;
-  List<FunctionSignature> appliedFunctions = null;
+  List<FunctionSignature> appliedFunctions = new ArrayList<FunctionSignature>();
   Statement stmt = null;
   String policy = null;
 }
 {
   (
     <CONNECT> <FEED> feedNameComponents = QualifiedName() <TO> <DATASET> datasetNameComponents = QualifiedName()
-    (appliedFunctions = ApplyFunction())? (policy = GetPolicy())?
+    (ApplyFunction(appliedFunctions))? (policy = GetPolicy())?
       {
         stmt = new ConnectFeedStatement(feedNameComponents, datasetNameComponents, appliedFunctions, policy, getVarCounter());
       }
@@ -1268,9 +1278,10 @@ Pair<String, String> Property() throws ParseException:
     }
 }
 
-TypeExpression IndexedTypeExpr() throws ParseException:
+IndexedTypeExpression IndexedTypeExpr() throws ParseException:
 {
   TypeExpression typeExpr = null;
+  boolean isUnknownable = false;
 }
 {
   (
@@ -1278,8 +1289,9 @@ TypeExpression IndexedTypeExpr() throws ParseException:
     | typeExpr = OrderedListTypeDef()
     | typeExpr = UnorderedListTypeDef()
   )
+  ( <QUES> { isUnknownable = true; } )?
   {
-    return typeExpr;
+    return new IndexedTypeExpression(typeExpr, isUnknownable);
   }
 }
 
@@ -1477,17 +1489,17 @@ String Identifier() throws ParseException:
   )
 }
 
-Pair<Integer, Pair<List<String>, TypeExpression>> OpenField() throws ParseException:
+Pair<Integer, Pair<List<String>, IndexedTypeExpression>> OpenField() throws ParseException:
 {
-  TypeExpression fieldType = null;
+  IndexedTypeExpression fieldType = null;
   Pair<Integer, List<String>> fieldList = null;
 }
 {
   fieldList = NestedField()
-  ( <COLON> fieldType =  IndexedTypeExpr() <QUES>)?
+  ( <COLON> fieldType = IndexedTypeExpr() )?
   {
-    return new Pair<Integer, Pair<List<String>, TypeExpression>>
-           (fieldList.first, new Pair<List<String>, TypeExpression>(fieldList.second, fieldType));
+    return new Pair<Integer, Pair<List<String>, IndexedTypeExpression>>
+            (fieldList.first, new Pair<List<String>, IndexedTypeExpression>(fieldList.second, fieldType));
   }
 }
 
@@ -2816,9 +2828,9 @@ TOKEN :
 <DEFAULT,IN_DBL_BRACE>
 TOKEN:
 {
-    < DOUBLE_LITERAL: <DIGITS>
-        | <DIGITS> ( "." <DIGITS> )?
-        | "." <DIGITS>
+    < DOUBLE_LITERAL: <DIGITS> ( "." <DIGITS> ) (("e"|"E") ("-")? <DIGITS>)?
+                          | <DIGITS> (("e"|"E") ("-")? <DIGITS>)
+                          | "." <DIGITS> (("e"|"E") ("-")? <DIGITS>)?
     >
   | < FLOAT_LITERAL: <DIGITS> ( "f" | "F" )
         | <DIGITS> ( "." <DIGITS> ( "f" | "F" ) )?

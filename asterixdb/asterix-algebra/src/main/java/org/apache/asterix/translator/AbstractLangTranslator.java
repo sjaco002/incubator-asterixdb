@@ -25,6 +25,8 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import org.apache.asterix.common.api.IClusterManagementWork.ClusterState;
+import org.apache.asterix.common.cluster.IClusterStateManager;
+import org.apache.asterix.common.cluster.IGlobalRecoveryManager;
 import org.apache.asterix.common.dataflow.ICcApplicationContext;
 import org.apache.asterix.common.exceptions.AsterixException;
 import org.apache.asterix.lang.common.base.Statement;
@@ -33,11 +35,9 @@ import org.apache.asterix.lang.common.statement.DataverseDropStatement;
 import org.apache.asterix.lang.common.statement.DeleteStatement;
 import org.apache.asterix.lang.common.statement.DropDatasetStatement;
 import org.apache.asterix.lang.common.statement.InsertStatement;
-import org.apache.asterix.lang.common.statement.NodeGroupDropStatement;
 import org.apache.asterix.metadata.dataset.hints.DatasetHints;
 import org.apache.asterix.metadata.entities.Dataverse;
 import org.apache.asterix.metadata.utils.MetadataConstants;
-import org.apache.asterix.runtime.utils.ClusterStateManager;
 import org.apache.hyracks.algebricks.common.utils.Pair;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
 
@@ -52,11 +52,13 @@ public abstract class AbstractLangTranslator {
     public void validateOperation(ICcApplicationContext appCtx, Dataverse defaultDataverse, Statement stmt)
             throws AsterixException {
 
-        if (!(ClusterStateManager.INSTANCE.getState().equals(ClusterState.ACTIVE)
-                && ClusterStateManager.INSTANCE.isGlobalRecoveryCompleted())) {
+        final IClusterStateManager clusterStateManager = appCtx.getClusterStateManager();
+        final IGlobalRecoveryManager globalRecoveryManager = appCtx.getGlobalRecoveryManager();
+        if (!(clusterStateManager.getState().equals(ClusterState.ACTIVE)
+                && globalRecoveryManager.isRecoveryCompleted())) {
             int maxWaitCycles = appCtx.getExternalProperties().getMaxWaitClusterActive();
             try {
-                ClusterStateManager.INSTANCE.waitForState(ClusterState.ACTIVE, maxWaitCycles, TimeUnit.SECONDS);
+                clusterStateManager.waitForState(ClusterState.ACTIVE, maxWaitCycles, TimeUnit.SECONDS);
             } catch (HyracksDataException e) {
                 throw new AsterixException(e);
             } catch (InterruptedException e) {
@@ -65,7 +67,7 @@ public abstract class AbstractLangTranslator {
                 }
                 Thread.currentThread().interrupt();
             }
-            if (!ClusterStateManager.INSTANCE.getState().equals(ClusterState.ACTIVE)) {
+            if (!clusterStateManager.getState().equals(ClusterState.ACTIVE)) {
                 throw new AsterixException("Cluster is in " + ClusterState.UNUSABLE + " state."
                         + "\n One or more Node Controllers have left or haven't joined yet.\n");
             } else {
@@ -75,16 +77,16 @@ public abstract class AbstractLangTranslator {
             }
         }
 
-        if (ClusterStateManager.INSTANCE.getState().equals(ClusterState.UNUSABLE)) {
+        if (clusterStateManager.getState().equals(ClusterState.UNUSABLE)) {
             throw new AsterixException("Cluster is in " + ClusterState.UNUSABLE + " state."
                     + "\n One or more Node Controllers have left.\n");
         }
 
-        if (!ClusterStateManager.INSTANCE.isGlobalRecoveryCompleted()) {
+        if (!globalRecoveryManager.isRecoveryCompleted()) {
             int maxWaitCycles = appCtx.getExternalProperties().getMaxWaitClusterActive();
             int waitCycleCount = 0;
             try {
-                while (!ClusterStateManager.INSTANCE.isGlobalRecoveryCompleted() && waitCycleCount < maxWaitCycles) {
+                while (!globalRecoveryManager.isRecoveryCompleted() && waitCycleCount < maxWaitCycles) {
                     Thread.sleep(1000);
                     waitCycleCount++;
                 }
@@ -94,7 +96,7 @@ public abstract class AbstractLangTranslator {
                 }
                 Thread.currentThread().interrupt();
             }
-            if (!ClusterStateManager.INSTANCE.isGlobalRecoveryCompleted()) {
+            if (!globalRecoveryManager.isRecoveryCompleted()) {
                 throw new AsterixException("Cluster Global recovery is not yet complete and the system is in "
                         + ClusterState.ACTIVE + " state");
             }
@@ -125,14 +127,6 @@ public abstract class AbstractLangTranslator {
                 if (invalidOperation) {
                     message = "Delete operation is not permitted in dataverse "
                             + MetadataConstants.METADATA_DATAVERSE_NAME;
-                }
-                break;
-
-            case Statement.Kind.NODEGROUP_DROP:
-                String nodegroupName = ((NodeGroupDropStatement) stmt).getNodeGroupName().getValue();
-                invalidOperation = MetadataConstants.METADATA_DEFAULT_NODEGROUP_NAME.equals(nodegroupName);
-                if (invalidOperation) {
-                    message = "Cannot drop nodegroup:" + nodegroupName;
                 }
                 break;
 

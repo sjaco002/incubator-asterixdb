@@ -27,7 +27,6 @@ import java.util.logging.Logger;
 
 import org.apache.asterix.common.api.IClusterManagementWork;
 import org.apache.asterix.common.api.IClusterManagementWork.ClusterState;
-import org.apache.asterix.common.api.IClusterManagementWorkResponse;
 import org.apache.asterix.common.cluster.IGlobalRecoveryManager;
 import org.apache.asterix.common.config.DatasetConfig.DatasetType;
 import org.apache.asterix.common.config.DatasetConfig.ExternalFilePendingOp;
@@ -44,33 +43,32 @@ import org.apache.asterix.metadata.entities.ExternalDatasetDetails;
 import org.apache.asterix.metadata.entities.Index;
 import org.apache.asterix.metadata.utils.ExternalIndexingOperations;
 import org.apache.asterix.metadata.utils.MetadataConstants;
-import org.apache.asterix.runtime.utils.ClusterStateManager;
 import org.apache.hyracks.api.application.ICCServiceContext;
 import org.apache.hyracks.api.client.IHyracksClientConnection;
+import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.apache.hyracks.api.job.JobId;
 import org.apache.hyracks.api.job.JobSpecification;
+import org.apache.hyracks.control.nc.NCShutdownHook;
+import org.apache.hyracks.util.ExitUtil;
 
 public class GlobalRecoveryManager implements IGlobalRecoveryManager {
 
     private static final Logger LOGGER = Logger.getLogger(GlobalRecoveryManager.class.getName());
-    private static GlobalRecoveryManager instance;
-    private static ClusterState state;
-    private final IStorageComponentProvider componentProvider;
-    private final ICCServiceContext ccServiceCtx;
-    private IHyracksClientConnection hcc;
+    protected final IStorageComponentProvider componentProvider;
+    protected final ICCServiceContext serviceCtx;
+    protected IHyracksClientConnection hcc;
+    protected volatile boolean recoveryCompleted;
+    protected volatile boolean recovering;
 
-    private GlobalRecoveryManager(ICCServiceContext ccServiceCtx, IHyracksClientConnection hcc,
-                                  IStorageComponentProvider componentProvider) {
-        setState(ClusterState.UNUSABLE);
-        this.ccServiceCtx = ccServiceCtx;
+    public GlobalRecoveryManager(ICCServiceContext serviceCtx, IHyracksClientConnection hcc,
+            IStorageComponentProvider componentProvider) {
+        this.serviceCtx = serviceCtx;
         this.hcc = hcc;
         this.componentProvider = componentProvider;
     }
 
     @Override
     public Set<IClusterManagementWork> notifyNodeFailure(Collection<String> deadNodeIds) {
-        setState(ClusterStateManager.INSTANCE.getState());
-        ClusterStateManager.INSTANCE.setGlobalRecoveryCompleted(false);
         return Collections.emptySet();
     }
 
@@ -86,61 +84,64 @@ public class GlobalRecoveryManager implements IGlobalRecoveryManager {
     }
 
     @Override
-    public void notifyRequestCompletion(IClusterManagementWorkResponse response) {
-        // Do nothing
-    }
-
-    @Override
-    public void notifyStateChange(ClusterState previousState, ClusterState newState) {
-        // Do nothing?
-    }
-
-    @Override
     public void startGlobalRecovery(ICcApplicationContext appCtx) {
-        // perform global recovery if state changed to active
-        final ClusterState newState = ClusterStateManager.INSTANCE.getState();
-        boolean needToRecover = !newState.equals(state) && (newState == ClusterState.ACTIVE);
-        if (needToRecover) {
-            setState(newState);
-            ccServiceCtx.getControllerService().getExecutor().submit(() -> {
-                LOGGER.info("Starting Global Recovery");
-                MetadataTransactionContext mdTxnCtx = null;
-                try {
-                    MetadataManager.INSTANCE.init();
-                    // Loop over datasets
-                    mdTxnCtx = MetadataManager.INSTANCE.beginTransaction();
-                    for (Dataverse dataverse : MetadataManager.INSTANCE.getDataverses(mdTxnCtx)) {
-                        mdTxnCtx = recoverDataset(appCtx, mdTxnCtx, dataverse);
-                    }
-                    MetadataManager.INSTANCE.commitTransaction(mdTxnCtx);
-                } catch (Exception e) {
-                    // This needs to be fixed <-- Needs to shutdown the system -->
-                    /*
-                     * Note: Throwing this illegal state exception will terminate this thread
-                     * and feeds listeners will not be notified.
+        if (!recoveryCompleted && !recovering) {
+            synchronized (this) {
+                if (!recovering) {
+                    recovering = true;
+                    /**
+                     * Perform recovery on a different thread to avoid deadlocks in
+                     * {@link org.apache.asterix.common.cluster.IClusterStateManager}
                      */
-                    LOGGER.log(Level.SEVERE, "Global recovery was not completed successfully: ", e);
-                    if (mdTxnCtx != null) {
+                    serviceCtx.getControllerService().getExecutor().submit(() -> {
                         try {
-                            MetadataManager.INSTANCE.abortTransaction(mdTxnCtx);
-                        } catch (Exception e1) {
-                            LOGGER.log(Level.SEVERE, "Exception in aborting", e1);
-                            e1.addSuppressed(e);
-                            throw new IllegalStateException(e1);
+                            recover(appCtx);
+                        } catch (HyracksDataException e) {
+                            LOGGER.log(Level.SEVERE, "Global recovery failed. Shutting down...", e);
+                            ExitUtil.exit(NCShutdownHook.FAILED_TO_RECOVER_EXIT_CODE);
                         }
-                    }
+                    });
                 }
-                ClusterStateManager.INSTANCE.setGlobalRecoveryCompleted(true);
-                LOGGER.info("Global Recovery Completed");
-            });
+            }
+        }
+    }
+
+    protected void recover(ICcApplicationContext appCtx) throws HyracksDataException {
+        try {
+            LOGGER.info("Starting Global Recovery");
+            MetadataManager.INSTANCE.init();
+            MetadataTransactionContext mdTxnCtx = MetadataManager.INSTANCE.beginTransaction();
+            mdTxnCtx = doRecovery(appCtx, mdTxnCtx);
+            MetadataManager.INSTANCE.commitTransaction(mdTxnCtx);
+            recoveryCompleted = true;
+            recovering = false;
+            LOGGER.info("Global Recovery Completed. Refreshing cluster state...");
+            appCtx.getClusterStateManager().refreshState();
+        } catch (Exception e) {
+            throw HyracksDataException.create(e);
+        }
+    }
+
+    protected MetadataTransactionContext doRecovery(ICcApplicationContext appCtx, MetadataTransactionContext mdTxnCtx)
+            throws Exception {
+        // Loop over datasets
+        for (Dataverse dataverse : MetadataManager.INSTANCE.getDataverses(mdTxnCtx)) {
+            mdTxnCtx = recoverDataset(appCtx, mdTxnCtx, dataverse);
+        }
+        return mdTxnCtx;
+    }
+
+    @Override
+    public void notifyStateChange(ClusterState newState) {
+        if (newState != ClusterState.ACTIVE && newState != ClusterState.RECOVERING) {
+            recoveryCompleted = false;
         }
     }
 
     private MetadataTransactionContext recoverDataset(ICcApplicationContext appCtx, MetadataTransactionContext mdTxnCtx,
-                                                      Dataverse dataverse)
-            throws Exception {
+            Dataverse dataverse) throws Exception {
         if (!dataverse.getDataverseName().equals(MetadataConstants.METADATA_DATAVERSE_NAME)) {
-            MetadataProvider metadataProvider = new MetadataProvider(appCtx, dataverse, componentProvider);
+            MetadataProvider metadataProvider = new MetadataProvider(appCtx, dataverse);
             try {
                 List<Dataset> datasets = MetadataManager.INSTANCE.getDataverseDatasets(mdTxnCtx,
                         dataverse.getDataverseName());
@@ -224,20 +225,12 @@ public class GlobalRecoveryManager implements IGlobalRecoveryManager {
                 metadataProvider.getLocks().unlock();
             }
         }
-
         return mdTxnCtx;
     }
 
-    public static GlobalRecoveryManager instance() {
-        return instance;
+    @Override
+    public boolean isRecoveryCompleted() {
+        return recoveryCompleted;
     }
 
-    public static synchronized void instantiate(ICCServiceContext ccServiceCtx, IHyracksClientConnection hcc,
-                                                IStorageComponentProvider componentProvider) {
-        instance = new GlobalRecoveryManager(ccServiceCtx, hcc, componentProvider);
-    }
-
-    public static synchronized void setState(ClusterState state) {
-        GlobalRecoveryManager.state = state;
-    }
 }

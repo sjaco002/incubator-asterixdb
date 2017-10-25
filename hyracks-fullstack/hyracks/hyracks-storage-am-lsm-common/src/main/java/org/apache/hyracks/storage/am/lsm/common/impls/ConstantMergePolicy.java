@@ -46,7 +46,7 @@ public class ConstantMergePolicy implements ILSMMergePolicy {
         if (!isMergeOp) {
             numFlushes++;
         }
-        List<ILSMDiskComponent> immutableComponents = index.getImmutableComponents();
+        List<ILSMDiskComponent> immutableComponents = index.getDiskComponents();
         if (!areComponentsMergable(immutableComponents)) {
             return;
         }
@@ -74,7 +74,7 @@ public class ConstantMergePolicy implements ILSMMergePolicy {
 
     @Override
     public void configure(Map<String, String> properties) {
-        numComponents = Integer.parseInt(properties.get("num-components"));
+        numComponents = Integer.parseInt(properties.get(ConstantMergePolicyFactory.NUM_COMPONENTS));
     }
 
     @Override
@@ -103,7 +103,7 @@ public class ConstantMergePolicy implements ILSMMergePolicy {
          * there will be no new merge either in this situation.
          */
 
-        List<ILSMDiskComponent> immutableComponents = index.getImmutableComponents();
+        List<ILSMDiskComponent> immutableComponents = index.getDiskComponents();
         int totalImmutableComponentCount = immutableComponents.size();
 
         // [case 1]

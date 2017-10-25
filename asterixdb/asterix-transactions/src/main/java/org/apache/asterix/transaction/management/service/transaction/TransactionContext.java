@@ -35,9 +35,9 @@ import org.apache.asterix.common.transactions.JobId;
 import org.apache.asterix.common.transactions.LogRecord;
 import org.apache.asterix.common.transactions.MutableLong;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
-import org.apache.hyracks.storage.am.common.api.IModificationOperationCallback;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMIndex;
 import org.apache.hyracks.storage.am.lsm.common.api.LSMOperationType;
+import org.apache.hyracks.storage.common.IModificationOperationCallback;
 
 /*
  * An object of TransactionContext is created and accessed(read/written) by multiple threads which work for
@@ -130,6 +130,12 @@ public class TransactionContext implements ITransactionContext, Serializable {
         }
     }
 
+    public PrimaryIndexOperationTracker getPrimaryIndexOpTracker() {
+        synchronized (indexMap) {
+            return primaryIndexOpTracker;
+        }
+    }
+
     // [Notice]
     // This method is called sequentially by the LogAppender threads.
     @Override
@@ -141,7 +147,11 @@ public class TransactionContext implements ITransactionContext, Serializable {
     @Override
     public void notifyOptracker(boolean isJobLevelCommit) {
         try {
-            if (isJobLevelCommit && isMetadataTxn) {
+            /**
+             * in case of transaction abort {@link TransactionContext#cleanupForAbort()} will
+             * clean the primaryIndexOpTracker state.
+             */
+            if (isJobLevelCommit && isMetadataTxn && txnState.get() != ITransactionManager.ABORTED) {
                 primaryIndexOpTracker.exclusiveJobCommitted();
             } else if (!isJobLevelCommit) {
                 primaryIndexOpTracker.completeOperation(null, LSMOperationType.MODIFICATION, null,

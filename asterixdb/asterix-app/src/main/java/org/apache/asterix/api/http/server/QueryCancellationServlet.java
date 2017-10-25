@@ -23,7 +23,6 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-import org.apache.asterix.api.http.servlet.ServletConstants;
 import org.apache.asterix.translator.IStatementExecutorContext;
 import org.apache.hyracks.api.client.IHyracksClientConnection;
 import org.apache.hyracks.api.job.JobId;
@@ -72,9 +71,7 @@ public class QueryCancellationServlet extends AbstractServlet {
             // response: OK
             response.setStatus(HttpResponseStatus.OK);
         } catch (Exception e) {
-            if (LOGGER.isLoggable(Level.WARNING)) {
-                LOGGER.log(Level.WARNING, e.getMessage(), e);
-            }
+            LOGGER.log(Level.WARNING, "unexpected exception thrown from cancel", e);
             // response: INTERNAL SERVER ERROR
             response.setStatus(HttpResponseStatus.INTERNAL_SERVER_ERROR);
         }

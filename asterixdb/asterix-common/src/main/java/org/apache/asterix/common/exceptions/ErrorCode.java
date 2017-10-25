@@ -55,7 +55,26 @@ public class ErrorCode {
     public static final int COERCION = 12;
     public static final int DUPLICATE_FIELD_NAME = 13;
     public static final int PROPERTY_NOT_SET = 14;
+    public static final int ROOT_LOCAL_RESOURCE_EXISTS = 15;
+    public static final int ROOT_LOCAL_RESOURCE_COULD_NOT_BE_CREATED = 16;
+    public static final int UNKNOWN_EXTERNAL_FILE_PENDING_OP = 17;
+    public static final int TYPE_CONVERT = 18;
+    public static final int TYPE_CONVERT_INTEGER_SOURCE = 19;
+    public static final int TYPE_CONVERT_INTEGER_TARGET = 20;
+    public static final int TYPE_CONVERT_OUT_OF_BOUND = 21;
+    public static final int FIELD_SHOULD_BE_TYPED = 22;
+    public static final int NC_REQUEST_TIMEOUT = 23;
+    public static final int POLYGON_INVALID_COORDINATE = 24;
+    public static final int POLYGON_3_POINTS = 25;
+    public static final int POLYGON_INVALID = 26;
+    public static final int OPERATION_NOT_SUPPORTED = 27;
+    public static final int INVALID_DURATION = 28;
+    public static final int UNKNOWN_DURATION_UNIT = 29;
+    public static final int QUERY_TIMEOUT = 30;
+
     public static final int INSTANTIATION_ERROR = 100;
+
+    public static final int EXTERNAL_UDF_RESULT_TYPE_ERROR = 200;
 
     // Compilation errors
     public static final int PARSE_ERROR = 1001;
@@ -95,6 +114,24 @@ public class ErrorCode {
     public static final int INCOMPATIBLE_SEARCH_MODIFIER = 1035;
     public static final int UNKNOWN_SEARCH_MODIFIER = 1036;
     public static final int COMPILATION_BAD_QUERY_PARAMETER_VALUE = 1037;
+    public static final int COMPILATION_ILLEGAL_STATE = 1038;
+    public static final int COMPILATION_TWO_PHASE_LOCKING_VIOLATION = 1039;
+    public static final int DATASET_ID_EXHAUSTED = 1040;
+    public static final int INDEX_ILLEGAL_ENFORCED_NON_OPTIONAL = 1041;
+    public static final int INDEX_ILLEGAL_NON_ENFORCED_TYPED = 1042;
+    public static final int INDEX_RTREE_MULTIPLE_FIELDS_NOT_ALLOWED = 1043;
+    public static final int REMOTE_EXCEPTION_WHEN_CALLING_METADATA_NODE = 1044;
+    public static final int ILLEGAL_LOCK_UPGRADE_OPERATION = 1045;
+    public static final int ILLEGAL_LOCK_DOWNGRADE_OPERATION = 1046;
+    public static final int UPGRADE_FAILED_LOCK_WAS_NOT_ACQUIRED = 1047;
+    public static final int DOWNGRADE_FAILED_LOCK_WAS_NOT_ACQUIRED = 1048;
+    public static final int LOCK_WAS_ACQUIRED_DIFFERENT_OPERATION = 1049;
+    public static final int NO_DATASET_WITH_NAME = 1050;
+    public static final int INDEX_ILLEGAL_ENFORCED_ON_CLOSED_FIELD = 1051;
+    public static final int INDEX_ILLEGAL_REPETITIVE_FIELD = 1052;
+    public static final int CANNOT_CREATE_SEC_PRIMARY_IDX_ON_EXT_DATASET = 1053;
+    public static final int COMPILATION_FAILED_DUE_TO_REPLICATE_OP = 1054;
+    public static final int COMPILATION_INCOMPATIBLE_FUNCTION_LANGUAGE = 1055;
 
     // Feed errors
     public static final int DATAFLOW_ILLEGAL_STATE = 3001;
@@ -130,9 +167,6 @@ public class ErrorCode {
     public static final int NODE_RESOLVER_UNABLE_RESOLVE_HOST = 3032;
     public static final int INPUT_RECORD_CONVERTER_DCP_MSG_TO_RECORD_CONVERTER_UNKNOWN_DCP_REQUEST = 3033;
     public static final int FEED_DATAFLOW_FRAME_DISTR_REGISTER_FAILED_DATA_PROVIDER = 3034;
-    public static final int FEED_MANAGEMENT_FEED_EVENTS_LISTENER_ALREADY_HAVE_INTAKE_JOB = 3035;
-    public static final int FEED_MANAGEMENT_FEED_EVENTS_LISTENER_INTAKE_JOB_REGISTERED = 3036;
-    public static final int FEED_MANAGEMENT_FEED_EVENTS_LISTENER_FEED_JOB_REGISTERED = 3037;
     public static final int INPUT_RECORD_READER_CHAR_ARRAY_RECORD_TOO_LARGE = 3038;
     public static final int LIBRARY_JOBJECT_ACCESSOR_CANNOT_PARSE_TYPE = 3039;
     public static final int LIBRARY_JOBJECT_UTIL_ILLEGAL_ARGU_TYPE = 3040;
@@ -178,6 +212,38 @@ public class ErrorCode {
     public static final int FEED_METADATA_UTIL_UNEXPECTED_FEED_DATATYPE = 3080;
     public static final int FEED_METADATA_SOCKET_ADAPTOR_SOCKET_NOT_PROPERLY_CONFIGURED = 3081;
     public static final int FEED_METADATA_SOCKET_ADAPTOR_SOCKET_INVALID_HOST_NC = 3082;
+    public static final int PROVIDER_DATASOURCE_FACTORY_DUPLICATE_FORMAT_MAPPING = 3083;
+    public static final int CANNOT_SUBSCRIBE_TO_FAILED_ACTIVE_ENTITY = 3084;
+    public static final int FEED_UNKNOWN_ADAPTER_NAME = 3085;
+    public static final int PROVIDER_STREAM_RECORD_READER_WRONG_CONFIGURATION = 3086;
+    public static final int FEED_CONNECT_FEED_APPLIED_INVALID_FUNCTION = 3087;
+    public static final int ACTIVE_MANAGER_INVALID_RUNTIME = 3088;
+    public static final int ACTIVE_ENTITY_ALREADY_STARTED = 3089;
+    public static final int ACTIVE_ENTITY_CANNOT_BE_STOPPED = 3090;
+    public static final int CANNOT_ADD_DATASET_TO_ACTIVE_ENTITY = 3091;
+    public static final int CANNOT_REMOVE_DATASET_FROM_ACTIVE_ENTITY = 3092;
+    public static final int ACTIVE_ENTITY_IS_ALREADY_REGISTERED = 3093;
+    public static final int CANNOT_ADD_INDEX_TO_DATASET_CONNECTED_TO_ACTIVE_ENTITY = 3094;
+    public static final int CANNOT_REMOVE_INDEX_FROM_DATASET_CONNECTED_TO_ACTIVE_ENTITY = 3095;
+    public static final int ACTIVE_NOTIFICATION_HANDLER_IS_SUSPENDED = 3096;
+    public static final int ACTIVE_ENTITY_LISTENER_IS_NOT_REGISTERED = 3097;
+    public static final int CANNOT_DERIGESTER_ACTIVE_ENTITY_LISTENER = 3098;
+    public static final int DOUBLE_INITIALIZATION_OF_ACTIVE_NOTIFICATION_HANDLER = 3099;
+    public static final int FAILED_TO_SHUTDOWN_EVENT_PROCESSOR = 3100;
+    public static final int DOUBLE_RECOVERY_ATTEMPTS = 3101;
+    public static final int UNREPORTED_TASK_FAILURE_EXCEPTION = 3102;
+    public static final int ACTIVE_ENTITY_ALREADY_SUSPENDED = 3103;
+    public static final int ACTIVE_ENTITY_CANNOT_RESUME_FROM_STATE = 3104;
+    public static final int ACTIVE_RUNTIME_IS_ALREADY_REGISTERED = 3105;
+    public static final int ACTIVE_RUNTIME_IS_NOT_REGISTERED = 3106;
+    public static final int ACTIVE_EVENT_HANDLER_ALREADY_SUSPENDED = 3107;
+    public static final int FEED_STOPPED_WHILE_WAITING_FOR_A_NEW_RECORD = 3108;
+    public static final int METADATA_DROP_FUCTION_IN_USE = 3109;
+    public static final int FEED_FAILED_WHILE_GETTING_A_NEW_RECORD = 3110;
+    public static final int FEED_START_FEED_WITHOUT_CONNECTION = 3111;
+
+    // Lifecycle management errors
+    public static final int DUPLICATE_PARTITION_ID = 4000;
 
     private ErrorCode() {
     }

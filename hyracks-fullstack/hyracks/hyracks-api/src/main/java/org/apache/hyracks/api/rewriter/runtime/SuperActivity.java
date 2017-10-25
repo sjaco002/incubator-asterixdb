@@ -25,7 +25,6 @@ import java.util.Map;
 import java.util.Map.Entry;
 
 import org.apache.commons.lang3.tuple.Pair;
-
 import org.apache.hyracks.api.context.IHyracksTaskContext;
 import org.apache.hyracks.api.dataflow.ActivityId;
 import org.apache.hyracks.api.dataflow.IActivity;
@@ -58,14 +57,14 @@ public class SuperActivity extends OneToOneConnectedActivityCluster implements I
     public IOperatorNodePushable createPushRuntime(IHyracksTaskContext ctx,
             final IRecordDescriptorProvider recordDescProvider, final int partition, final int nPartitions)
             throws HyracksDataException {
-        final Map<ActivityId, IActivity> startActivities = new HashMap<ActivityId, IActivity>();
+        final Map<ActivityId, IActivity> startActivities = new HashMap<>();
         Map<ActivityId, IActivity> activities = getActivityMap();
         for (Entry<ActivityId, IActivity> entry : activities.entrySet()) {
             /**
              * extract start activities
              */
             List<IConnectorDescriptor> conns = getActivityInputMap().get(entry.getKey());
-            if (conns == null || conns.size() == 0) {
+            if (conns == null || conns.isEmpty()) {
                 startActivities.put(entry.getKey(), entry.getValue());
             }
         }

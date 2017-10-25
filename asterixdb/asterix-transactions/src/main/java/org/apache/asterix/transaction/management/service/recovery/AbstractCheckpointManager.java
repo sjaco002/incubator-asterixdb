@@ -23,6 +23,7 @@ import java.io.File;
 import java.io.FilenameFilter;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.nio.channels.ClosedByInterruptException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -30,6 +31,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import org.apache.asterix.common.exceptions.ACIDException;
@@ -63,13 +65,19 @@ public abstract class AbstractCheckpointManager implements ICheckpointManager {
     public AbstractCheckpointManager(ITransactionSubsystem txnSubsystem, CheckpointProperties checkpointProperties) {
         this.txnSubsystem = txnSubsystem;
         String checkpointDirPath = checkpointProperties.getCheckpointDirPath();
+        if (LOGGER.isLoggable(Level.INFO)) {
+            LOGGER.log(Level.INFO, "Checkpoint directory = " + checkpointDirPath);
+        }
         if (!checkpointDirPath.endsWith(File.separator)) {
             checkpointDirPath += File.separator;
         }
         checkpointDir = new File(checkpointDirPath);
         // Create the checkpoint directory if missing
         if (!checkpointDir.exists()) {
-            (new File(checkpointDirPath)).mkdir();
+            if (LOGGER.isLoggable(Level.INFO)) {
+                LOGGER.log(Level.INFO, "Checkpoint directory " + checkpointDirPath + " didn't exist. Creating one");
+            }
+            checkpointDir.mkdirs();
         }
         lsnThreshold = checkpointProperties.getLsnThreshold();
         pollFrequency = checkpointProperties.getPollFrequency();
@@ -80,19 +88,54 @@ public abstract class AbstractCheckpointManager implements ICheckpointManager {
     @Override
     public Checkpoint getLatest() throws ACIDException {
         // Read all checkpointObjects from the existing checkpoint files
+        LOGGER.log(Level.INFO, "Getting latest checkpoint");
         File[] checkpoints = checkpointDir.listFiles(filter);
         if (checkpoints == null || checkpoints.length == 0) {
+            if (LOGGER.isLoggable(Level.INFO)) {
+                LOGGER.log(Level.INFO,
+                        "Listing of files in the checkpoint dir returned " + (checkpoints == null ? "null" : "empty"));
+            }
             return null;
+        }
+        if (LOGGER.isLoggable(Level.INFO)) {
+            LOGGER.log(Level.INFO, "Listing of files in the checkpoint dir returned " + Arrays.toString(checkpoints));
         }
         List<Checkpoint> checkpointObjectList = new ArrayList<>();
         for (File file : checkpoints) {
             try {
+                if (LOGGER.isLoggable(Level.WARNING)) {
+                    LOGGER.log(Level.WARNING, "Reading checkpoint file: " + file.getAbsolutePath());
+                }
                 String jsonString = new String(Files.readAllBytes(Paths.get(file.getAbsolutePath())));
                 checkpointObjectList.add(Checkpoint.fromJson(jsonString));
+            } catch (ClosedByInterruptException e) {
+                Thread.currentThread().interrupt();
+                if (LOGGER.isLoggable(Level.WARNING)) {
+                    LOGGER.log(Level.WARNING, "Interrupted while reading checkpoint file: " + file.getAbsolutePath(),
+                            e);
+                }
+                throw new ACIDException(e);
             } catch (IOException e) {
-                throw new ACIDException("Failed to read a checkpoint file", e);
+                // ignore corrupted checkpoint file
+                if (LOGGER.isLoggable(Level.WARNING)) {
+                    LOGGER.log(Level.WARNING, "Failed to read checkpoint file: " + file.getAbsolutePath(), e);
+                }
+                file.delete();
+                if (LOGGER.isLoggable(Level.WARNING)) {
+                    LOGGER.log(Level.WARNING, "Deleted corrupted checkpoint file: " + file.getAbsolutePath());
+                }
             }
         }
+        /**
+         * If all checkpoint files are corrupted, we have no option but to try to perform recovery.
+         * We will forge a checkpoint that forces recovery to start from the beginning of the log.
+         * This shouldn't happen unless a hardware corruption happens.
+         */
+        if (checkpointObjectList.isEmpty()) {
+            LOGGER.severe("All checkpoint files are corrupted. Forcing recovery from the beginning of the log");
+            checkpointObjectList.add(forgeForceRecoveryCheckpoint());
+        }
+
         // Sort checkpointObjects in descending order by timeStamp to find out the most recent one.
         Collections.sort(checkpointObjectList);
 
@@ -123,6 +166,11 @@ public abstract class AbstractCheckpointManager implements ICheckpointManager {
         // Nothing to dump
     }
 
+    public Path getCheckpointPath(long checkpointTimestamp) {
+        return Paths.get(checkpointDir.getAbsolutePath() + File.separator + CHECKPOINT_FILENAME_PREFIX
+                + Long.toString(checkpointTimestamp));
+    }
+
     protected void capture(long minMCTFirstLSN, boolean sharp) throws HyracksDataException {
         ILogManager logMgr = txnSubsystem.getLogManager();
         ITransactionManager txnMgr = txnSubsystem.getTransactionManager();
@@ -132,16 +180,38 @@ public abstract class AbstractCheckpointManager implements ICheckpointManager {
         cleanup();
     }
 
+    protected Checkpoint forgeForceRecoveryCheckpoint() {
+        /**
+         * By setting the checkpoint first LSN (low watermark) to Long.MIN_VALUE, the recovery manager will start from
+         * the first available log.
+         * We set the storage version to the current version. If there is a version mismatch, it will be detected
+         * during recovery.
+         */
+        return new Checkpoint(Long.MIN_VALUE, Long.MIN_VALUE, Integer.MIN_VALUE, System.currentTimeMillis(), false,
+                StorageConstants.VERSION);
+    }
+
     private void persist(Checkpoint checkpoint) throws HyracksDataException {
-        // Construct checkpoint file name
-        String fileName = checkpointDir.getAbsolutePath() + File.separator + CHECKPOINT_FILENAME_PREFIX
-                + Long.toString(checkpoint.getTimeStamp());
+        // Get checkpoint file path
+        Path path = getCheckpointPath(checkpoint.getTimeStamp());
+
+        if (LOGGER.isLoggable(Level.INFO)) {
+            File file = path.toFile();
+            LOGGER.log(Level.INFO, "Persisting checkpoint file to " + file + " which "
+                    + (file.exists() ? "already exists" : "doesn't exist yet"));
+        }
         // Write checkpoint file to disk
-        Path path = Paths.get(fileName);
         try (BufferedWriter writer = Files.newBufferedWriter(path)) {
             writer.write(checkpoint.asJson());
+            writer.flush();
         } catch (IOException e) {
-            throw new HyracksDataException("Failed to write checkpoint to disk", e);
+            LOGGER.log(Level.SEVERE, "Failed to write checkpoint to disk", e);
+            throw HyracksDataException.create(e);
+        }
+        if (LOGGER.isLoggable(Level.INFO)) {
+            File file = path.toFile();
+            LOGGER.log(Level.INFO, "Completed persisting checkpoint file to " + file + " which now "
+                    + (file.exists() ? "exists" : " still doesn't exist"));
         }
     }
 
@@ -150,8 +220,13 @@ public abstract class AbstractCheckpointManager implements ICheckpointManager {
         // Sort the filenames lexicographically to keep the latest checkpoint history files.
         Arrays.sort(checkpointFiles);
         for (int i = 0; i < checkpointFiles.length - historyToKeep; i++) {
+            if (LOGGER.isLoggable(Level.WARNING)) {
+                LOGGER.warning("Deleting checkpoint file at: " + checkpointFiles[i].getAbsolutePath());
+            }
             if (!checkpointFiles[i].delete()) {
-                LOGGER.warning("Could not delete checkpoint file at: " + checkpointFiles[i].getAbsolutePath());
+                if (LOGGER.isLoggable(Level.WARNING)) {
+                    LOGGER.warning("Could not delete checkpoint file at: " + checkpointFiles[i].getAbsolutePath());
+                }
             }
         }
     }

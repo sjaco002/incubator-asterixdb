@@ -34,6 +34,7 @@ import org.apache.asterix.common.config.DatasetConfig.DatasetType;
 import org.apache.asterix.common.config.DatasetConfig.IndexType;
 import org.apache.asterix.common.dataflow.LSMIndexUtil;
 import org.apache.asterix.common.exceptions.ACIDException;
+import org.apache.asterix.common.exceptions.MetadataException;
 import org.apache.asterix.common.functions.FunctionSignature;
 import org.apache.asterix.common.metadata.MetadataIndexImmutableProperties;
 import org.apache.asterix.common.transactions.AbstractOperationCallback;
@@ -97,7 +98,9 @@ import org.apache.asterix.om.types.BuiltinType;
 import org.apache.asterix.om.types.IAType;
 import org.apache.asterix.transaction.management.opcallbacks.AbstractIndexModificationOperationCallback.Operation;
 import org.apache.asterix.transaction.management.opcallbacks.SecondaryIndexModificationOperationCallback;
+import org.apache.asterix.transaction.management.opcallbacks.UpsertOperationCallback;
 import org.apache.asterix.transaction.management.service.transaction.DatasetIdFactory;
+import org.apache.asterix.transaction.management.service.transaction.TransactionContext;
 import org.apache.hyracks.api.dataflow.value.IBinaryComparator;
 import org.apache.hyracks.api.dataflow.value.IBinaryComparatorFactory;
 import org.apache.hyracks.api.dataflow.value.ISerializerDeserializer;
@@ -108,16 +111,17 @@ import org.apache.hyracks.dataflow.common.comm.io.ArrayTupleReference;
 import org.apache.hyracks.dataflow.common.data.accessors.ITupleReference;
 import org.apache.hyracks.dataflow.common.utils.TupleUtils;
 import org.apache.hyracks.storage.am.btree.impls.RangePredicate;
-import org.apache.hyracks.storage.am.common.api.IIndex;
-import org.apache.hyracks.storage.am.common.api.IIndexAccessor;
-import org.apache.hyracks.storage.am.common.api.IIndexCursor;
-import org.apache.hyracks.storage.am.common.api.IModificationOperationCallback;
 import org.apache.hyracks.storage.am.common.api.ITreeIndexCursor;
 import org.apache.hyracks.storage.am.common.impls.NoOpOperationCallback;
-import org.apache.hyracks.storage.am.common.ophelpers.MultiComparator;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMIndex;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMIndexAccessor;
+import org.apache.hyracks.storage.am.lsm.common.api.LSMOperationType;
 import org.apache.hyracks.storage.am.lsm.common.impls.AbstractLSMIndex;
+import org.apache.hyracks.storage.common.IIndex;
+import org.apache.hyracks.storage.common.IIndexAccessor;
+import org.apache.hyracks.storage.common.IIndexCursor;
+import org.apache.hyracks.storage.common.IModificationOperationCallback;
+import org.apache.hyracks.storage.common.MultiComparator;
 
 public class MetadataNode implements IMetadataNode {
     private static final long serialVersionUID = 1L;
@@ -213,6 +217,25 @@ public class MetadataNode implements IMetadataNode {
     }
 
     /**
+     * Upsert entity to index
+     *
+     * @param jobId
+     * @param entity
+     * @param tupleTranslator
+     * @param index
+     * @throws MetadataException
+     */
+    private <T> void upsertEntity(JobId jobId, T entity, IMetadataEntityTupleTranslator<T> tupleTranslator,
+            IMetadataIndex index) throws MetadataException {
+        try {
+            ITupleReference tuple = tupleTranslator.getTupleFromMetadataEntity(entity);
+            upsertTupleIntoIndex(jobId, index, tuple);
+        } catch (HyracksDataException | ACIDException e) {
+            throw new MetadataException(e);
+        }
+    }
+
+    /**
      * Delete entity from index
      *
      * @param jobId
@@ -265,6 +288,18 @@ public class MetadataNode implements IMetadataNode {
         }
         IMetadataEntityTupleTranslator<T> tupleTranslator = index.getTupleTranslator();
         addEntity(jobId, entity, tupleTranslator, index);
+    }
+
+    @SuppressWarnings("unchecked")
+    @Override
+    public <T extends IExtensionMetadataEntity> void upsertEntity(JobId jobId, T entity)
+            throws MetadataException, RemoteException {
+        ExtensionMetadataDataset<T> index = (ExtensionMetadataDataset<T>) extensionDatasets.get(entity.getDatasetId());
+        if (index == null) {
+            throw new MetadataException("Metadata Extension Index: " + entity.getDatasetId() + " was not found");
+        }
+        IMetadataEntityTupleTranslator<T> tupleTranslator = index.getTupleTranslator();
+        upsertEntity(jobId, entity, tupleTranslator, index);
     }
 
     @SuppressWarnings("unchecked")
@@ -323,7 +358,7 @@ public class MetadataNode implements IMetadataNode {
                 InternalDatasetDetails id = (InternalDatasetDetails) dataset.getDatasetDetails();
                 Index primaryIndex = new Index(dataset.getDataverseName(), dataset.getDatasetName(),
                         dataset.getDatasetName(), IndexType.BTREE, id.getPrimaryKey(), id.getKeySourceIndicator(),
-                        id.getPrimaryKeyType(), false, true, dataset.getPendingOp());
+                        id.getPrimaryKeyType(), false, false, true, dataset.getPendingOp());
 
                 addIndex(jobId, primaryIndex);
             }
@@ -456,6 +491,47 @@ public class MetadataNode implements IMetadataNode {
 
             // TODO: fix exceptions once new BTree exception model is in hyracks.
             indexAccessor.forceInsert(tuple);
+            //Manually complete the operation after the insert. This is to decrement the resource counters within the
+            //index that determine how many tuples are still 'in-flight' within the index. Normally the log flusher
+            //does this. The only exception is the index registered as the "primary" which we will let be decremented
+            //by the job commit log event
+            if (!((TransactionContext) txnCtx).getPrimaryIndexOpTracker().equals(lsmIndex.getOperationTracker())) {
+                lsmIndex.getOperationTracker().completeOperation(lsmIndex, LSMOperationType.FORCE_MODIFICATION, null,
+                        modCallback);
+            }
+        } finally {
+            datasetLifecycleManager.close(resourceName);
+        }
+    }
+
+    private void upsertTupleIntoIndex(JobId jobId, IMetadataIndex metadataIndex, ITupleReference tuple)
+            throws ACIDException, HyracksDataException {
+        long resourceId = metadataIndex.getResourceId();
+        String resourceName = metadataIndex.getFile().getRelativePath();
+        ILSMIndex lsmIndex = (ILSMIndex) datasetLifecycleManager.get(resourceName);
+        datasetLifecycleManager.open(resourceName);
+        try {
+            // prepare a Callback for logging
+            ITransactionContext txnCtx =
+                    transactionSubsystem.getTransactionManager().getTransactionContext(jobId, false);
+            IModificationOperationCallback modCallback =
+                    new UpsertOperationCallback(metadataIndex.getDatasetId(), metadataIndex.getPrimaryKeyIndexes(),
+                            txnCtx, transactionSubsystem.getLockManager(), transactionSubsystem, resourceId,
+                            metadataStoragePartition, ResourceType.LSM_BTREE, Operation.UPSERT);
+            ILSMIndexAccessor indexAccessor = lsmIndex.createAccessor(modCallback, NoOpOperationCallback.INSTANCE);
+            txnCtx.setWriteTxn(true);
+            txnCtx.registerIndexAndCallback(resourceId, lsmIndex, (AbstractOperationCallback) modCallback,
+                    metadataIndex.isPrimaryIndex());
+            LSMIndexUtil.checkAndSetFirstLSN((AbstractLSMIndex) lsmIndex, transactionSubsystem.getLogManager());
+            indexAccessor.forceUpsert(tuple);
+            //Manually complete the operation after the insert. This is to decrement the resource counters within the
+            //index that determine how many tuples are still 'in-flight' within the index. Normally the log flusher
+            //does this. The only exception is the index registered as the "primary" which we will let be decremented
+            //by the job commit log event
+            if (!((TransactionContext) txnCtx).getPrimaryIndexOpTracker().equals(lsmIndex.getOperationTracker())) {
+                lsmIndex.getOperationTracker().completeOperation(lsmIndex, LSMOperationType.FORCE_MODIFICATION, null,
+                        modCallback);
+            }
         } finally {
             datasetLifecycleManager.close(resourceName);
         }
@@ -635,10 +711,13 @@ public class MetadataNode implements IMetadataNode {
     }
 
     @Override
-    public void dropNodegroup(JobId jobId, String nodeGroupName) throws MetadataException, RemoteException {
-        List<String> datasetNames;
-        datasetNames = getDatasetNamesPartitionedOnThisNodeGroup(jobId, nodeGroupName);
+    public boolean dropNodegroup(JobId jobId, String nodeGroupName, boolean failSilently)
+            throws MetadataException, RemoteException {
+        List<String> datasetNames = getDatasetNamesPartitionedOnThisNodeGroup(jobId, nodeGroupName);
         if (!datasetNames.isEmpty()) {
+            if (failSilently) {
+                return false;
+            }
             StringBuilder sb = new StringBuilder();
             sb.append("Nodegroup '" + nodeGroupName
                     + "' cannot be dropped; it was used for partitioning these datasets:");
@@ -655,6 +734,7 @@ public class MetadataNode implements IMetadataNode {
             deleteTupleFromIndex(jobId, MetadataPrimaryIndexes.NODEGROUP_DATASET, tuple);
             // TODO: Change this to be a BTree specific exception, e.g.,
             // BTreeKeyDoesNotExistException.
+            return true;
         } catch (HyracksDataException e) {
             if (e.getComponent().equals(ErrorCode.HYRACKS)
                     && e.getErrorCode() == ErrorCode.UPDATE_OR_DELETE_NON_EXISTENT_KEY) {
@@ -747,6 +827,14 @@ public class MetadataNode implements IMetadataNode {
             LSMIndexUtil.checkAndSetFirstLSN((AbstractLSMIndex) lsmIndex, transactionSubsystem.getLogManager());
 
             indexAccessor.forceDelete(tuple);
+            //Manually complete the operation after the insert. This is to decrement the resource counters within the
+            //index that determine how many tuples are still 'in-flight' within the index. Normally the log flusher
+            //does this. The only exception is the index registered as the "primary" which we will let be decremented
+            //by the job commit log event
+            if (!((TransactionContext) txnCtx).getPrimaryIndexOpTracker().equals(lsmIndex.getOperationTracker())) {
+                lsmIndex.getOperationTracker().completeOperation(lsmIndex, LSMOperationType.FORCE_MODIFICATION, null,
+                        modCallback);
+            }
         } finally {
             datasetLifecycleManager.close(resourceName);
         }
@@ -950,7 +1038,7 @@ public class MetadataNode implements IMetadataNode {
         Datatype parentType = getDatatype(jobId, dataverseName, datatypeName);
 
         List<IAType> subTypes = null;
-        if (parentType.getDatatype().getTypeTag() == ATypeTag.RECORD) {
+        if (parentType.getDatatype().getTypeTag() == ATypeTag.OBJECT) {
             ARecordType recType = (ARecordType) parentType.getDatatype();
             subTypes = Arrays.asList(recType.getFieldTypes());
         } else if (parentType.getDatatype().getTypeTag() == ATypeTag.UNION) {
@@ -1068,6 +1156,20 @@ public class MetadataNode implements IMetadataNode {
                 return null;
             }
             return results.get(0);
+        } catch (HyracksDataException e) {
+            throw new MetadataException(e);
+        }
+    }
+
+    @Override
+    public List<Function> getFunctions(JobId jobId, String dataverseName) throws MetadataException, RemoteException {
+        try {
+            ITupleReference searchKey = createTuple(dataverseName);
+            FunctionTupleTranslator tupleReaderWriter = tupleTranslatorProvider.getFunctionTupleTranslator(false);
+            List<Function> results = new ArrayList<>();
+            IValueExtractor<Function> valueExtractor = new MetadataEntityValueExtractor<>(tupleReaderWriter);
+            searchIndex(jobId, MetadataPrimaryIndexes.FUNCTION_DATASET, searchKey, valueExtractor, results);
+            return results;
         } catch (HyracksDataException e) {
             throw new MetadataException(e);
         }
@@ -1647,6 +1749,20 @@ public class MetadataNode implements IMetadataNode {
                 return results.get(0);
             }
             return null;
+        } catch (HyracksDataException e) {
+            throw new MetadataException(e);
+        }
+    }
+
+    @Override
+    public List<Feed> getFeeds(JobId jobId, String dataverse) throws MetadataException, RemoteException {
+        try {
+            ITupleReference searchKey = createTuple(dataverse);
+            FeedTupleTranslator tupleReaderWriter = tupleTranslatorProvider.getFeedTupleTranslator(false);
+            List<Feed> results = new ArrayList<>();
+            IValueExtractor<Feed> valueExtractor = new MetadataEntityValueExtractor<>(tupleReaderWriter);
+            searchIndex(jobId, MetadataPrimaryIndexes.FEED_DATASET, searchKey, valueExtractor, results);
+            return results;
         } catch (HyracksDataException e) {
             throw new MetadataException(e);
         }

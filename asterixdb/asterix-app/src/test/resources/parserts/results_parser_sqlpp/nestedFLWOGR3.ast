@@ -58,7 +58,7 @@ Groupby
 
 Let Variable [ Name=$sig_sponsorship_count ]
   :=
-  FunctionCall null.sql-count@1[
+  FunctionCall asterix.sql-count@1[
     (
       SELECT ELEMENT [
       FunctionCall Metadata.resolve@-1[
@@ -88,13 +88,12 @@ Let Variable [ Name=$by_chapter ]
       (
         LiteralExpr [STRING] [escount]
         :
-        FunctionCall null.sql-count@1[
+        FunctionCall asterix.sql-count@1[
           (
             SELECT ELEMENT [
             FunctionCall Metadata.resolve@-1[
               LiteralExpr [STRING] [es]
               Variable [ Name=#4 ]
-              Variable [ Name=$e ]
               Variable [ Name=$sponsor ]
               Variable [ Name=$sig_sponsorship_count ]
               Variable [ Name=$chapter_name ]

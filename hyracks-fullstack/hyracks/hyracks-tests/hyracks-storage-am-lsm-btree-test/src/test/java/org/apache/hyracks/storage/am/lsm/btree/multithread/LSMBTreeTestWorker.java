@@ -28,13 +28,14 @@ import org.apache.hyracks.storage.am.btree.impls.RangePredicate;
 import org.apache.hyracks.storage.am.common.AbstractIndexTestWorker;
 import org.apache.hyracks.storage.am.common.TestOperationSelector;
 import org.apache.hyracks.storage.am.common.TestOperationSelector.TestOperation;
-import org.apache.hyracks.storage.am.common.api.IIndex;
-import org.apache.hyracks.storage.am.common.api.IIndexCursor;
 import org.apache.hyracks.storage.am.common.datagen.DataGenThread;
-import org.apache.hyracks.storage.am.common.ophelpers.MultiComparator;
 import org.apache.hyracks.storage.am.lsm.btree.impls.LSMBTree;
-import org.apache.hyracks.storage.am.lsm.btree.impls.LSMBTree.LSMBTreeAccessor;
-import org.apache.hyracks.storage.am.lsm.common.impls.NoOpIOOperationCallback;
+import org.apache.hyracks.storage.am.lsm.btree.impls.LSMBTreeOpContext;
+import org.apache.hyracks.storage.am.lsm.common.impls.LSMTreeIndexAccessor;
+import org.apache.hyracks.storage.am.lsm.common.impls.NoOpIOOperationCallbackFactory;
+import org.apache.hyracks.storage.common.IIndex;
+import org.apache.hyracks.storage.common.IIndexCursor;
+import org.apache.hyracks.storage.common.MultiComparator;
 
 public class LSMBTreeTestWorker extends AbstractIndexTestWorker {
     private final LSMBTree lsmBTree;
@@ -52,9 +53,10 @@ public class LSMBTreeTestWorker extends AbstractIndexTestWorker {
 
     @Override
     public void performOp(ITupleReference tuple, TestOperation op) throws HyracksDataException {
-        LSMBTreeAccessor accessor = (LSMBTreeAccessor) indexAccessor;
+        LSMTreeIndexAccessor accessor = (LSMTreeIndexAccessor) indexAccessor;
         IIndexCursor searchCursor = accessor.createSearchCursor(false);
-        MultiComparator cmp = accessor.getMultiComparator();
+        LSMBTreeOpContext concreteCtx = (LSMBTreeOpContext) accessor.getCtx();
+        MultiComparator cmp = concreteCtx.getCmp();
         RangePredicate rangePred = new RangePredicate(tuple, tuple, true, true, cmp, cmp);
 
         switch (op) {
@@ -116,7 +118,8 @@ public class LSMBTreeTestWorker extends AbstractIndexTestWorker {
                 break;
 
             case MERGE:
-                accessor.scheduleMerge(NoOpIOOperationCallback.INSTANCE, lsmBTree.getImmutableComponents());
+                accessor.scheduleMerge(NoOpIOOperationCallbackFactory.INSTANCE.createIoOpCallback(),
+                        lsmBTree.getDiskComponents());
                 break;
 
             default:

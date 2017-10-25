@@ -21,12 +21,16 @@
   <parent>
     <artifactId>apache-asterixdb</artifactId>
     <groupId>org.apache.asterix</groupId>
-    <version>0.9.2-SNAPSHOT</version>
+    <version>0.9.3-SNAPSHOT</version>
   </parent>
   <artifactId>asterix-installer</artifactId>
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <appendedResourcesDirectory>${basedir}/src/main/appended-resources</appendedResourcesDirectory>
+
+    <failsafe.test.excludes>**/DmlRecoveryIT.java</failsafe.test.excludes>
+    <cluster.test.excludes>**/AsterixClusterLifeCycleIT.java</cluster.test.excludes>
+    <cluster.extest.excludes>**/ClusterExecutionIT.java</cluster.extest.excludes>
   </properties>
 
   <licenses>
@@ -43,7 +47,6 @@
       <plugin>
         <groupId>org.apache.hyracks</groupId>
         <artifactId>license-automation-plugin</artifactId>
-        <version>${hyracks.version}</version>
         <executions>
           <execution>
             <phase>generate-resources</phase>
@@ -307,6 +310,17 @@
           </excludes>
         </configuration>
       </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-failsafe-plugin</artifactId>
+        <configuration>
+          <excludes combine.children="append">
+            <exclude>${failsafe.test.excludes}</exclude>
+            <exclude>${cluster.test.excludes}</exclude>
+            <exclude>${cluster.extest.excludes}</exclude>
+          </excludes>
+        </configuration>
+      </plugin>
     </plugins>
     <pluginManagement>
       <plugins>
@@ -321,7 +335,7 @@
                   <pluginExecutionFilter>
                     <groupId>org.apache.hyracks</groupId>
                     <artifactId>license-automation-plugin</artifactId>
-                    <versionRange>${hyracks.version}</versionRange>
+                    <versionRange>[0.0,)</versionRange>
                     <goals>
                       <goal>generate</goal>
                     </goals>
@@ -388,7 +402,6 @@
           <plugin>
             <groupId>org.apache.maven.plugins</groupId>
             <artifactId>maven-failsafe-plugin</artifactId>
-            <version>2.6</version>
             <configuration>
               <runOrder>alphabetical</runOrder>
               <forkMode>pertest</forkMode>

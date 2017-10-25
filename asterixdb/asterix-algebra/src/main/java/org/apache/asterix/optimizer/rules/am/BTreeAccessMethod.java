@@ -38,6 +38,9 @@ import org.apache.asterix.metadata.entities.Dataset;
 import org.apache.asterix.metadata.entities.Index;
 import org.apache.asterix.om.functions.BuiltinFunctions;
 import org.apache.asterix.om.types.ARecordType;
+import org.apache.asterix.om.types.AUnionType;
+import org.apache.asterix.om.types.IAType;
+import org.apache.asterix.om.utils.NonTaggedFormatUtil;
 import org.apache.asterix.optimizer.rules.util.EquivalenceClassUtils;
 import org.apache.commons.lang3.mutable.Mutable;
 import org.apache.commons.lang3.mutable.MutableObject;
@@ -259,11 +262,6 @@ public class BTreeAccessMethod implements IAccessMethod {
         BitSet setHighKeys = new BitSet(numSecondaryKeys);
         // Go through the func exprs listed as optimizable by the chosen index,
         // and formulate a range predicate on the secondary-index keys.
-
-        // checks whether a type casting happened from a real (FLOAT, DOUBLE) value to an INT value
-        // since we have a round issues when dealing with LT(<) OR GT(>) operator.
-        boolean realTypeConvertedToIntegerType;
-
         for (Pair<Integer, Integer> exprIndex : exprAndVarList) {
             // Position of the field of matchedFuncExprs.get(exprIndex) in the chosen index's indexed exprs.
             IOptimizableFuncExpr optFuncExpr = analysisCtx.getMatchedFuncExpr(exprIndex.first);
@@ -275,36 +273,26 @@ public class BTreeAccessMethod implements IAccessMethod {
             if (keyPos < 0) {
                 throw CompilationException.create(ErrorCode.NO_INDEX_FIELD_NAME_FOR_GIVEN_FUNC_EXPR);
             }
-            Pair<ILogicalExpression, Boolean> returnedSearchKeyExpr =
-                    AccessMethodUtils.createSearchKeyExpr(optFuncExpr, indexSubTree, probeSubTree);
+            IAType indexedFieldType = chosenIndex.getKeyFieldTypes().get(keyPos);
+            Pair<ILogicalExpression, Boolean> returnedSearchKeyExpr = AccessMethodUtils.createSearchKeyExpr(chosenIndex,
+                    optFuncExpr, indexedFieldType, indexSubTree, probeSubTree);
             ILogicalExpression searchKeyExpr = returnedSearchKeyExpr.first;
             if (searchKeyExpr.getExpressionTag() == LogicalExpressionTag.FUNCTION_CALL) {
                 constantAtRuntimeExpressions[keyPos] = searchKeyExpr;
                 constAtRuntimeExprVars[keyPos] = context.newVar();
                 searchKeyExpr = new VariableReferenceExpression(constAtRuntimeExprVars[keyPos]);
-
             }
-            realTypeConvertedToIntegerType = returnedSearchKeyExpr.second;
 
             LimitType limit = getLimitType(optFuncExpr, probeSubTree);
+            if (limit == null) {
+                return null;
+            }
 
-            // If a DOUBLE or FLOAT constant is converted to an INT type value,
-            // we need to check a corner case where two real values are located between an INT value.
-            // For example, for the following query,
-            //
-            // for $emp in dataset empDataset
-            // where $emp.age > double("2.3") and $emp.age < double("3.3")
-            // return $emp.id
-            //
-            // It should generate a result if there is a tuple that satisfies the condition, which is 3,
-            // however, it does not generate the desired result since finding candidates
-            // fail after truncating the fraction part (there is no INT whose value is greater than 2 and less than 3.)
-            //
-            // Therefore, we convert LT(<) to LE(<=) and GT(>) to GE(>=) to find candidates.
-            // This does not change the result of an actual comparison since this conversion is only applied
-            // for finding candidates from an index.
-            //
-            if (realTypeConvertedToIntegerType) {
+            // checks whether a type casting happened from a real (FLOAT, DOUBLE) value to an INT value
+            // since we have a round issues when dealing with LT(<) OR GT(>) operator.
+            boolean realTypeConvertedToIntegerType = returnedSearchKeyExpr.second;
+
+            if (relaxLimitTypeToInclusive(chosenIndex, keyPos, realTypeConvertedToIntegerType)) {
                 if (limit == LimitType.HIGH_EXCLUSIVE) {
                     limit = LimitType.HIGH_INCLUSIVE;
                 } else if (limit == LimitType.LOW_EXCLUSIVE) {
@@ -482,15 +470,21 @@ public class BTreeAccessMethod implements IAccessMethod {
         jobGenParams.setLowKeyVarList(keyVarList, 0, numLowKeys);
         jobGenParams.setHighKeyVarList(keyVarList, numLowKeys, numHighKeys);
 
-        ILogicalOperator inputOp = null;
+        ILogicalOperator inputOp;
         if (!assignKeyVarList.isEmpty()) {
             // Assign operator that sets the constant secondary-index search-key fields if necessary.
-            AssignOperator assignConstantSearchKeys = new AssignOperator(assignKeyVarList, assignKeyExprList);
-            // Input to this assign is the EmptyTupleSource (which the dataSourceScan also must have had as input).
-            assignConstantSearchKeys.getInputs().add(new MutableObject<>(
-                    OperatorManipulationUtil.deepCopy(dataSourceOp.getInputs().get(0).getValue())));
-            assignConstantSearchKeys.setExecutionMode(dataSourceOp.getExecutionMode());
-            inputOp = assignConstantSearchKeys;
+            AssignOperator assignSearchKeys = new AssignOperator(assignKeyVarList, assignKeyExprList);
+            if (probeSubTree == null) {
+                // We are optimizing a selection query.
+                // Input to this assign is the EmptyTupleSource (which the dataSourceScan also must have had as input).
+                assignSearchKeys.getInputs().add(new MutableObject<>(
+                        OperatorManipulationUtil.deepCopy(dataSourceOp.getInputs().get(0).getValue())));
+                assignSearchKeys.setExecutionMode(dataSourceOp.getExecutionMode());
+            } else {
+                // We are optimizing a join, place the assign op top of the probe subtree.
+                assignSearchKeys.getInputs().add(probeSubTree.getRootRef());
+            }
+            inputOp = assignSearchKeys;
         } else if (probeSubTree == null) {
             //nonpure case
             //Make sure that the nonpure function is unpartitioned
@@ -715,6 +709,50 @@ public class BTreeAccessMethod implements IAccessMethod {
             }
         }
         return limit;
+    }
+
+    private boolean relaxLimitTypeToInclusive(Index chosenIndex, int keyPos, boolean realTypeConvertedToIntegerType) {
+        // If a DOUBLE or FLOAT constant is converted to an INT type value,
+        // we need to check a corner case where two real values are located between an INT value.
+        // For example, for the following query,
+        //
+        // for $emp in dataset empDataset
+        // where $emp.age > double("2.3") and $emp.age < double("3.3")
+        // return $emp.id
+        //
+        // It should generate a result if there is a tuple that satisfies the condition, which is 3,
+        // however, it does not generate the desired result since finding candidates
+        // fail after truncating the fraction part (there is no INT whose value is greater than 2 and less than 3.)
+        //
+        // Therefore, we convert LT(<) to LE(<=) and GT(>) to GE(>=) to find candidates.
+        // This does not change the result of an actual comparison since this conversion is only applied
+        // for finding candidates from an index.
+        //
+        // We also need to do this for a non-enforced index that overrides key field type (for a numeric type)
+
+        if (realTypeConvertedToIntegerType) {
+            return true;
+        }
+
+        if (chosenIndex.isOverridingKeyFieldTypes() && !chosenIndex.isEnforced()) {
+            IAType indexedKeyType = chosenIndex.getKeyFieldTypes().get(keyPos);
+            if (NonTaggedFormatUtil.isOptional(indexedKeyType)) {
+                indexedKeyType = ((AUnionType) indexedKeyType).getActualType();
+            }
+            switch (indexedKeyType.getTypeTag()) {
+                case TINYINT:
+                case SMALLINT:
+                case INTEGER:
+                case BIGINT:
+                case FLOAT:
+                case DOUBLE:
+                    return true;
+                default:
+                    break;
+            }
+        }
+
+        return false;
     }
 
     private boolean probeIsOnLhs(IOptimizableFuncExpr optFuncExpr, OptimizableOperatorSubTree probeSubTree) {

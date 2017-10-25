@@ -15,15 +15,18 @@ RecordConstructor [
   (
     LiteralExpr [STRING] [sum_profit]
     :
-    FunctionCall tpch.sum@1[
+    FunctionCall asterix.sum@1[
       (
         SELECT ELEMENT [
         FieldAccessor [
-          Variable [ Name=$pr ]
+          FieldAccessor [
+            Variable [ Name=$pr ]
+            Field=profit
+          ]
           Field=amount
         ]
         ]
-        FROM [          Variable [ Name=$profit ]
+        FROM [          Variable [ Name=$g ]
           AS Variable [ Name=$pr ]
         ]
       )
@@ -431,7 +434,7 @@ Groupby
     Variable [ Name=$profit ]
     Field=o_year
   ]
-  GROUP AS Variable [ Name=#1 ]
+  GROUP AS Variable [ Name=$g ]
   (
     profit:=Variable [ Name=$profit ]
   )

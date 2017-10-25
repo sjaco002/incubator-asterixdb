@@ -18,13 +18,20 @@
  */
 package org.apache.hyracks.storage.am.common;
 
-import org.junit.After;
-import org.junit.Assert;
-import org.junit.Before;
-import org.junit.Test;
+import java.nio.file.NoSuchFileException;
+import java.util.logging.Level;
+import java.util.logging.LogRecord;
 
 import org.apache.hyracks.api.exceptions.HyracksDataException;
-import org.apache.hyracks.storage.am.common.api.IIndex;
+import org.apache.hyracks.api.util.IoUtil;
+import org.apache.hyracks.storage.common.IIndex;
+import org.apache.hyracks.util.RuntimeLogsMonitor;
+import org.junit.After;
+import org.junit.AfterClass;
+import org.junit.Assert;
+import org.junit.Before;
+import org.junit.BeforeClass;
+import org.junit.Test;
 
 public abstract class AbstractIndexLifecycleTest {
 
@@ -40,6 +47,16 @@ public abstract class AbstractIndexLifecycleTest {
 
     protected abstract void clearCheckableInsertions() throws Exception;
 
+    @BeforeClass
+    public static void startLogsMonitor() {
+        RuntimeLogsMonitor.monitor("org.apache.hyracks");
+    }
+
+    @AfterClass
+    public static void afterClass() {
+        RuntimeLogsMonitor.stop();
+    }
+
     @Before
     public abstract void setup() throws Exception;
 
@@ -48,10 +65,17 @@ public abstract class AbstractIndexLifecycleTest {
 
     @Test
     public void validSequenceTest() throws Exception {
-        // Double create is valid
+        RuntimeLogsMonitor.reset();
+        // Double create is invalid
         index.create();
         Assert.assertTrue(persistentStateExists());
-        index.create();
+        boolean exceptionCaught = false;
+        try {
+            index.create();
+        } catch (Exception e) {
+            exceptionCaught = true;
+        }
+        Assert.assertTrue(exceptionCaught);
         Assert.assertTrue(persistentStateExists());
 
         // Double open is valid
@@ -69,8 +93,6 @@ public abstract class AbstractIndexLifecycleTest {
 
         // Insert more stuff
         performInsertions();
-
-        // Double close is valid
         index.deactivate();
 
         // Check that the inserted stuff is still there
@@ -78,10 +100,12 @@ public abstract class AbstractIndexLifecycleTest {
         checkInsertions();
         index.deactivate();
 
-        // Double destroy is valid
+        // Double destroy is idempotent but should log NoSuchFileException
         index.destroy();
         Assert.assertFalse(persistentStateExists());
         index.destroy();
+        final LogRecord fileNotFoundWarnLog = new LogRecord(Level.WARNING, IoUtil.FILE_NOT_FOUND_MSG);
+        Assert.assertTrue(RuntimeLogsMonitor.count(fileNotFoundWarnLog) > 0);
         Assert.assertFalse(persistentStateExists());
     }
 
@@ -89,20 +113,34 @@ public abstract class AbstractIndexLifecycleTest {
     public void invalidSequenceTest1() throws Exception {
         index.create();
         index.activate();
-        index.create();
+        try {
+            index.create();
+        } finally {
+            index.deactivate();
+            index.destroy();
+        }
     }
 
     @Test(expected = HyracksDataException.class)
     public void invalidSequenceTest2() throws Exception {
         index.create();
         index.activate();
-        index.destroy();
+        try {
+            index.destroy();
+        } finally {
+            index.deactivate();
+            index.destroy();
+        }
     }
 
     @Test(expected = HyracksDataException.class)
     public void invalidSequenceTest3() throws Exception {
         index.create();
-        index.clear();
+        try {
+            index.clear();
+        } finally {
+            index.destroy();
+        }
     }
 
     @Test(expected = HyracksDataException.class)
@@ -114,7 +152,12 @@ public abstract class AbstractIndexLifecycleTest {
     public void invalidSequenceTest5() throws Exception {
         index.create();
         index.activate();
-        index.activate();
+        try {
+            index.activate();
+        } finally {
+            index.deactivate();
+            index.destroy();
+        }
     }
 
     @Test(expected = HyracksDataException.class)
@@ -122,6 +165,10 @@ public abstract class AbstractIndexLifecycleTest {
         index.create();
         index.activate();
         index.deactivate();
-        index.deactivate();
+        try {
+            index.deactivate();
+        } finally {
+            index.destroy();
+        }
     }
 }

@@ -36,6 +36,7 @@ import org.apache.asterix.common.config.DatasetConfig.DatasetType;
 import org.apache.asterix.common.config.MetadataProperties;
 import org.apache.asterix.common.dataflow.ICcApplicationContext;
 import org.apache.asterix.common.exceptions.CompilationException;
+import org.apache.asterix.common.exceptions.MetadataException;
 import org.apache.asterix.common.functions.FunctionConstants;
 import org.apache.asterix.common.functions.FunctionSignature;
 import org.apache.asterix.external.util.ExternalDataUtils;
@@ -72,7 +73,6 @@ import org.apache.asterix.lang.common.struct.OperatorType;
 import org.apache.asterix.lang.common.struct.QuantifiedPair;
 import org.apache.asterix.lang.common.util.FunctionUtil;
 import org.apache.asterix.lang.common.visitor.base.AbstractQueryExpressionVisitor;
-import org.apache.asterix.metadata.MetadataException;
 import org.apache.asterix.metadata.MetadataManager;
 import org.apache.asterix.metadata.declared.DataSource;
 import org.apache.asterix.metadata.declared.DataSourceId;
@@ -94,13 +94,11 @@ import org.apache.asterix.om.functions.BuiltinFunctions;
 import org.apache.asterix.om.functions.FunctionInfo;
 import org.apache.asterix.om.types.ARecordType;
 import org.apache.asterix.om.types.IAType;
-import org.apache.asterix.runtime.formats.FormatUtils;
 import org.apache.asterix.translator.CompiledStatements.CompiledInsertStatement;
 import org.apache.asterix.translator.CompiledStatements.CompiledLoadFromFileStatement;
 import org.apache.asterix.translator.CompiledStatements.CompiledSubscribeFeedStatement;
 import org.apache.asterix.translator.CompiledStatements.CompiledUpsertStatement;
 import org.apache.asterix.translator.CompiledStatements.ICompiledDmlStatement;
-import org.apache.asterix.translator.util.FunctionCollection;
 import org.apache.asterix.translator.util.PlanTranslationUtil;
 import org.apache.commons.lang3.mutable.Mutable;
 import org.apache.commons.lang3.mutable.MutableObject;
@@ -181,7 +179,6 @@ class LangExpressionToPlanTranslator
             throws AlgebricksException {
         this.context = new TranslationContext(new Counter(currentVarCounterValue));
         this.metadataProvider = metadataProvider;
-        FormatUtils.getDefaultFormat().registerRuntimeFunctions(FunctionCollection.getFunctionDescriptorFactories());
     }
 
     // Keeps the given Counter if one is provided instead of a value.
@@ -189,7 +186,6 @@ class LangExpressionToPlanTranslator
             throws AlgebricksException {
         this.context = new TranslationContext(currentVarCounter);
         this.metadataProvider = metadataProvider;
-        FormatUtils.getDefaultFormat().registerRuntimeFunctions(FunctionCollection.getFunctionDescriptorFactories());
     }
 
     @Override
@@ -211,7 +207,7 @@ class LangExpressionToPlanTranslator
                 metadataProvider.findType(dataset.getMetaItemTypeDataverseName(), dataset.getMetaItemTypeName());
         DatasetDataSource targetDatasource =
                 validateDatasetInfo(metadataProvider, stmt.getDataverseName(), stmt.getDatasetName());
-        List<List<String>> partitionKeys = DatasetUtil.getPartitioningKeys(targetDatasource.getDataset());
+        List<List<String>> partitionKeys = targetDatasource.getDataset().getPrimaryKeys();
         if (dataset.hasMetaPart()) {
             throw new AlgebricksException(
                     dataset.getDatasetName() + ": load dataset is not supported on Datasets with Meta records");
@@ -361,7 +357,7 @@ class LangExpressionToPlanTranslator
             ArrayList<LogicalVariable> vars = new ArrayList<>();
             ArrayList<Mutable<ILogicalExpression>> exprs = new ArrayList<>();
             List<Mutable<ILogicalExpression>> varRefsForLoading = new ArrayList<>();
-            List<List<String>> partitionKeys = DatasetUtil.getPartitioningKeys(targetDatasource.getDataset());
+            List<List<String>> partitionKeys = targetDatasource.getDataset().getPrimaryKeys();
             int numOfPrimaryKeys = partitionKeys.size();
             for (int i = 0; i < numOfPrimaryKeys; i++) {
                 if (keySourceIndicator == null || keySourceIndicator.get(i).intValue() == 0) {
@@ -413,15 +409,6 @@ class LangExpressionToPlanTranslator
                     leafOperator = translateDelete(targetDatasource, varRef, varRefsForLoading,
                             additionalFilteringExpressions, assign);
                     break;
-                case Statement.Kind.CONNECT_FEED:
-                    leafOperator = translateConnectFeed(targetDatasource, varRef, varRefsForLoading,
-                            additionalFilteringExpressions, assign);
-                    break;
-                case Statement.Kind.SUBSCRIBE_FEED:
-                    leafOperator = translateSubscribeFeed((CompiledSubscribeFeedStatement) stmt, targetDatasource,
-                            unnestVar, topOp, exprs, resVar, varRefsForLoading, varRef, assign,
-                            additionalFilteringField, additionalFilteringAssign, additionalFilteringExpressions);
-                    break;
                 default:
                     throw new AlgebricksException("Unsupported statement kind " + stmt.getKind());
             }
@@ -431,18 +418,6 @@ class LangExpressionToPlanTranslator
         ILogicalPlan plan = new ALogicalPlanImpl(globalPlanRoots);
         eliminateSharedOperatorReferenceForPlan(plan);
         return plan;
-    }
-
-    private ILogicalOperator translateConnectFeed(DatasetDataSource targetDatasource,
-            Mutable<ILogicalExpression> varRef, List<Mutable<ILogicalExpression>> varRefsForLoading,
-            List<Mutable<ILogicalExpression>> additionalFilteringExpressions, ILogicalOperator assign) {
-        InsertDeleteUpsertOperator insertOp = new InsertDeleteUpsertOperator(targetDatasource, varRef,
-                varRefsForLoading, InsertDeleteUpsertOperator.Kind.INSERT, false);
-        insertOp.setAdditionalFilteringExpressions(additionalFilteringExpressions);
-        insertOp.getInputs().add(new MutableObject<>(assign));
-        ILogicalOperator leafOperator = new DelegateOperator(new CommitOperator(true));
-        leafOperator.getInputs().add(new MutableObject<>(insertOp));
-        return leafOperator;
     }
 
     private ILogicalOperator translateDelete(DatasetDataSource targetDatasource, Mutable<ILogicalExpression> varRef,
@@ -459,100 +434,6 @@ class LangExpressionToPlanTranslator
         deleteOp.getInputs().add(new MutableObject<>(assign));
         ILogicalOperator leafOperator = new DelegateOperator(new CommitOperator(true));
         leafOperator.getInputs().add(new MutableObject<>(deleteOp));
-        return leafOperator;
-    }
-
-    private ILogicalOperator translateSubscribeFeed(CompiledSubscribeFeedStatement sfs,
-            DatasetDataSource targetDatasource, LogicalVariable unnestVar, ILogicalOperator topOp,
-            ArrayList<Mutable<ILogicalExpression>> exprs, LogicalVariable resVar,
-            List<Mutable<ILogicalExpression>> varRefsForLoading, Mutable<ILogicalExpression> varRef,
-            ILogicalOperator assign, List<String> additionalFilteringField, AssignOperator additionalFilteringAssign,
-            List<Mutable<ILogicalExpression>> additionalFilteringExpressions) throws AlgebricksException {
-        // if the feed is a change feed (i.e, performs different operations), we need to project op variable
-        InsertDeleteUpsertOperator feedModificationOp;
-        AssignOperator metaAndKeysAssign;
-        List<LogicalVariable> metaAndKeysVars = null;
-        List<Mutable<ILogicalExpression>> metaAndKeysExprs = null;
-        List<Mutable<ILogicalExpression>> metaExpSingletonList = null;
-        Feed feed = metadataProvider.findFeed(sfs.getDataverseName(), sfs.getFeedName());
-        boolean isChangeFeed = ExternalDataUtils.isChangeFeed(feed.getAdapterConfiguration());
-        boolean isUpsertFeed = ExternalDataUtils.isUpsertFeed(feed.getAdapterConfiguration());
-
-        ProjectOperator project = (ProjectOperator) topOp;
-        if (targetDatasource.getDataset().hasMetaPart() || isChangeFeed) {
-            metaAndKeysVars = new ArrayList<>();
-            metaAndKeysExprs = new ArrayList<>();
-            if (targetDatasource.getDataset().hasMetaPart()) {
-                // add the meta function
-                IFunctionInfo finfoMeta = FunctionUtil.getFunctionInfo(BuiltinFunctions.META);
-                ScalarFunctionCallExpression metaFunction = new ScalarFunctionCallExpression(finfoMeta,
-                        new MutableObject<>(new VariableReferenceExpression(unnestVar)));
-                // create assign for the meta part
-                LogicalVariable metaVar = context.newVar();
-                metaExpSingletonList = new ArrayList<>(1);
-                metaExpSingletonList.add(new MutableObject<>(new VariableReferenceExpression(metaVar)));
-                metaAndKeysVars.add(metaVar);
-                metaAndKeysExprs.add(new MutableObject<>(metaFunction));
-                project.getVariables().add(metaVar);
-            }
-        }
-        if (isChangeFeed) {
-            varRefsForLoading.clear();
-            for (Mutable<ILogicalExpression> assignExpr : exprs) {
-                if (assignExpr.getValue().getExpressionTag() == LogicalExpressionTag.FUNCTION_CALL) {
-                    AbstractFunctionCallExpression funcCall = (AbstractFunctionCallExpression) assignExpr.getValue();
-                    funcCall.substituteVar(resVar, unnestVar);
-                    LogicalVariable pkVar = context.newVar();
-                    metaAndKeysVars.add(pkVar);
-                    metaAndKeysExprs.add(new MutableObject<>(assignExpr.getValue()));
-                    project.getVariables().add(pkVar);
-                    varRefsForLoading.add(new MutableObject<>(new VariableReferenceExpression(pkVar)));
-                }
-            }
-            // A change feed, we don't need the assign to access PKs
-            feedModificationOp = new InsertDeleteUpsertOperator(targetDatasource, varRef, varRefsForLoading,
-                    metaExpSingletonList, InsertDeleteUpsertOperator.Kind.UPSERT, false);
-            // Create and add a new variable used for representing the original record
-            feedModificationOp.setPrevRecordVar(context.newVar());
-            feedModificationOp.setPrevRecordType(targetDatasource.getItemType());
-            if (targetDatasource.getDataset().hasMetaPart()) {
-                List<LogicalVariable> metaVars = new ArrayList<>();
-                metaVars.add(context.newVar());
-                feedModificationOp.setPrevAdditionalNonFilteringVars(metaVars);
-                List<Object> metaTypes = new ArrayList<>();
-                metaTypes.add(targetDatasource.getMetaItemType());
-                feedModificationOp.setPrevAdditionalNonFilteringTypes(metaTypes);
-            }
-
-            if (additionalFilteringField != null) {
-                feedModificationOp.setPrevFilterVar(context.newVar());
-                feedModificationOp.setPrevFilterType(
-                        ((ARecordType) targetDatasource.getItemType()).getFieldType(additionalFilteringField.get(0)));
-                additionalFilteringAssign.getInputs().clear();
-                additionalFilteringAssign.getInputs().add(assign.getInputs().get(0));
-                feedModificationOp.getInputs().add(new MutableObject<>(additionalFilteringAssign));
-            } else {
-                feedModificationOp.getInputs().add(assign.getInputs().get(0));
-            }
-        } else {
-            final InsertDeleteUpsertOperator.Kind opKind =
-                    isUpsertFeed ? InsertDeleteUpsertOperator.Kind.UPSERT : InsertDeleteUpsertOperator.Kind.INSERT;
-            feedModificationOp = new InsertDeleteUpsertOperator(targetDatasource, varRef, varRefsForLoading,
-                    metaExpSingletonList, opKind, false);
-            if (isUpsertFeed) {
-                feedModificationOp.setPrevRecordVar(context.newVar());
-                feedModificationOp.setPrevRecordType(targetDatasource.getItemType());
-            }
-            feedModificationOp.getInputs().add(new MutableObject<>(assign));
-        }
-        if (targetDatasource.getDataset().hasMetaPart() || isChangeFeed) {
-            metaAndKeysAssign = new AssignOperator(metaAndKeysVars, metaAndKeysExprs);
-            metaAndKeysAssign.getInputs().add(topOp.getInputs().get(0));
-            topOp.getInputs().set(0, new MutableObject<>(metaAndKeysAssign));
-        }
-        feedModificationOp.setAdditionalFilteringExpressions(additionalFilteringExpressions);
-        ILogicalOperator leafOperator = new DelegateOperator(new CommitOperator(true));
-        leafOperator.getInputs().add(new MutableObject<>(feedModificationOp));
         return leafOperator;
     }
 
@@ -574,7 +455,6 @@ class LangExpressionToPlanTranslator
         if (targetDatasource.getDataset().hasMetaPart()) {
             if (returnExpression != null) {
                 throw new AlgebricksException("Returning not allowed on datasets with Meta records");
-
             }
             AssignOperator metaAndKeysAssign;
             List<LogicalVariable> metaAndKeysVars;
@@ -691,7 +571,7 @@ class LangExpressionToPlanTranslator
         ILogicalOperator rootOperator = inputOperator;
 
         //Makes the id of the insert var point to the record variable.
-        context.newVar(compiledInsert.getVar());
+        context.newVarFromExpression(compiledInsert.getVar());
         context.setVar(compiledInsert.getVar(),
                 ((VariableReferenceExpression) insertOp.getPayloadExpression().getValue()).getVariableReference());
         Pair<ILogicalExpression, Mutable<ILogicalOperator>> p =
@@ -744,12 +624,12 @@ class LangExpressionToPlanTranslator
         LogicalVariable v;
         ILogicalOperator returnedOp;
         if (lc.getBindingExpr().getKind() == Kind.VARIABLE_EXPRESSION) {
-            v = context.newVar(lc.getVarExpr());
+            v = context.newVarFromExpression(lc.getVarExpr());
             LogicalVariable prev = context.getVar(((VariableExpr) lc.getBindingExpr()).getVar().getId());
             returnedOp = new AssignOperator(v, new MutableObject<>(new VariableReferenceExpression(prev)));
             returnedOp.getInputs().add(tupSource);
         } else {
-            v = context.newVar(lc.getVarExpr());
+            v = context.newVarFromExpression(lc.getVarExpr());
             Pair<ILogicalExpression, Mutable<ILogicalOperator>> eo =
                     langExprToAlgExpression(lc.getBindingExpr(), tupSource);
             returnedOp = new AssignOperator(v, new MutableObject<>(eo.first));
@@ -762,7 +642,7 @@ class LangExpressionToPlanTranslator
     public Pair<ILogicalOperator, LogicalVariable> visit(FieldAccessor fa, Mutable<ILogicalOperator> tupSource)
             throws CompilationException {
         Pair<ILogicalExpression, Mutable<ILogicalOperator>> p = langExprToAlgExpression(fa.getExpr(), tupSource);
-        LogicalVariable v = context.newVar();
+        LogicalVariable v = context.newVarFromExpression(fa);
         AbstractFunctionCallExpression fldAccess =
                 new ScalarFunctionCallExpression(FunctionUtil.getFunctionInfo(BuiltinFunctions.FIELD_ACCESS_BY_NAME));
         fldAccess.getArguments().add(new MutableObject<>(p.first));
@@ -863,7 +743,8 @@ class LangExpressionToPlanTranslator
             IFunctionInfo finfo = ExternalFunctionCompilerUtil
                     .getExternalFunctionInfo(metadataProvider.getMetadataTxnContext(), function);
             f = new ScalarFunctionCallExpression(finfo, args);
-        } else if (function.getLanguage().equalsIgnoreCase(Function.LANGUAGE_AQL)) {
+        } else if (function.getLanguage().equalsIgnoreCase(Function.LANGUAGE_AQL)
+                || function.getLanguage().equalsIgnoreCase(Function.LANGUAGE_SQLPP)) {
             IFunctionInfo finfo = FunctionUtil.getFunctionInfo(signature);
             f = new ScalarFunctionCallExpression(finfo, args);
         } else {
@@ -922,7 +803,7 @@ class LangExpressionToPlanTranslator
                 ILogicalExpression groupFieldExpr = langExprToAlgExpression(groupField.first, topOp).first;
                 groupRecordConstructorArgList.add(new MutableObject<>(groupFieldExpr));
             }
-            LogicalVariable groupVar = context.newVar(gc.getGroupVar());
+            LogicalVariable groupVar = context.newVarFromExpression(gc.getGroupVar());
             AssignOperator groupVarAssignOp = new AssignOperator(groupVar,
                     new MutableObject<>(new ScalarFunctionCallExpression(
                             FunctionUtil.getFunctionInfo(BuiltinFunctions.OPEN_RECORD_CONSTRUCTOR),
@@ -934,14 +815,14 @@ class LangExpressionToPlanTranslator
         GroupByOperator gOp = new GroupByOperator();
         for (GbyVariableExpressionPair ve : gc.getGbyPairList()) {
             VariableExpr vexpr = ve.getVar();
-            LogicalVariable v = vexpr == null ? context.newVar() : context.newVar(vexpr);
+            LogicalVariable v = vexpr == null ? context.newVar() : context.newVarFromExpression(vexpr);
             Pair<ILogicalExpression, Mutable<ILogicalOperator>> eo = langExprToAlgExpression(ve.getExpr(), topOp);
             gOp.addGbyExpression(v, eo.first);
             topOp = eo.second;
         }
         for (GbyVariableExpressionPair ve : gc.getDecorPairList()) {
             VariableExpr vexpr = ve.getVar();
-            LogicalVariable v = vexpr == null ? context.newVar() : context.newVar(vexpr);
+            LogicalVariable v = vexpr == null ? context.newVar() : context.newVarFromExpression(vexpr);
             Pair<ILogicalExpression, Mutable<ILogicalOperator>> eo = langExprToAlgExpression(ve.getExpr(), topOp);
             gOp.addDecorExpression(v, eo.first);
             topOp = eo.second;
@@ -1159,7 +1040,7 @@ class LangExpressionToPlanTranslator
         for (QuantifiedPair qt : qe.getQuantifiedList()) {
             Pair<ILogicalExpression, Mutable<ILogicalOperator>> eo1 = langExprToAlgExpression(qt.getExpr(), topOp);
             topOp = eo1.second;
-            LogicalVariable uVar = context.newVar(qt.getVarExpr());
+            LogicalVariable uVar = context.newVarFromExpression(qt.getVarExpr());
             ILogicalOperator u = new UnnestOperator(uVar, new MutableObject<>(makeUnnestExpression(eo1.first)));
 
             if (firstOp == null) {

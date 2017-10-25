@@ -42,13 +42,12 @@ import org.apache.hyracks.storage.am.lsm.common.api.ILSMOperationTracker;
 import org.apache.hyracks.storage.am.lsm.common.api.IVirtualBufferCache;
 import org.apache.hyracks.storage.am.lsm.common.impls.MultitenantVirtualBufferCache;
 import org.apache.hyracks.storage.am.lsm.common.impls.NoMergePolicy;
-import org.apache.hyracks.storage.am.lsm.common.impls.NoOpIOOperationCallback;
+import org.apache.hyracks.storage.am.lsm.common.impls.NoOpIOOperationCallbackFactory;
 import org.apache.hyracks.storage.am.lsm.common.impls.SynchronousScheduler;
 import org.apache.hyracks.storage.am.lsm.common.impls.ThreadCountingTracker;
 import org.apache.hyracks.storage.am.lsm.common.impls.VirtualBufferCache;
 import org.apache.hyracks.storage.common.buffercache.HeapBufferAllocator;
 import org.apache.hyracks.storage.common.buffercache.IBufferCache;
-import org.apache.hyracks.storage.common.file.IFileMapProvider;
 import org.apache.hyracks.test.support.TestStorageManagerComponentHolder;
 import org.apache.hyracks.test.support.TestUtils;
 
@@ -68,7 +67,6 @@ public class LSMInvertedIndexTestHarness {
     protected IOManager ioManager;
     protected int ioDeviceId;
     protected IBufferCache diskBufferCache;
-    protected IFileMapProvider diskFileMapProvider;
     protected List<IVirtualBufferCache> virtualBufferCaches;
     protected IHyracksTaskContext ctx;
     protected ILSMIOOperationScheduler ioScheduler;
@@ -97,7 +95,7 @@ public class LSMInvertedIndexTestHarness {
         this.ioScheduler = SynchronousScheduler.INSTANCE;
         this.mergePolicy = new NoMergePolicy();
         this.opTracker = new ThreadCountingTracker();
-        this.ioOpCallback = NoOpIOOperationCallback.INSTANCE;
+        this.ioOpCallback = NoOpIOOperationCallbackFactory.INSTANCE.createIoOpCallback();
         this.numMutableComponents = AccessMethodTestsConfig.LSM_INVINDEX_NUM_MUTABLE_COMPONENTS;
     }
 
@@ -108,12 +106,11 @@ public class LSMInvertedIndexTestHarness {
                 + simpleDateFormat.format(new Date()) + sep;
         ctx = TestUtils.create(getHyracksFrameSize());
         TestStorageManagerComponentHolder.init(diskPageSize, diskNumPages, diskMaxOpenFiles);
-        diskBufferCache = TestStorageManagerComponentHolder.getBufferCache(ctx);
-        diskFileMapProvider = TestStorageManagerComponentHolder.getFileMapProvider(ctx);
+        diskBufferCache = TestStorageManagerComponentHolder.getBufferCache(ctx.getJobletContext().getServiceContext());
         virtualBufferCaches = new ArrayList<>();
         for (int i = 0; i < numMutableComponents; i++) {
-            IVirtualBufferCache virtualBufferCache = new MultitenantVirtualBufferCache(new VirtualBufferCache(
-                    new HeapBufferAllocator(), memPageSize, memNumPages / numMutableComponents));
+            IVirtualBufferCache virtualBufferCache = new MultitenantVirtualBufferCache(
+                    new VirtualBufferCache(new HeapBufferAllocator(), memPageSize, memNumPages / numMutableComponents));
             virtualBufferCaches.add(virtualBufferCache);
             virtualBufferCache.open();
         }
@@ -182,10 +179,6 @@ public class LSMInvertedIndexTestHarness {
 
     public IBufferCache getDiskBufferCache() {
         return diskBufferCache;
-    }
-
-    public IFileMapProvider getDiskFileMapProvider() {
-        return diskFileMapProvider;
     }
 
     public List<IVirtualBufferCache> getVirtualBufferCaches() {

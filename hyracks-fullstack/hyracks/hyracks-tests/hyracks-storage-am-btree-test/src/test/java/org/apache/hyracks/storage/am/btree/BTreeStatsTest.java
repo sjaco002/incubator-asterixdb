@@ -44,6 +44,7 @@ import org.apache.hyracks.storage.am.btree.api.IBTreeLeafFrame;
 import org.apache.hyracks.storage.am.btree.frames.BTreeNSMInteriorFrameFactory;
 import org.apache.hyracks.storage.am.btree.frames.BTreeNSMLeafFrameFactory;
 import org.apache.hyracks.storage.am.btree.impls.BTree;
+import org.apache.hyracks.storage.am.btree.tuples.BTreeTypeAwareTupleWriterFactory;
 import org.apache.hyracks.storage.am.btree.util.AbstractBTreeTest;
 import org.apache.hyracks.storage.am.common.TestOperationCallback;
 import org.apache.hyracks.storage.am.common.api.IMetadataPageManager;
@@ -53,12 +54,10 @@ import org.apache.hyracks.storage.am.common.api.ITreeIndexMetadataFrame;
 import org.apache.hyracks.storage.am.common.api.ITreeIndexMetadataFrameFactory;
 import org.apache.hyracks.storage.am.common.frames.LIFOMetaDataFrameFactory;
 import org.apache.hyracks.storage.am.common.freepage.LinkedMetaDataPageManager;
-import org.apache.hyracks.storage.am.common.tuples.TypeAwareTupleWriterFactory;
 import org.apache.hyracks.storage.am.common.util.TreeIndexBufferCacheWarmup;
 import org.apache.hyracks.storage.am.common.util.TreeIndexStats;
 import org.apache.hyracks.storage.am.common.util.TreeIndexStatsGatherer;
 import org.apache.hyracks.storage.common.buffercache.IBufferCache;
-import org.apache.hyracks.storage.common.file.IFileMapProvider;
 import org.apache.hyracks.test.support.TestStorageManagerComponentHolder;
 import org.apache.hyracks.test.support.TestUtils;
 import org.junit.Test;
@@ -77,7 +76,6 @@ public class BTreeStatsTest extends AbstractBTreeTest {
 
         TestStorageManagerComponentHolder.init(PAGE_SIZE, NUM_PAGES, MAX_OPEN_FILES);
         IBufferCache bufferCache = harness.getBufferCache();
-        IFileMapProvider fmp = harness.getFileMapProvider();
 
         // declare fields
         int fieldCount = 2;
@@ -90,7 +88,7 @@ public class BTreeStatsTest extends AbstractBTreeTest {
         IBinaryComparatorFactory[] cmpFactories = new IBinaryComparatorFactory[keyFieldCount];
         cmpFactories[0] = PointableBinaryComparatorFactory.of(IntegerPointable.FACTORY);
 
-        TypeAwareTupleWriterFactory tupleWriterFactory = new TypeAwareTupleWriterFactory(typeTraits);
+        BTreeTypeAwareTupleWriterFactory tupleWriterFactory = new BTreeTypeAwareTupleWriterFactory(typeTraits, false);
         ITreeIndexFrameFactory leafFrameFactory = new BTreeNSMLeafFrameFactory(tupleWriterFactory);
         ITreeIndexFrameFactory interiorFrameFactory = new BTreeNSMInteriorFrameFactory(tupleWriterFactory);
         ITreeIndexMetadataFrameFactory metaFrameFactory = new LIFOMetaDataFrameFactory();
@@ -101,7 +99,7 @@ public class BTreeStatsTest extends AbstractBTreeTest {
 
         IMetadataPageManager freePageManager = new LinkedMetaDataPageManager(bufferCache, metaFrameFactory);
 
-        BTree btree = new BTree(bufferCache, fmp, freePageManager, interiorFrameFactory, leafFrameFactory, cmpFactories,
+        BTree btree = new BTree(bufferCache, freePageManager, interiorFrameFactory, leafFrameFactory, cmpFactories,
                 fieldCount, harness.getFileReference());
         btree.create();
         btree.activate();
@@ -163,16 +161,15 @@ public class BTreeStatsTest extends AbstractBTreeTest {
             }
         }
 
-        int fileId = fmp.lookupFileId(harness.getFileReference());
-        TreeIndexStatsGatherer statsGatherer =
-                new TreeIndexStatsGatherer(bufferCache, freePageManager, fileId, btree.getRootPageId());
+        TreeIndexStatsGatherer statsGatherer = new TreeIndexStatsGatherer(bufferCache, freePageManager,
+                harness.getFileReference(), btree.getRootPageId());
         TreeIndexStats stats = statsGatherer.gatherStats(leafFrame, interiorFrame, metaFrame);
         if (LOGGER.isLoggable(Level.INFO)) {
             LOGGER.info("\n" + stats.toString());
         }
 
         TreeIndexBufferCacheWarmup bufferCacheWarmup =
-                new TreeIndexBufferCacheWarmup(bufferCache, freePageManager, fileId);
+                new TreeIndexBufferCacheWarmup(bufferCache, freePageManager, harness.getFileReference());
         bufferCacheWarmup.warmup(leafFrame, metaFrame, new int[] { 1, 2 }, new int[] { 2, 5 });
 
         btree.deactivate();

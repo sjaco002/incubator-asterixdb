@@ -95,8 +95,8 @@ public class FeedMetaComputeNodePushable extends AbstractUnaryInputUnaryOutputOp
      */
     public FeedMetaComputeNodePushable(IHyracksTaskContext ctx, IRecordDescriptorProvider recordDescProvider,
             int partition, int nPartitions, IOperatorDescriptor coreOperator, FeedConnectionId feedConnectionId,
-            Map<String, String> feedPolicyProperties, String operationId,
-            FeedMetaOperatorDescriptor feedMetaOperatorDescriptor) throws HyracksDataException {
+            Map<String, String> feedPolicyProperties, FeedMetaOperatorDescriptor feedMetaOperatorDescriptor)
+            throws HyracksDataException {
         this.ctx = ctx;
         this.coreOperator = (AbstractUnaryInputUnaryOutputOperatorNodePushable) ((IActivity) coreOperator)
                 .createPushRuntime(ctx, recordDescProvider, partition, nPartitions);
@@ -106,7 +106,7 @@ public class FeedMetaComputeNodePushable extends AbstractUnaryInputUnaryOutputOp
         this.feedManager = (ActiveManager) ((INcApplicationContext) ctx.getJobletContext().getServiceContext()
                 .getApplicationContext()).getActiveManager();
         this.message = new VSizeFrame(ctx);
-        TaskUtil.putInSharedMap(HyracksConstants.KEY_MESSAGE, message, ctx);
+        TaskUtil.put(HyracksConstants.KEY_MESSAGE, message, ctx);
         this.opDesc = feedMetaOperatorDescriptor;
         this.recordDescProvider = recordDescProvider;
     }

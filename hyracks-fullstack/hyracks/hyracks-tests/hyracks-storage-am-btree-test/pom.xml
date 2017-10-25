@@ -25,11 +25,11 @@
   <parent>
     <groupId>org.apache.hyracks</groupId>
     <artifactId>hyracks-tests</artifactId>
-    <version>0.3.2-SNAPSHOT</version>
+    <version>0.3.3-SNAPSHOT</version>
   </parent>
 
   <properties>
-    <root.dir>${basedir}/../..</root.dir>
+    <root.dir>${basedir}/../../..</root.dir>
   </properties>
 
   <build>

@@ -47,6 +47,7 @@ import org.apache.asterix.lang.common.expression.FieldBinding;
 import org.apache.asterix.lang.common.expression.GbyVariableExpressionPair;
 import org.apache.asterix.lang.common.expression.IfExpr;
 import org.apache.asterix.lang.common.expression.IndexAccessor;
+import org.apache.asterix.lang.common.expression.IndexedTypeExpression;
 import org.apache.asterix.lang.common.expression.ListConstructor;
 import org.apache.asterix.lang.common.expression.LiteralExpr;
 import org.apache.asterix.lang.common.expression.OperatorExpr;
@@ -60,7 +61,6 @@ import org.apache.asterix.lang.common.expression.TypeReferenceExpression;
 import org.apache.asterix.lang.common.expression.UnaryExpr;
 import org.apache.asterix.lang.common.expression.UnorderedListTypeDefinition;
 import org.apache.asterix.lang.common.expression.VariableExpr;
-import org.apache.asterix.lang.common.literal.IntegerLiteral;
 import org.apache.asterix.lang.common.statement.CompactStatement;
 import org.apache.asterix.lang.common.statement.ConnectFeedStatement;
 import org.apache.asterix.lang.common.statement.CreateDataverseStatement;
@@ -98,7 +98,6 @@ import org.apache.asterix.lang.common.struct.OperatorType;
 import org.apache.asterix.lang.common.struct.QuantifiedPair;
 import org.apache.asterix.lang.common.struct.UnaryExprType;
 import org.apache.asterix.lang.common.visitor.base.ILangVisitor;
-import org.apache.asterix.metadata.utils.MetadataConstants;
 import org.apache.hyracks.algebricks.common.utils.Pair;
 import org.apache.hyracks.algebricks.core.algebra.expressions.IExpressionAnnotation;
 
@@ -490,8 +489,7 @@ public class FormatPrintVisitor implements ILangVisitor<Void, Integer> {
             printConfiguration(externalDetails.getProperties());
         }
         Identifier nodeGroupName = dd.getNodegroupName();
-        if (nodeGroupName != null
-                && !nodeGroupName.getValue().equals(MetadataConstants.METADATA_DEFAULT_NODEGROUP_NAME)) {
+        if (nodeGroupName != null) {
             out.print(" on " + nodeGroupName.getValue());
         }
         Map<String, String> hints = dd.getHints();
@@ -663,14 +661,18 @@ public class FormatPrintVisitor implements ILangVisitor<Void, Integer> {
         out.print(generateFullName(cis.getDataverseName(), cis.getDatasetName()));
 
         out.print(" (");
-        List<Pair<List<String>, TypeExpression>> fieldExprs = cis.getFieldExprs();
+        List<Pair<List<String>, IndexedTypeExpression>> fieldExprs = cis.getFieldExprs();
         int index = 0;
         int size = fieldExprs.size();
-        for (Pair<List<String>, TypeExpression> entry : fieldExprs) {
+        for (Pair<List<String>, IndexedTypeExpression> entry : fieldExprs) {
             printNestField(entry.first);
-            if (entry.second != null) {
+            IndexedTypeExpression typeExpr = entry.second;
+            if (typeExpr != null) {
                 out.print(":");
-                entry.second.accept(this, step);
+                typeExpr.getType().accept(this, step);
+                if (typeExpr.isUnknownable()) {
+                    out.print('?');
+                }
             }
             if (++index < size) {
                 out.print(",");

@@ -47,7 +47,7 @@ public class AlgebricksMetaOperatorDescriptor extends AbstractSingleActivityOper
             IPushRuntimeFactory[] runtimeFactories, RecordDescriptor[] internalRecordDescriptors) {
         super(spec, inputArity, outputArity);
         if (outputArity == 1) {
-            this.recordDescriptors[0] = internalRecordDescriptors[internalRecordDescriptors.length - 1];
+            this.outRecDescs[0] = internalRecordDescriptors[internalRecordDescriptors.length - 1];
         }
         this.pipeline = new AlgebricksPipeline(runtimeFactories, internalRecordDescriptors);
     }
@@ -91,7 +91,7 @@ public class AlgebricksMetaOperatorDescriptor extends AbstractSingleActivityOper
             public void initialize() throws HyracksDataException {
                 IFrameWriter startOfPipeline;
                 RecordDescriptor pipelineOutputRecordDescriptor =
-                        outputArity > 0 ? AlgebricksMetaOperatorDescriptor.this.recordDescriptors[0] : null;
+                        outputArity > 0 ? AlgebricksMetaOperatorDescriptor.this.outRecDescs[0] : null;
                 PipelineAssembler pa =
                         new PipelineAssembler(pipeline, inputArity, outputArity, null, pipelineOutputRecordDescriptor);
                 startOfPipeline = pa.assemblePipeline(writer, ctx);
@@ -112,18 +112,20 @@ public class AlgebricksMetaOperatorDescriptor extends AbstractSingleActivityOper
         return new AbstractUnaryInputUnaryOutputOperatorNodePushable() {
 
             private IFrameWriter startOfPipeline;
+            private boolean opened = false;
 
             @Override
             public void open() throws HyracksDataException {
                 if (startOfPipeline == null) {
                     RecordDescriptor pipelineOutputRecordDescriptor =
-                            outputArity > 0 ? AlgebricksMetaOperatorDescriptor.this.recordDescriptors[0] : null;
+                            outputArity > 0 ? AlgebricksMetaOperatorDescriptor.this.outRecDescs[0] : null;
                     RecordDescriptor pipelineInputRecordDescriptor = recordDescProvider
                             .getInputRecordDescriptor(AlgebricksMetaOperatorDescriptor.this.getActivityId(), 0);
                     PipelineAssembler pa = new PipelineAssembler(pipeline, inputArity, outputArity,
                             pipelineInputRecordDescriptor, pipelineOutputRecordDescriptor);
                     startOfPipeline = pa.assemblePipeline(writer, ctx);
                 }
+                opened = true;
                 startOfPipeline.open();
             }
 
@@ -134,12 +136,16 @@ public class AlgebricksMetaOperatorDescriptor extends AbstractSingleActivityOper
 
             @Override
             public void close() throws HyracksDataException {
-                startOfPipeline.close();
+                if (opened) {
+                    startOfPipeline.close();
+                }
             }
 
             @Override
             public void fail() throws HyracksDataException {
-                startOfPipeline.fail();
+                if (opened) {
+                    startOfPipeline.fail();
+                }
             }
 
             @Override

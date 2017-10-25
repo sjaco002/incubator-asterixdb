@@ -23,6 +23,7 @@ import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.StandardSocketOptions;
 import java.nio.ByteBuffer;
+import java.nio.channels.Channel;
 import java.nio.channels.ClosedChannelException;
 import java.nio.channels.SelectableChannel;
 import java.nio.channels.SelectionKey;
@@ -32,15 +33,23 @@ import java.nio.channels.SocketChannel;
 import java.util.ArrayList;
 import java.util.BitSet;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+import org.apache.commons.io.IOUtils;
+
 public class IPCConnectionManager {
     private static final Logger LOGGER = Logger.getLogger(IPCConnectionManager.class.getName());
+
+    // TODO(mblow): the next two could be config parameters
+    private static final int INITIAL_RETRY_DELAY_MILLIS = 100;
+    private static final int MAX_RETRY_DELAY_MILLIS = 15000;
 
     private final IPCSystem system;
 
@@ -88,18 +97,20 @@ public class IPCConnectionManager {
         networkThread.start();
     }
 
-    void stop() throws IOException {
+    void stop() {
         stopped = true;
-        serverSocketChannel.close();
+        IOUtils.closeQuietly(serverSocketChannel);
+        networkThread.selector.wakeup();
     }
 
-    IPCHandle getIPCHandle(InetSocketAddress remoteAddress, int retries) throws IOException, InterruptedException {
+    IPCHandle getIPCHandle(InetSocketAddress remoteAddress, int maxRetries) throws IOException, InterruptedException {
         IPCHandle handle;
-        int attempt = 1;
+        int retries = 0;
+        int delay = INITIAL_RETRY_DELAY_MILLIS;
         while (true) {
             synchronized (this) {
                 handle = ipcHandleMap.get(remoteAddress);
-                if (handle == null) {
+                if (handle == null || !handle.isConnected()) {
                     handle = new IPCHandle(system, remoteAddress);
                     pendingConnections.add(handle);
                     networkThread.selector.wakeup();
@@ -108,19 +119,11 @@ public class IPCConnectionManager {
             if (handle.waitTillConnected()) {
                 return handle;
             }
-            if (retries < 0) {
-                if (LOGGER.isLoggable(Level.INFO)) {
-                    LOGGER.info("Connection to " + remoteAddress + " failed, retrying...");
-                    attempt++;
-                    Thread.sleep(5000);
-                }
-            } else if (attempt < retries) {
-                if (LOGGER.isLoggable(Level.INFO)) {
-                    LOGGER.info("Connection to " + remoteAddress + " failed (Attempt " + attempt + " of " + retries
-                            + ")");
-                    attempt++;
-                    Thread.sleep(5000);
-                }
+            if (maxRetries < 0 || retries++ < maxRetries) {
+                LOGGER.warning("Connection to " + remoteAddress + " failed; retrying" + (maxRetries <= 0 ? ""
+                        : " (retry attempt " + retries + " of " + maxRetries + ") after " + delay + "ms"));
+                Thread.sleep(delay);
+                delay = Math.min(MAX_RETRY_DELAY_MILLIS, (int) (delay * 1.5));
             } else {
                 throw new IOException("Connection failed to " + remoteAddress);
             }
@@ -174,6 +177,8 @@ public class IPCConnectionManager {
     private class NetworkThread extends Thread {
         private final Selector selector;
 
+        private final Set<SocketChannel> openChannels = new HashSet<>();
+
         public NetworkThread() {
             super("IPC Network Listener Thread [" + address + "]");
             setDaemon(true);
@@ -186,6 +191,14 @@ public class IPCConnectionManager {
 
         @Override
         public void run() {
+            try {
+                doRun();
+            } finally {
+                cleanup();
+            }
+        }
+
+        private void doRun() {
             try {
                 serverSocketChannel.register(selector, SelectionKey.OP_ACCEPT);
             } catch (ClosedChannelException e) {
@@ -204,6 +217,7 @@ public class IPCConnectionManager {
                     if (!workingPendingConnections.isEmpty()) {
                         for (IPCHandle handle : workingPendingConnections) {
                             SocketChannel channel = SocketChannel.open();
+                            openChannels.add(channel);
                             channel.setOption(StandardSocketOptions.TCP_NODELAY, true);
                             channel.configureBlocking(false);
                             SelectionKey cKey;
@@ -269,7 +283,8 @@ public class IPCConnectionManager {
                                 system.getPerformanceCounters().addMessageBytesReceived(len);
                                 if (len < 0) {
                                     key.cancel();
-                                    channel.close();
+                                    IOUtils.closeQuietly(channel);
+                                    openChannels.remove(channel);
                                     handle.close();
                                 } else {
                                     handle.processIncomingMessages();
@@ -285,7 +300,8 @@ public class IPCConnectionManager {
                                 system.getPerformanceCounters().addMessageBytesSent(len);
                                 if (len < 0) {
                                     key.cancel();
-                                    channel.close();
+                                    IOUtils.closeQuietly(channel);
+                                    openChannels.remove(channel);
                                     handle.close();
                                 } else if (!writeBuffer.hasRemaining()) {
                                     key.interestOps(key.interestOps() & ~SelectionKey.OP_WRITE);
@@ -297,6 +313,7 @@ public class IPCConnectionManager {
                             } else if (key.isAcceptable()) {
                                 assert sc == serverSocketChannel;
                                 SocketChannel channel = serverSocketChannel.accept();
+                                openChannels.add(channel);
                                 channel.setOption(StandardSocketOptions.TCP_NODELAY, true);
                                 channel.configureBlocking(false);
                                 IPCHandle handle = new IPCHandle(system, null);
@@ -332,6 +349,14 @@ public class IPCConnectionManager {
                     }
                 }
             }
+        }
+
+        private void cleanup() {
+            for (Channel channel : openChannels) {
+                IOUtils.closeQuietly(channel);
+            }
+            openChannels.clear();
+            IOUtils.closeQuietly(selector);
         }
 
         private boolean finishConnect(SocketChannel channel) {

@@ -41,6 +41,7 @@ import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.apache.hyracks.api.exceptions.HyracksException;
 import org.apache.hyracks.api.job.JobId;
 import org.apache.hyracks.api.job.JobSpecification;
+import org.apache.hyracks.api.job.JobStatus;
 import org.apache.hyracks.control.cc.PreDistributedJobStore;
 import org.apache.hyracks.control.common.dataset.ResultStateSweeper;
 import org.apache.hyracks.control.common.work.IResultCallback;
@@ -69,7 +70,7 @@ public class DatasetDirectoryService implements IDatasetDirectoryService {
         this.resultTTL = resultTTL;
         this.resultSweepThreshold = resultSweepThreshold;
         this.preDistributedJobStore = preDistributedJobStore;
-        jobResultLocations = new LinkedHashMap<JobId, JobResultInfo>();
+        jobResultLocations = new LinkedHashMap<>();
     }
 
     @Override
@@ -94,7 +95,7 @@ public class DatasetDirectoryService implements IDatasetDirectoryService {
     }
 
     @Override
-    public void notifyJobFinish(JobId jobId) throws HyracksException {
+    public void notifyJobFinish(JobId jobId, JobStatus jobStatus, List<Exception> exceptions) throws HyracksException {
         // Auto-generated method stub
     }
 
@@ -106,7 +107,7 @@ public class DatasetDirectoryService implements IDatasetDirectoryService {
     private DatasetJobRecord getNonNullDatasetJobRecord(JobId jobId) throws HyracksDataException {
         final DatasetJobRecord djr = getDatasetJobRecord(jobId);
         if (djr == null) {
-            throw HyracksDataException.create(ErrorCode.NO_RESULTSET, jobId);
+            throw HyracksDataException.create(ErrorCode.NO_RESULT_SET, jobId);
         }
         return djr;
     }
@@ -149,23 +150,19 @@ public class DatasetDirectoryService implements IDatasetDirectoryService {
     }
 
     @Override
-    public synchronized void reportResultPartitionFailure(JobId jobId, ResultSetId rsId, int partition) {
-        DatasetJobRecord djr = getDatasetJobRecord(jobId);
-        if (djr != null) {
-            djr.fail(rsId, partition);
-        }
-        jobResultLocations.get(jobId).setException(new Exception());
-        notifyAll();
-    }
-
-    @Override
     public synchronized void reportJobFailure(JobId jobId, List<Exception> exceptions) {
+        LOGGER.log(Level.INFO, "job " + jobId + " failed and is being reported to " + getClass().getSimpleName(),
+                exceptions.get(0));
         DatasetJobRecord djr = getDatasetJobRecord(jobId);
+        LOGGER.log(Level.INFO, "Dataset job record is " + djr);
         if (djr != null) {
+            LOGGER.log(Level.INFO, "Setting exceptions in Dataset job record");
             djr.fail(exceptions);
         }
         final JobResultInfo jobResultInfo = jobResultLocations.get(jobId);
+        LOGGER.log(Level.INFO, "Job result info is " + jobResultInfo);
         if (jobResultInfo != null) {
+            LOGGER.log(Level.INFO, "Setting exceptions in Job result info");
             jobResultInfo.setException(exceptions.isEmpty() ? null : exceptions.get(0));
         }
         notifyAll();
@@ -189,7 +186,7 @@ public class DatasetDirectoryService implements IDatasetDirectoryService {
 
     @Override
     public synchronized long getResultTimestamp(JobId jobId) {
-        if (preDistributedJobStore.jobIsPredistributed(jobId)){
+        if (preDistributedJobStore.jobIsPredistributed(jobId)) {
             return -1;
         }
         return getState(jobId).getTimestamp();
@@ -270,6 +267,7 @@ class JobResultInfo {
 
     private DatasetJobRecord record;
     private Waiters waiters;
+    private Exception exception;
 
     JobResultInfo(DatasetJobRecord record, Waiters waiters) {
         this.record = record;
@@ -286,6 +284,10 @@ class JobResultInfo {
             waiters = new Waiters();
         }
         waiters.put(rsId, new Waiter(knownRecords, callback));
+        if (exception != null) {
+            // Exception was set before the waiter is added.
+            setException(exception);
+        }
     }
 
     Waiter removeWaiter(ResultSetId rsId) {
@@ -302,6 +304,8 @@ class JobResultInfo {
                 waiters.remove(rsId).callback.setException(exception);
             }
         }
+        // Caches the exception anyway for future added waiters.
+        this.exception = exception;
     }
 
     @Override

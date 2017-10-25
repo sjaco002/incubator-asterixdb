@@ -156,7 +156,7 @@ public class IntroduceSecondaryIndexInsertDeleteRule implements IAlgebraicRewrit
         // Create operators for secondary index insert / delete.
         String itemTypeName = dataset.getItemTypeName();
         IAType itemType = mp.findType(dataset.getItemTypeDataverseName(), itemTypeName);
-        if (itemType.getTypeTag() != ATypeTag.RECORD) {
+        if (itemType.getTypeTag() != ATypeTag.OBJECT) {
             throw new AlgebricksException("Only record types can be indexed.");
         }
         ARecordType recType = (ARecordType) itemType;
@@ -206,7 +206,7 @@ public class IntroduceSecondaryIndexInsertDeleteRule implements IAlgebraicRewrit
         ReplicateOperator replicateOp = null;
         if (secondaryIndexTotalCnt > 1 && primaryIndexModificationOp.isBulkload()) {
             // Split the logical plan into "each secondary index update branch"
-            // to replicate each <PK,RECORD> pair.
+            // to replicate each <PK,OBJECT> pair.
             replicateOp = new ReplicateOperator(secondaryIndexTotalCnt);
             replicateOp.getInputs().add(new MutableObject<ILogicalOperator>(currentTop));
             replicateOp.setExecutionMode(ExecutionMode.PARTITIONED);
@@ -266,6 +266,7 @@ public class IntroduceSecondaryIndexInsertDeleteRule implements IAlgebraicRewrit
             hasSecondaryIndex = true;
             // Get the secondary fields names and types
             List<List<String>> secondaryKeyFields = index.getKeyFieldNames();
+            List<IAType> secondaryKeyTypes = index.getKeyFieldTypes();
             List<LogicalVariable> secondaryKeyVars = new ArrayList<>();
             List<Mutable<ILogicalExpression>> secondaryExpressions = new ArrayList<>();
             List<Mutable<ILogicalExpression>> beforeOpSecondaryExpressions = new ArrayList<>();
@@ -273,7 +274,7 @@ public class IntroduceSecondaryIndexInsertDeleteRule implements IAlgebraicRewrit
 
             for (int i = 0; i < secondaryKeyFields.size(); i++) {
                 IndexFieldId indexFieldId = new IndexFieldId(index.getKeyFieldSourceIndicators().get(i),
-                        secondaryKeyFields.get(i));
+                        secondaryKeyFields.get(i), secondaryKeyTypes.get(i).getTypeTag());
                 LogicalVariable skVar = fieldVarsForNewRecord.get(indexFieldId);
                 secondaryKeyVars.add(skVar);
                 secondaryExpressions.add(new MutableObject<ILogicalExpression>(new VariableReferenceExpression(skVar)));
@@ -289,7 +290,7 @@ public class IntroduceSecondaryIndexInsertDeleteRule implements IAlgebraicRewrit
                 Mutable<ILogicalExpression> filterExpression = (primaryIndexModificationOp
                         .getOperation() == Kind.UPSERT) ? null
                                 : createFilterExpression(secondaryKeyVars, context.getOutputTypeEnvironment(currentTop),
-                                        index.isEnforcingKeyFileds());
+                                        index.isOverridingKeyFieldTypes());
                 DataSourceIndex dataSourceIndex = new DataSourceIndex(index, dataverseName, datasetName, mp);
 
                 // Introduce the TokenizeOperator only when doing bulk-load,
@@ -474,6 +475,16 @@ public class IntroduceSecondaryIndexInsertDeleteRule implements IAlgebraicRewrit
                 currentTop = indexUpdate;
             } else {
                 replicateOp.getOutputs().add(new MutableObject<>(replicateOutput));
+
+                /* special treatment for bulk load with the existence of secondary primary index.
+                 * the branch coming out of the replicate operator and feeding the index will not have the usual
+                 * "blocking" sort operator since tuples are already sorted. We mark the materialization flag for that
+                 * branch to make it blocking. Without "blocking", the activity cluster graph would be messed up
+                 */
+                if (index.getKeyFieldNames().isEmpty() && index.getIndexType() == IndexType.BTREE) {
+                    int positionOfSecondaryPrimaryIndex = replicateOp.getOutputs().size() - 1;
+                    replicateOp.getOutputMaterializationFlags()[positionOfSecondaryPrimaryIndex] = true;
+                }
             }
             if (primaryIndexModificationOp.isBulkload()) {
                 // For bulk load, we connect all fanned out insert operator to a single SINK operator
@@ -531,7 +542,7 @@ public class IntroduceSecondaryIndexInsertDeleteRule implements IAlgebraicRewrit
             throws AlgebricksException {
         if (recordExpr.getExpressionTag() == LogicalExpressionTag.VARIABLE) {
             IAType type = (IAType) typeEnvironment.getType(recordExpr);
-            return type != null && type.getTypeTag() == ATypeTag.RECORD;
+            return type != null && type.getTypeTag() == ATypeTag.OBJECT;
         }
         return false;
     }
@@ -550,7 +561,8 @@ public class IntroduceSecondaryIndexInsertDeleteRule implements IAlgebraicRewrit
             List<List<String>> skNames = index.getKeyFieldNames();
             List<Integer> indicators = index.getKeyFieldSourceIndicators();
             for (int i = 0; i < index.getKeyFieldNames().size(); i++) {
-                IndexFieldId indexFieldId = new IndexFieldId(indicators.get(i), skNames.get(i));
+                IndexFieldId indexFieldId =
+                        new IndexFieldId(indicators.get(i), skNames.get(i), skTypes.get(i).getTypeTag());
                 if (fieldAccessVars.containsKey(indexFieldId)) {
                     // already handled in a different index
                     continue;
@@ -572,8 +584,8 @@ public class IntroduceSecondaryIndexInsertDeleteRule implements IAlgebraicRewrit
                     AbstractFunctionCallExpression fieldAccessFunc = getOpenOrNestedFieldAccessFunction(varRef,
                             indexFieldId.fieldName);
                     // create cast
-                    theFieldAccessFunc = new ScalarFunctionCallExpression(
-                            FunctionUtil.getFunctionInfo(BuiltinFunctions.CAST_TYPE));
+                    theFieldAccessFunc = new ScalarFunctionCallExpression(FunctionUtil.getFunctionInfo(
+                            index.isEnforced() ? BuiltinFunctions.CAST_TYPE : BuiltinFunctions.CAST_TYPE_LAX));
                     // The first argument is the field
                     theFieldAccessFunc.getArguments().add(new MutableObject<ILogicalExpression>(fieldAccessFunc));
                     TypeCastUtils.setRequiredAndInputTypes(theFieldAccessFunc, skTypes.get(i), BuiltinType.ANY);
@@ -684,27 +696,41 @@ public class IntroduceSecondaryIndexInsertDeleteRule implements IAlgebraicRewrit
         return filterExpression;
     }
 
-    private class IndexFieldId {
-        private int indicator;
-        private List<String> fieldName;
+    private final class IndexFieldId {
+        private final int indicator;
+        private final List<String> fieldName;
+        private final ATypeTag fieldType;
 
-        public IndexFieldId(int indicator, List<String> fieldName) {
+        private IndexFieldId(int indicator, List<String> fieldName, ATypeTag fieldType) {
             this.indicator = indicator;
             this.fieldName = fieldName;
+            this.fieldType = fieldType;
         }
 
         @Override
         public int hashCode() {
-            return 31 * indicator + fieldName.hashCode();
+            int result = indicator;
+            result = 31 * result + fieldName.hashCode();
+            result = 31 * result + fieldType.hashCode();
+            return result;
         }
 
         @Override
         public boolean equals(Object o) {
-            if (o instanceof IndexFieldId) {
-                IndexFieldId oIndexFieldId = (IndexFieldId) o;
-                return indicator == oIndexFieldId.indicator && fieldName.equals(oIndexFieldId.fieldName);
+            if (this == o) {
+                return true;
             }
-            return false;
+            if (o == null || getClass() != o.getClass()) {
+                return false;
+            }
+            IndexFieldId that = (IndexFieldId) o;
+            if (indicator != that.indicator) {
+                return false;
+            }
+            if (!fieldName.equals(that.fieldName)) {
+                return false;
+            }
+            return fieldType == that.fieldType;
         }
     }
 }

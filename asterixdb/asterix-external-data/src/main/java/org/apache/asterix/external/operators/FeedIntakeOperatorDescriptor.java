@@ -74,7 +74,7 @@ public class FeedIntakeOperatorDescriptor extends AbstractSingleActivityOperator
         this.adaptorFactory = adapterFactory;
         this.adapterOutputType = adapterOutputType;
         this.policyAccessor = policyAccessor;
-        this.recordDescriptors[0] = rDesc;
+        this.outRecDescs[0] = rDesc;
     }
 
     public FeedIntakeOperatorDescriptor(JobSpecification spec, IFeed primaryFeed, String adapterLibraryName,
@@ -87,7 +87,7 @@ public class FeedIntakeOperatorDescriptor extends AbstractSingleActivityOperator
         this.adaptorConfiguration = primaryFeed.getAdapterConfiguration();
         this.adapterOutputType = adapterOutputType;
         this.policyAccessor = policyAccessor;
-        this.recordDescriptors[0] = rDesc;
+        this.outRecDescs[0] = rDesc;
     }
 
     @Override
@@ -96,8 +96,7 @@ public class FeedIntakeOperatorDescriptor extends AbstractSingleActivityOperator
         if (adaptorFactory == null) {
             adaptorFactory = createExternalAdapterFactory(ctx);
         }
-        return new FeedIntakeOperatorNodePushable(ctx, feedId, adaptorFactory, partition, policyAccessor,
-                recordDescProvider, this);
+        return new FeedIntakeOperatorNodePushable(ctx, feedId, adaptorFactory, partition, recordDescProvider, this);
     }
 
     private IAdapterFactory createExternalAdapterFactory(IHyracksTaskContext ctx) throws HyracksDataException {
@@ -112,7 +111,7 @@ public class FeedIntakeOperatorDescriptor extends AbstractSingleActivityOperator
                 adapterFactory.setOutputType(adapterOutputType);
                 adapterFactory.configure(ctx.getJobletContext().getServiceContext(), adaptorConfiguration);
             } catch (Exception e) {
-                throw new HyracksDataException(e);
+                throw HyracksDataException.create(e);
             }
         } else {
             RuntimeDataException err = new RuntimeDataException(

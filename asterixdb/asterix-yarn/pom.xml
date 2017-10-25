@@ -21,7 +21,7 @@
   <parent>
     <artifactId>apache-asterixdb</artifactId>
     <groupId>org.apache.asterix</groupId>
-    <version>0.9.2-SNAPSHOT</version>
+    <version>0.9.3-SNAPSHOT</version>
   </parent>
   <artifactId>asterix-yarn</artifactId>
 
@@ -78,7 +78,6 @@
       <plugin>
         <groupId>org.apache.hyracks</groupId>
         <artifactId>license-automation-plugin</artifactId>
-        <version>${hyracks.version}</version>
         <executions>
           <execution>
             <phase>generate-resources</phase>
@@ -212,7 +211,6 @@
             <usedDependency>org.apache.httpcomponents:httpclient</usedDependency>
             <usedDependency>org.apache.httpcomponents:httpcore</usedDependency>
             <usedDependency>org.slf4j:slf4j-simple</usedDependency>
-            <usedDependency>xerces:xercesImpl</usedDependency>
           </usedDependencies>
           <ignoredUnusedDeclaredDependencies>
             <ignoredUnusedDeclaredDependency>org.apache.asterix:asterix-external-data:zip:*</ignoredUnusedDeclaredDependency>
@@ -233,7 +231,7 @@
                   <pluginExecutionFilter>
                     <groupId>org.apache.hyracks</groupId>
                     <artifactId>license-automation-plugin</artifactId>
-                    <versionRange>${hyracks.version}</versionRange>
+                    <versionRange>[0.0,)</versionRange>
                     <goals>
                       <goal>generate</goal>
                     </goals>
@@ -385,11 +383,6 @@
     <dependency>
       <groupId>junit</groupId>
       <artifactId>junit</artifactId>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
-      <groupId>xerces</groupId>
-      <artifactId>xercesImpl</artifactId>
       <scope>test</scope>
     </dependency>
     <dependency>

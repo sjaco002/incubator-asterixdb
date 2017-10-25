@@ -25,15 +25,12 @@ import org.apache.hyracks.storage.am.btree.api.IBTreeLeafFrame;
 import org.apache.hyracks.storage.am.btree.impls.BTree;
 import org.apache.hyracks.storage.am.btree.impls.BTreeRangeSearchCursor;
 import org.apache.hyracks.storage.am.btree.impls.RangePredicate;
-import org.apache.hyracks.storage.am.common.api.ICursorInitialState;
-import org.apache.hyracks.storage.am.common.api.ISearchOperationCallback;
-import org.apache.hyracks.storage.am.common.api.ISearchPredicate;
 import org.apache.hyracks.storage.am.common.api.ITreeIndexAccessor;
 import org.apache.hyracks.storage.am.common.api.ITreeIndexCursor;
 import org.apache.hyracks.storage.am.common.impls.NoOpOperationCallback;
-import org.apache.hyracks.storage.am.common.ophelpers.MultiComparator;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMComponent;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMComponent.LSMComponentType;
+import org.apache.hyracks.storage.am.lsm.common.api.ILSMComponentFilter;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMIndexOperationContext;
 import org.apache.hyracks.storage.am.lsm.common.impls.LSMIndexSearchCursor;
 import org.apache.hyracks.storage.am.rtree.api.IRTreeInteriorFrame;
@@ -41,6 +38,10 @@ import org.apache.hyracks.storage.am.rtree.api.IRTreeLeafFrame;
 import org.apache.hyracks.storage.am.rtree.impls.RTree;
 import org.apache.hyracks.storage.am.rtree.impls.RTreeSearchCursor;
 import org.apache.hyracks.storage.am.rtree.impls.SearchPredicate;
+import org.apache.hyracks.storage.common.ICursorInitialState;
+import org.apache.hyracks.storage.common.ISearchOperationCallback;
+import org.apache.hyracks.storage.common.ISearchPredicate;
+import org.apache.hyracks.storage.common.MultiComparator;
 
 public class LSMRTreeWithAntiMatterTuplesSearchCursor extends LSMIndexSearchCursor {
 
@@ -100,8 +101,8 @@ public class LSMRTreeWithAntiMatterTuplesSearchCursor extends LSMIndexSearchCurs
         btreeAccessors = new ITreeIndexAccessor[numMutableComponents];
         for (int i = 0; i < numMutableComponents; i++) {
             ILSMComponent component = operationalComponents.get(i);
-            RTree rtree = ((LSMRTreeMemoryComponent) component).getRTree();
-            BTree btree = ((LSMRTreeMemoryComponent) component).getBTree();
+            RTree rtree = ((LSMRTreeMemoryComponent) component).getIndex();
+            BTree btree = ((LSMRTreeMemoryComponent) component).getBuddyIndex();
             mutableRTreeCursors[i] = new RTreeSearchCursor(
                     (IRTreeInteriorFrame) lsmInitialState.getRTreeInteriorFrameFactory().createFrame(),
                     (IRTreeLeafFrame) lsmInitialState.getRTreeLeafFrameFactory().createFrame());
@@ -120,7 +121,7 @@ public class LSMRTreeWithAntiMatterTuplesSearchCursor extends LSMIndexSearchCurs
             rangeCursors[j] = new RTreeSearchCursor(
                     (IRTreeInteriorFrame) lsmInitialState.getRTreeInteriorFrameFactory().createFrame(),
                     (IRTreeLeafFrame) lsmInitialState.getRTreeLeafFrameFactory().createFrame());
-            RTree rtree = ((LSMRTreeDiskComponent) component).getRTree();
+            RTree rtree = ((LSMRTreeWithAntimatterDiskComponent) component).getIndex();
             immutableRTreeAccessors[j] =
                     rtree.createAccessor(NoOpOperationCallback.INSTANCE, NoOpOperationCallback.INSTANCE);
             immutableRTreeAccessors[j].search(rangeCursors[j], searchPred);
@@ -200,6 +201,23 @@ public class LSMRTreeWithAntiMatterTuplesSearchCursor extends LSMIndexSearchCurs
 
         return false;
     }
+
+    @Override
+    public ITupleReference getFilterMinTuple() {
+        ILSMComponentFilter filter = operationalComponents.get(
+                currentCursor < numMutableComponents ? currentCursor : outputElement.getCursorIndex() + currentCursor)
+                .getLSMComponentFilter();
+        return filter == null ? null : filter.getMinTuple();
+    }
+
+    @Override
+    public ITupleReference getFilterMaxTuple() {
+        ILSMComponentFilter filter = operationalComponents.get(
+                currentCursor < numMutableComponents ? currentCursor : outputElement.getCursorIndex() + currentCursor)
+                .getLSMComponentFilter();
+        return filter == null ? null : filter.getMaxTuple();
+    }
+
 
     @Override
     public void next() throws HyracksDataException {

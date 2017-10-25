@@ -25,10 +25,10 @@ import java.rmi.RemoteException;
 import java.util.List;
 
 import org.apache.asterix.common.exceptions.ACIDException;
+import org.apache.asterix.common.exceptions.MetadataException;
 import org.apache.asterix.common.functions.FunctionSignature;
 import org.apache.asterix.common.transactions.JobId;
 import org.apache.asterix.external.indexing.ExternalFile;
-import org.apache.asterix.metadata.MetadataException;
 import org.apache.asterix.metadata.entities.CompactionPolicy;
 import org.apache.asterix.metadata.entities.Dataset;
 import org.apache.asterix.metadata.entities.DatasourceAdapter;
@@ -367,12 +367,16 @@ public interface IMetadataNode extends Remote, Serializable {
      *            A globally unique id for an active metadata transaction.
      * @param nodeGroupName
      *            Name of node group to be deleted.
+     * @param failSilently
+     *            true means it's a no-op if the node group cannot be dropped; false means it will throw an exception.
+     * @return Whether the node group has been successfully dropped.
      * @throws MetadataException
      *             For example, there are still datasets partitioned on the node
      *             group to be deleted.
      * @throws RemoteException
      */
-    void dropNodegroup(JobId jobId, String nodeGroupName) throws MetadataException, RemoteException;
+    boolean dropNodegroup(JobId jobId, String nodeGroupName, boolean failSilently)
+            throws MetadataException, RemoteException;
 
     /**
      * Inserts a node (compute node), acquiring local locks on behalf of the
@@ -398,6 +402,8 @@ public interface IMetadataNode extends Remote, Serializable {
      * @throws RemoteException
      */
     Function getFunction(JobId jobId, FunctionSignature functionSignature) throws MetadataException, RemoteException;
+
+    List<Function> getFunctions(JobId jobId, String dataverseName) throws MetadataException, RemoteException;
 
     /**
      * Deletes a function, acquiring local locks on behalf of the given
@@ -532,6 +538,8 @@ public interface IMetadataNode extends Remote, Serializable {
      * @throws RemoteException
      */
     Feed getFeed(JobId jobId, String dataverse, String feedName) throws MetadataException, RemoteException;
+
+    List<Feed> getFeeds(JobId jobId, String dataverse) throws MetadataException, RemoteException;
 
     /**
      * @param jobId
@@ -743,6 +751,17 @@ public interface IMetadataNode extends Remote, Serializable {
             throws MetadataException, RemoteException;
 
     /**
+     * Upserts an extension entity under the ongoing transaction job id
+     *
+     * @param jobId
+     * @param entity
+     * @throws MetadataException
+     * @throws RemoteException
+     */
+    <T extends IExtensionMetadataEntity> void upsertEntity(JobId jobId, T entity)
+            throws MetadataException, RemoteException;
+
+    /**
      * Deletes an extension entity under the ongoing transaction job id
      *
      * @param jobId
@@ -775,4 +794,5 @@ public interface IMetadataNode extends Remote, Serializable {
 
     List<FeedConnection> getFeedConnections(JobId jobId, String dataverseName, String feedName)
             throws MetadataException, RemoteException;
+
 }

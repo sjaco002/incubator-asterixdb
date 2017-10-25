@@ -28,7 +28,6 @@ import org.apache.hyracks.storage.am.btree.util.BTreeUtils;
 import org.apache.hyracks.storage.am.common.api.ITreeIndexMetadataFrameFactory;
 import org.apache.hyracks.storage.am.common.frames.LIFOMetaDataFrameFactory;
 import org.apache.hyracks.storage.am.common.freepage.LinkedMetaDataPageManager;
-import org.apache.hyracks.storage.common.file.IFileMapProvider;
 import org.apache.hyracks.test.support.TestStorageManagerComponentHolder;
 import org.apache.hyracks.test.support.TestUtils;
 
@@ -46,11 +45,10 @@ public class BTreeRunner extends InMemoryBTreeRunner {
             throws HyracksDataException {
         IHyracksTaskContext ctx = TestUtils.create(HYRACKS_FRAME_SIZE);
         TestStorageManagerComponentHolder.init(pageSize, numPages, MAX_OPEN_FILES);
-        bufferCache = TestStorageManagerComponentHolder.getBufferCache(ctx);
-        IFileMapProvider fmp = TestStorageManagerComponentHolder.getFileMapProvider(ctx);
+        bufferCache = TestStorageManagerComponentHolder.getBufferCache(ctx.getJobletContext().getServiceContext());
         ITreeIndexMetadataFrameFactory metaFrameFactory = new LIFOMetaDataFrameFactory();
         LinkedMetaDataPageManager freePageManager = new LinkedMetaDataPageManager(bufferCache, metaFrameFactory);
-        btree = BTreeUtils.createBTree(bufferCache, fmp, typeTraits, cmpFactories, BTreeLeafFrameType.REGULAR_NSM, file,
-                freePageManager);
+        btree = BTreeUtils.createBTree(bufferCache, typeTraits, cmpFactories, BTreeLeafFrameType.REGULAR_NSM, file,
+                freePageManager, false);
     }
 }

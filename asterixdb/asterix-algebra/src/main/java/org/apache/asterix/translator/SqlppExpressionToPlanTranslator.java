@@ -248,13 +248,13 @@ class SqlppExpressionToPlanTranslator extends LangExpressionToPlanTranslator imp
     @Override
     public Pair<ILogicalOperator, LogicalVariable> visit(FromTerm fromTerm, Mutable<ILogicalOperator> tupSource)
             throws CompilationException {
-        LogicalVariable fromVar = context.newVar(fromTerm.getLeftVariable());
+        LogicalVariable fromVar = context.newVarFromExpression(fromTerm.getLeftVariable());
         Expression fromExpr = fromTerm.getLeftExpression();
         Pair<ILogicalExpression, Mutable<ILogicalOperator>> eo = langExprToAlgExpression(fromExpr, tupSource);
         ILogicalOperator unnestOp;
         if (fromTerm.hasPositionalVariable()) {
-            LogicalVariable pVar = context.newVar(fromTerm.getPositionalVariable());
-            // We set the positional variable type as INT64 type.
+            LogicalVariable pVar = context.newVarFromExpression(fromTerm.getPositionalVariable());
+            // We set the positional variable type as BIGINT type.
             unnestOp =
                     new UnnestOperator(fromVar, new MutableObject<ILogicalExpression>(makeUnnestExpression(eo.first)),
                             pVar, BuiltinType.AINT64, new PositionWriter());
@@ -448,13 +448,13 @@ class SqlppExpressionToPlanTranslator extends LangExpressionToPlanTranslator imp
     private Pair<ILogicalOperator, LogicalVariable> generateUnnestForBinaryCorrelateRightBranch(
             AbstractBinaryCorrelateClause binaryCorrelate, Mutable<ILogicalOperator> inputOpRef, boolean innerUnnest)
             throws CompilationException {
-        LogicalVariable rightVar = context.newVar(binaryCorrelate.getRightVariable());
+        LogicalVariable rightVar = context.newVarFromExpression(binaryCorrelate.getRightVariable());
         Expression rightExpr = binaryCorrelate.getRightExpression();
         Pair<ILogicalExpression, Mutable<ILogicalOperator>> eo = langExprToAlgExpression(rightExpr, inputOpRef);
         ILogicalOperator unnestOp;
         if (binaryCorrelate.hasPositionalVariable()) {
-            LogicalVariable pVar = context.newVar(binaryCorrelate.getPositionalVariable());
-            // We set the positional variable type as INT64 type.
+            LogicalVariable pVar = context.newVarFromExpression(binaryCorrelate.getPositionalVariable());
+            // We set the positional variable type as BIGINT type.
             unnestOp = innerUnnest
                     ? new UnnestOperator(rightVar, new MutableObject<>(makeUnnestExpression(eo.first)), pVar,
                             BuiltinType.AINT64, new PositionWriter())
@@ -614,7 +614,7 @@ class SqlppExpressionToPlanTranslator extends LangExpressionToPlanTranslator imp
             returnVar = context.getVar(varExpr.getVar().getId());
         } else {
             returnVar = context.newVar();
-            returnOperator = new AssignOperator(returnVar, new MutableObject<ILogicalExpression>(eo.first));
+            returnOperator = new AssignOperator(returnVar, new MutableObject<>(eo.first));
             returnOperator.getInputs().add(eo.second);
         }
         if (selectClause.distinct()) {

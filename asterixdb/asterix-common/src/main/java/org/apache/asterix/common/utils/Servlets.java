@@ -31,7 +31,9 @@ public class Servlets {
     public static final String QUERY_STATUS = "/query/service/status/*";
     public static final String QUERY_RESULT = "/query/service/result/*";
     public static final String QUERY_SERVICE = "/query/service";
+    public static final String QUERY_AQL = "/query/aql";
     public static final String CONNECTOR = "/connector";
+    public static final String REBALANCE = "/admin/rebalance";
     public static final String SHUTDOWN = "/admin/shutdown";
     public static final String VERSION = "/admin/version";
     public static final String RUNNING_REQUESTS = "/admin/requests/running/*";
@@ -39,6 +41,7 @@ public class Servlets {
     public static final String CLUSTER_STATE_NODE_DETAIL = "/admin/cluster/node/*";
     public static final String CLUSTER_STATE_CC_DETAIL = "/admin/cluster/cc/*";
     public static final String DIAGNOSTICS = "/admin/diagnostics";
+    public static final String ACTIVE_STATS = "/admin/active/*";
 
     private Servlets() {
     }
