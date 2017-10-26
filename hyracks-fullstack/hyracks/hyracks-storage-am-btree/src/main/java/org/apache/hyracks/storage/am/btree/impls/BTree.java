@@ -178,11 +178,12 @@ public class BTree extends AbstractTreeIndex {
         ctx.getValidationInfos().removeFirst();
     }
 
-    private void search(ITreeIndexCursor cursor, ISearchPredicate searchPred, BTreeOpContext ctx)
+    private int search(ITreeIndexCursor cursor, ISearchPredicate searchPred, BTreeOpContext ctx)
             throws HyracksDataException {
         ctx.reset();
         ctx.setPred((RangePredicate) searchPred);
         ctx.setCursor(cursor);
+        int depth = 0;
         // simple index scan
         if (ctx.getPred().getLowKeyComparator() == null) {
             ctx.getPred().setLowKeyComparator(ctx.getCmp());
@@ -194,7 +195,7 @@ public class BTree extends AbstractTreeIndex {
         // due to ongoing structure modifications during the descent
         boolean repeatOp = true;
         while (repeatOp && ctx.getOpRestarts() < MAX_RESTARTS) {
-            performOp(rootPage, null, true, ctx);
+            depth = performOp(rootPage, null, true, ctx);
             // if we reach this stage then we need to restart from the (possibly
             // new) root
             if (!ctx.getPageLsns().isEmpty() && ctx.getPageLsns().getLast() == RESTART_OP) {
@@ -205,6 +206,7 @@ public class BTree extends AbstractTreeIndex {
         }
         cursor.setBufferCache(bufferCache);
         cursor.setFileId(getFileId());
+        return depth;
     }
 
     private void unsetSmPages(BTreeOpContext ctx) throws HyracksDataException {
@@ -559,9 +561,10 @@ public class BTree extends AbstractTreeIndex {
         return node;
     }
 
-    private void performOp(int pageId, ICachedPage parent, boolean parentIsReadLatched, BTreeOpContext ctx)
+    private int performOp(int pageId, ICachedPage parent, boolean parentIsReadLatched, BTreeOpContext ctx)
             throws HyracksDataException {
         ICachedPage node = bufferCache.pin(BufferedFileHandle.getDiskPageId(getFileId(), pageId), false);
+        int depth = 1;
         ctx.getInteriorFrame().setPage(node);
         // this check performs an unprotected read in the page
         // the following could happen: TODO fill out
@@ -592,7 +595,7 @@ public class BTree extends AbstractTreeIndex {
                     boolean repeatOp = true;
                     while (repeatOp && ctx.getOpRestarts() < MAX_RESTARTS) {
                         int childPageId = ctx.getInteriorFrame().getChildPageId(ctx.getPred());
-                        performOp(childPageId, node, isReadLatched, ctx);
+                        depth += performOp(childPageId, node, isReadLatched, ctx);
                         node = null;
 
                         if (!ctx.getPageLsns().isEmpty()) {
@@ -749,6 +752,7 @@ public class BTree extends AbstractTreeIndex {
             ctx.setExceptionHandled(true);
             throw wrappedException;
         }
+        return depth;
     }
 
     private BTreeOpContext createOpContext(IIndexAccessor accessor, IModificationOperationCallback modificationCallback,
@@ -763,7 +767,6 @@ public class BTree extends AbstractTreeIndex {
                 modificationCallback, searchCallback, logTupleFields);
     }
 
-    @SuppressWarnings("rawtypes")
     public String printTree(IBTreeLeafFrame leafFrame, IBTreeInteriorFrame interiorFrame,
             ISerializerDeserializer[] keySerdes) throws Exception {
         MultiComparator cmp = MultiComparator.create(cmpFactories);
@@ -773,7 +776,6 @@ public class BTree extends AbstractTreeIndex {
         return strBuilder.toString();
     }
 
-    @SuppressWarnings("rawtypes")
     public void printTree(int pageId, ICachedPage parent, boolean unpin, IBTreeLeafFrame leafFrame,
             IBTreeInteriorFrame interiorFrame, byte treeHeight, ISerializerDeserializer[] keySerdes,
             StringBuilder strBuilder, MultiComparator cmp) throws Exception {
@@ -841,6 +843,11 @@ public class BTree extends AbstractTreeIndex {
         private BTree btree;
         private BTreeOpContext ctx;
 
+        @Override
+        public int getComponentCount() {
+            return -1;
+        }
+
         public BTreeAccessor(BTree btree, IModificationOperationCallback modificationCalback,
                 ISearchOperationCallback searchCallback) {
             this.btree = btree;
@@ -900,6 +907,11 @@ public class BTree extends AbstractTreeIndex {
         public void search(IIndexCursor cursor, ISearchPredicate searchPred) throws HyracksDataException {
             ctx.setOperation(IndexOperation.SEARCH);
             btree.search((ITreeIndexCursor) cursor, searchPred, ctx);
+        }
+
+        public int searchIt(IIndexCursor cursor, ISearchPredicate searchPred) throws HyracksDataException {
+            ctx.setOperation(IndexOperation.SEARCH);
+            return btree.search((ITreeIndexCursor) cursor, searchPred, ctx);
         }
 
         @Override
@@ -1199,7 +1211,6 @@ public class BTree extends AbstractTreeIndex {
         }
     }
 
-    @SuppressWarnings("rawtypes")
     public static String printLeafFrameTuples(IBTreeLeafFrame leafFrame, ISerializerDeserializer[] fieldSerdes)
             throws HyracksDataException {
         StringBuilder strBuilder = new StringBuilder();
@@ -1215,7 +1226,6 @@ public class BTree extends AbstractTreeIndex {
         return strBuilder.toString();
     }
 
-    @SuppressWarnings("rawtypes")
     public static String printInteriorFrameTuples(IBTreeInteriorFrame interiorFrame,
             ISerializerDeserializer[] fieldSerdes) throws HyracksDataException {
         StringBuilder strBuilder = new StringBuilder();

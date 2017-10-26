@@ -75,6 +75,11 @@ public class ExternalIndexHarness extends LSMHarness {
     }
 
     @Override
+    public ILSMIndex getLsmIndex() {
+        return lsmIndex;
+    }
+
+    @Override
     protected boolean enterComponents(ILSMIndexOperationContext ctx, LSMOperationType opType)
             throws HyracksDataException {
         validateOperationEnterComponentsState(ctx);

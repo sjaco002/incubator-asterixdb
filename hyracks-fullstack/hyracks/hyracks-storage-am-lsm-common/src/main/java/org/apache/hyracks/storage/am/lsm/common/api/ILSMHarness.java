@@ -43,6 +43,8 @@ public interface ILSMHarness {
      */
     void forceModify(ILSMIndexOperationContext ctx, ITupleReference tuple) throws HyracksDataException;
 
+    ILSMIndex getLsmIndex();
+
     /**
      * Modify the index if the memory component is not full, wait for a new memory component if the current one is full
      *

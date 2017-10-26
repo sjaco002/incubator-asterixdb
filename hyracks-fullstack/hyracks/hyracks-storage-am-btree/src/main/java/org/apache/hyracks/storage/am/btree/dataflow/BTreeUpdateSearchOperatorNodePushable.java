@@ -56,7 +56,7 @@ public class BTreeUpdateSearchOperatorNodePushable extends BTreeSearchOperatorNo
     }
 
     @Override
-    protected void writeSearchResults(int tupleIndex) throws Exception {
+    protected long writeSearchResults(int tupleIndex) throws Exception {
         while (cursor.hasNext()) {
             tb.reset();
             cursor.next();
@@ -75,5 +75,6 @@ public class BTreeUpdateSearchOperatorNodePushable extends BTreeSearchOperatorNo
             }
             FrameUtils.appendToWriter(writer, appender, tb.getFieldEndOffsets(), tb.getByteArray(), 0, tb.getSize());
         }
+        return -1;
     }
 }

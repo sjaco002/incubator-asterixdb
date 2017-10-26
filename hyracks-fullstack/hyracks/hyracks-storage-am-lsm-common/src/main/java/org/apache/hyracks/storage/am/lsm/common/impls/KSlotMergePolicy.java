@@ -21,6 +21,7 @@ package org.apache.hyracks.storage.am.lsm.common.impls;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Date;
 import java.util.List;
 import java.util.Map;
 import java.util.logging.Level;
@@ -213,9 +214,10 @@ public class KSlotMergePolicy implements ILSMMergePolicy {
     private void logMergeInfo(long size, boolean isFullMerge, int mergedComponents, int totalComponents) {
         if (LOGGER.isLoggable(Level.SEVERE)) {
             if (isFullMerge) {
-                LOGGER.severe("Full Merged: " + size + ", " + mergedComponents + ", " + totalComponents);
+                LOGGER.severe(
+                        "Full Merged: " + size + ", " + mergedComponents + ", " + totalComponents + ", " + new Date());
             } else {
-                LOGGER.severe("Merged: " + size + ", " + mergedComponents + ", " + totalComponents);
+                LOGGER.severe("Merged: " + size + ", " + mergedComponents + ", " + totalComponents + ", " + new Date());
             }
         }
     }

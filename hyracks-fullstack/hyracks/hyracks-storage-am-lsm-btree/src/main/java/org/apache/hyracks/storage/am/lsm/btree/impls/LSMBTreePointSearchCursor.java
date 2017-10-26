@@ -19,7 +19,9 @@
 
 package org.apache.hyracks.storage.am.lsm.btree.impls;
 
+import java.util.Date;
 import java.util.List;
+import java.util.logging.Logger;
 
 import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.apache.hyracks.dataflow.common.data.accessors.ITupleReference;
@@ -34,6 +36,7 @@ import org.apache.hyracks.storage.am.common.impls.NoOpOperationCallback;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMComponent;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMComponent.LSMComponentType;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMComponentFilter;
+import org.apache.hyracks.storage.am.lsm.common.api.ILSMDiskComponent;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMHarness;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMIndexOperationContext;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMTreeTupleReference;
@@ -43,6 +46,8 @@ import org.apache.hyracks.storage.common.ISearchPredicate;
 import org.apache.hyracks.storage.common.buffercache.IBufferCache;
 
 public class LSMBTreePointSearchCursor implements ITreeIndexCursor {
+
+    private static final Logger LOGGER = Logger.getLogger(LSMBTreePointSearchCursor.class.getName());
 
     private BTreeRangeSearchCursor[] rangeCursors;
     private final ILSMIndexOperationContext opCtx;
@@ -70,17 +75,42 @@ public class LSMBTreePointSearchCursor implements ITreeIndexCursor {
         //This is the function to monitor for single-key queries
         //it returns true when there is at least one record
         //There is a range cursor for range queries
+
+        String bloomFilterString = "";
+        String searchTimeString = "";
+        String componentSizeString = "";
+        String depthString = "";
+
+        for (ILSMComponent component : operationalComponents) {
+            if (component instanceof ILSMDiskComponent) {
+                componentSizeString = componentSizeString + ":" + ((ILSMDiskComponent) component).getComponentSize();
+            }
+        }
+
         if (nextHasBeenCalled) {
             return false;
         } else if (foundTuple) {
             return true;
         }
         boolean reconciled = false;
-        for (int i = 0; i < numBTrees; ++i) {
+        int i = 0;
+        for (; i < numBTrees; ++i) {
+            long start = System.nanoTime();
             if (bloomFilters[i] != null && !bloomFilters[i].contains(predicate.getLowKey(), hashes)) {
+                long end = System.nanoTime();
+                bloomFilterString = bloomFilterString + ":" + 0;
+                searchTimeString = searchTimeString + ":" + (end - start);
+                depthString = depthString + ":" + 0;
                 continue;
             }
-            btreeAccessors[i].search(rangeCursors[i], predicate);
+            if (bloomFilters[i] == null) {
+                bloomFilterString = bloomFilterString + ":" + -1;
+            } else {
+                bloomFilterString = bloomFilterString + ":" + 1;
+            }
+            int depth = btreeAccessors[i].searchIt(rangeCursors[i], predicate);
+            depthString = depthString + ":" + depth;
+
             if (rangeCursors[i].hasNext()) {
                 rangeCursors[i].next();
                 // We use the predicate's to lock the key instead of the tuple that we get from cursor
@@ -92,11 +122,22 @@ public class LSMBTreePointSearchCursor implements ITreeIndexCursor {
                             searchCallback.cancel(predicate.getLowKey());
                         }
                         rangeCursors[i].close();
+                        long end = System.nanoTime();
+                        searchTimeString = searchTimeString + ":" + (end - start);
+                        //LOGGER.severe("ReadTraceBAD: " + bloomFilterString + ", " + (i - 1) + ", " + false + ", "
+                        //        + new Date() + ", Merg");
                         return false;
                     } else {
                         frameTuple = rangeCursors[i].getTuple();
                         foundTuple = true;
                         foundIn = i;
+                        long end = System.nanoTime();
+                        searchTimeString = searchTimeString + ":" + (end - start);
+                        if (lsmHarness.getLsmIndex().toString().contains("Tweets1")) {
+                            LOGGER.severe("ReadTrace: " + bloomFilterString + " " + (i - 1) + " " + true + " "
+                                    + new Date() + " Merg" + " " + searchTimeString + " " + componentSizeString + " "
+                                    + depthString);
+                        }
                         return true;
                     }
                 }
@@ -113,12 +154,20 @@ public class LSMBTreePointSearchCursor implements ITreeIndexCursor {
                         if (((ILSMTreeTupleReference) rangeCursors[i].getTuple()).isAntimatter()) {
                             searchCallback.cancel(predicate.getLowKey());
                             rangeCursors[i].close();
+                            long end = System.nanoTime();
+                            searchTimeString = searchTimeString + ":" + (end - start);
+                            //LOGGER.severe("ReadTraceBAD3: " + bloomFilterString + ", " + (i - 1) + ", " + false + ", "
+                            //        + new Date() + ", Merg");
                             return false;
                         } else {
                             frameTuple = rangeCursors[i].getTuple();
                             foundTuple = true;
                             searchCallback.complete(predicate.getLowKey());
                             foundIn = i;
+                            long end = System.nanoTime();
+                            searchTimeString = searchTimeString + ":" + (end - start);
+                            //LOGGER.severe("ReadTraceBAD: " + bloomFilterString + ", " + (i - 1) + ", " + true + ", "
+                            //        + new Date() + ", Merg");
                             return true;
                         }
                     } else {
@@ -131,11 +180,23 @@ public class LSMBTreePointSearchCursor implements ITreeIndexCursor {
                     searchCallback.complete(frameTuple);
                     foundTuple = true;
                     foundIn = i;
+                    long end = System.nanoTime();
+                    searchTimeString = searchTimeString + ":" + (end - start);
+                    //LOGGER.severe("ReadTraceBAD: " + bloomFilterString + ", " + (i - 1) + ", " + true + ", "
+                    //        + new Date()
+                    //        + ", Merg");
                     return true;
                 }
             } else {
                 rangeCursors[i].close();
             }
+            long end = System.nanoTime();
+            searchTimeString = searchTimeString + ":" + (end - start);
+        }
+        if (lsmHarness.getLsmIndex().toString().contains("Tweets1")) {
+            LOGGER.severe(
+                    "ReadTrace: " + bloomFilterString + " " + (i - 1) + " " + false + " " + new Date() + " Merg" + " "
+                            + searchTimeString + " " + componentSizeString + " " + depthString);
         }
         return false;
     }

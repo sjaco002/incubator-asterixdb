@@ -29,6 +29,9 @@ import org.apache.hyracks.dataflow.common.data.accessors.ITupleReference;
  * concurrent operations).
  */
 public interface IIndexAccessor {
+
+    int getComponentCount();
+
     /**
      * Inserts the given tuple.
      *

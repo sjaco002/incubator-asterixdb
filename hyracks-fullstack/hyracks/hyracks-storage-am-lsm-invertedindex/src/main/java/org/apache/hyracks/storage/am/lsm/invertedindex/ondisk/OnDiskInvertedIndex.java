@@ -421,6 +421,10 @@ public class OnDiskInvertedIndex implements IInPlaceInvertedIndex {
         private final IInvertedIndexSearcher searcher;
         private final IIndexOperationContext opCtx = new OnDiskInvertedIndexOpContext(btree);
 
+        public int getComponentCount() {
+            return -1;
+        }
+
         public OnDiskInvertedIndexAccessor(OnDiskInvertedIndex index) throws HyracksDataException {
             this.index = index;
             this.searcher = new TOccurrenceSearcher(ctx, index);

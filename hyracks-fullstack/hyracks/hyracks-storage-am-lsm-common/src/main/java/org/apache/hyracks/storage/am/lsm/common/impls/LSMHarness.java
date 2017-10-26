@@ -84,6 +84,10 @@ public class LSMHarness implements ILSMHarness {
         }
     }
 
+    public ILSMIndex getLsmIndex() {
+        return lsmIndex;
+    }
+
     protected boolean getAndEnterComponents(ILSMIndexOperationContext ctx, LSMOperationType opType,
             boolean isTryOperation) throws HyracksDataException {
         validateOperationEnterComponentsState(ctx);
@@ -879,6 +883,7 @@ public class LSMHarness implements ILSMHarness {
         return getClass().getSimpleName() + ":" + lsmIndex;
     }
 
+    @Override
     public ILSMMergePolicy getMergePolicy() {
 
         return mergePolicy;

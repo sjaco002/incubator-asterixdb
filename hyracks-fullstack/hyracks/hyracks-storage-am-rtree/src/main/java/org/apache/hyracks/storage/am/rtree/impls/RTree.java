@@ -770,6 +770,10 @@ public class RTree extends AbstractTreeIndex {
         private RTree rtree;
         private RTreeOpContext ctx;
 
+        public int getComponentCount() {
+            return -1;
+        }
+
         public RTreeAccessor(RTree rtree, IModificationOperationCallback modificationCallback,
                 ISearchOperationCallback searchCallback) {
             this.rtree = rtree;

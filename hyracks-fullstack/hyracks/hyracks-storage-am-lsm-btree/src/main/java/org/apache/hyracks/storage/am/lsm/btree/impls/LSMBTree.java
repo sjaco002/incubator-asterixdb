@@ -24,7 +24,6 @@ import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
-import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import org.apache.hyracks.api.dataflow.value.IBinaryComparatorFactory;
@@ -238,19 +237,6 @@ public class LSMBTree extends AbstractLSMIndex implements ITreeIndex {
         ZonedDateTime startTime = ZonedDateTime.now();
         ctx.getCurrentMutableBTreeAccessor().upsertIfConditionElseInsert(tuple, AntimatterAwareTupleAcceptor.INSTANCE);
         Duration readTime = Duration.between(startTime, ZonedDateTime.now());
-        if (writeCount % writeLogInterval == 0 && toString().contains("Tweets1")) {
-            if (LOGGER.isLoggable(Level.SEVERE)) {
-                ILSMMergePolicy mergePolicy = lsmHarness.getMergePolicy();
-                totalDiskComponents = totalDiskComponents + diskComponents.size();
-                LOGGER.severe("Merge Policy Experiment Write Count: " + writeCount + " " + new Date() + " "
-                        + readTime.toNanos()
-                        + " , "
-                        + totalDiskComponents + "," + diskComponents.size() + ","
-                        + mergePolicy.getNumberOfFlushes() + "," + mergePolicy.getNumberOfMerges() + ","
-                        + mergePolicy.getMergeCost() + "," + experimentDuplCheckTime + "," + checkEndTime + ","
-                        + writeCount);
-            }
-        }
         return true;
     }
 
@@ -266,34 +252,11 @@ public class LSMBTree extends AbstractLSMIndex implements ITreeIndex {
     public void search(ILSMIndexOperationContext ictx, IIndexCursor cursor, ISearchPredicate pred, long start,
             int stackSize)
             throws HyracksDataException {
-        long startIt = System.nanoTime();
-        int startSize = diskComponents.size();
-        if (toString().contains("Tweets1")) {
-            if (readCount % readLogInterval == 0) {
-                if (LOGGER.isLoggable(Level.SEVERE)) {
-                    LOGGER.severe("Merge Policy Experiment Read Search Start: on stack size " + diskComponents.size()
-                            + " " + new Date() + " ");
-                }
-            }
-        }
 
         LSMBTreeOpContext ctx = (LSMBTreeOpContext) ictx;
         List<ILSMComponent> operationalComponents = ctx.getComponentHolder();
         ctx.getSearchInitialState().reset(pred, operationalComponents);
         cursor.open(ctx.getSearchInitialState(), pred);
-
-        long end = System.nanoTime();
-        long microseconds = (end - startIt);
-        long longerMicroseconds = (end - start);
-        if (toString().contains("Tweets1")) {
-            readCount++;
-            if (readCount % readLogInterval == 0) {
-                if (LOGGER.isLoggable(Level.SEVERE)) {
-                    LOGGER.severe("Merge Policy Experiment Read Search micro: " + stackSize + " " + startSize + " "
-                            + diskComponents.size() + " " + longerMicroseconds + " " + microseconds + " " + new Date());
-                }
-            }
-        }
     }
 
 
@@ -372,6 +335,8 @@ public class LSMBTree extends AbstractLSMIndex implements ITreeIndex {
         flushingComponent.getMetadata().copy(component.getMetadata());
 
         componentBulkLoader.end();
+
+        LOGGER.severe("Merge Policy Experiment Write Count: " + numElements + " " + new Date());
 
         return component;
     }
