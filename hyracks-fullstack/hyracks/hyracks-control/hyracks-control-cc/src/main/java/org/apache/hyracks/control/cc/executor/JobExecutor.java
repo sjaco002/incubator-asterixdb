@@ -380,14 +380,13 @@ public class JobExecutor {
         tcAttempt.initializePendingTaskCounter();
         tcAttempts.add(tcAttempt);
 
-        /**
+        /*
          * Improvement for reducing master/slave message communications, for each TaskAttemptDescriptor,
          * we set the NetworkAddress[][] partitionLocations, in which each row is for an incoming connector descriptor
          * and each column is for an input channel of the connector.
          */
         INodeManager nodeManager = ccs.getNodeManager();
-        for (Map.Entry<String, List<TaskAttemptDescriptor>> e : taskAttemptMap.entrySet()) {
-            List<TaskAttemptDescriptor> tads = e.getValue();
+        taskAttemptMap.forEach((key, tads) -> {
             for (TaskAttemptDescriptor tad : tads) {
                 TaskAttemptId taid = tad.getTaskAttemptId();
                 int attempt = taid.getAttempt();
@@ -402,7 +401,7 @@ public class JobExecutor {
                 for (int i = 0; i < inPartitionCounts.length; ++i) {
                     ConnectorDescriptorId cdId = inConnectors.get(i).getConnectorId();
                     IConnectorPolicy policy = jobRun.getConnectorPolicyMap().get(cdId);
-                    /**
+                    /*
                      * carry sender location information into a task
                      * when it is not the case that it is an re-attempt and the send-side
                      * is materialized blocking.
@@ -420,7 +419,7 @@ public class JobExecutor {
                 }
                 tad.setInputPartitionLocations(partitionLocations);
             }
-        }
+        });
 
         tcAttempt.setStatus(TaskClusterAttempt.TaskClusterStatus.RUNNING);
         tcAttempt.setStartTime(System.currentTimeMillis());
@@ -562,12 +561,11 @@ public class JobExecutor {
         final JobId jobId = jobRun.getJobId();
         LOGGER.info("Abort map for job: " + jobId + ": " + abortTaskAttemptMap);
         INodeManager nodeManager = ccs.getNodeManager();
-        for (Map.Entry<String, List<TaskAttemptId>> entry : abortTaskAttemptMap.entrySet()) {
-            final NodeControllerState node = nodeManager.getNodeControllerState(entry.getKey());
-            final List<TaskAttemptId> abortTaskAttempts = entry.getValue();
+        abortTaskAttemptMap.forEach((key, abortTaskAttempts) -> {
+            final NodeControllerState node = nodeManager.getNodeControllerState(key);
             if (node != null) {
                 if (LOGGER.isLoggable(Level.INFO)) {
-                    LOGGER.info("Aborting: " + abortTaskAttempts + " at " + entry.getKey());
+                    LOGGER.info("Aborting: " + abortTaskAttempts + " at " + key);
                 }
                 try {
                     node.getNodeController().abortTasks(jobId, abortTaskAttempts);
@@ -575,7 +573,7 @@ public class JobExecutor {
                     LOGGER.log(Level.SEVERE, e.getMessage(), e);
                 }
             }
-        }
+        });
         inProgressTaskClusters.remove(tcAttempt.getTaskCluster());
         TaskCluster tc = tcAttempt.getTaskCluster();
         PartitionMatchMaker pmm = jobRun.getPartitionMatchMaker();
