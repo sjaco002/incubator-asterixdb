@@ -27,5 +27,6 @@ public interface IJobletEventListenerFactory extends Serializable {
 
     IJobletEventListenerFactory copyFactory();
 
+    //Allows job parameters to change listener settings
     void updateListenerJobParameters(JobParameterByteStore jobParameterByteStore);
 }

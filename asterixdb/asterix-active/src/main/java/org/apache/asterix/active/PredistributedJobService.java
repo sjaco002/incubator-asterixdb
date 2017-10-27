@@ -85,7 +85,7 @@ public class PredistributedJobService {
 
         hcc.waitForCompletion(jobId);
         Date checkEndTime = new Date();
-        long executionMilliseconds = (checkEndTime.getTime() - checkStartTime.getTime());
+        long executionMilliseconds = checkEndTime.getTime() - checkStartTime.getTime();
 
         LOGGER.log(Level.INFO,
                 "Distributed Job completed for " + entityId.getExtensionName() + " " + entityId.getDataverse() + "."

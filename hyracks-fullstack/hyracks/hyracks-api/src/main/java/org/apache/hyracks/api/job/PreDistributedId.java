@@ -74,8 +74,7 @@ public final class PreDistributedId implements IWritable, Serializable {
 
     public static PreDistributedId parse(String str) throws HyracksDataException {
         if (str.startsWith("PDJID:")) {
-            str = str.substring(4);
-            return new PreDistributedId(Long.parseLong(str));
+            return new PreDistributedId(Long.parseLong(str.substring(4)));
         }
         throw HyracksDataException.create(ErrorCode.NOT_A_JOBID, str);
     }
