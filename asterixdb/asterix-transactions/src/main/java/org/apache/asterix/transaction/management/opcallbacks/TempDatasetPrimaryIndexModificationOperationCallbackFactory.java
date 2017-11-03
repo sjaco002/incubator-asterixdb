@@ -65,10 +65,9 @@ public class TempDatasetPrimaryIndexModificationOperationCallbackFactory extends
         }
 
         try {
-            IJobletEventListenerFactory fact = ctx.getJobletContext().getEventListenerFactory();
-            JobId lookupId =
-                    fact instanceof IJobEventListenerFactory ? ((IJobEventListenerFactory) fact).getJobId() : jobId;
-            ITransactionContext txnCtx = txnSubsystem.getTransactionManager().getTransactionContext(lookupId, false);
+            IJobletEventListenerFactory fact = ctx.getJobletContext().getJobletEventListenerFactory();
+            ITransactionContext txnCtx = txnSubsystem.getTransactionManager()
+                    .getTransactionContext(((IJobEventListenerFactory) fact).getJobId(jobId), false);
             DatasetLocalResource aResource = (DatasetLocalResource) resource.getResource();
             IModificationOperationCallback modCallback = new TempDatasetIndexModificationOperationCallback(
                     new DatasetId(datasetId), primaryKeyFields, txnCtx, txnSubsystem.getLockManager(), txnSubsystem,

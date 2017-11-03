@@ -206,7 +206,6 @@ public class DatasetUtil {
         return new Pair<>(mergePolicyFactory, properties);
     }
 
-    @SuppressWarnings("unchecked")
     public static void writePropertyTypeRecord(String name, String value, DataOutput out, ARecordType recordType)
             throws HyracksDataException {
         IARecordBuilder propertyRecordBuilder = new RecordBuilder();
@@ -400,7 +399,7 @@ public class DatasetUtil {
                     metadataProvider.getSplitProviderAndConstraints(dataset);
 
             // prepare callback
-            JobId jobId = ((JobEventListenerFactory) spec.getJobletEventListenerFactory()).getJobId();
+            JobId jobId = ((JobEventListenerFactory) spec.getJobletEventListenerFactory()).getJobId(null);
             int[] primaryKeyFields = new int[numKeys];
             for (int i = 0; i < numKeys; i++) {
                 primaryKeyFields[i] = i;

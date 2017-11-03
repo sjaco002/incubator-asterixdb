@@ -208,10 +208,10 @@ public class StartTasksWork extends AbstractWork {
             ncs.createOrGetJobParameterByteStore(jobId).setParameters(jobParameters);
             IJobletEventListenerFactory listenerFactory = acg.getJobletEventListenerFactory();
             if (listenerFactory != null) {
-                listenerFactory.updateListenerJobParameters(ncs.createOrGetJobParameterByteStore(jobId));
                 if (preDistributedId != null) {
                     listenerFactory = acg.getJobletEventListenerFactory().copyFactory();
                 }
+                listenerFactory.updateListenerJobParameters(ncs.createOrGetJobParameterByteStore(jobId));
             }
             ji = new Joblet(ncs, deploymentId, jobId, appCtx, acg, listenerFactory);
             jobletMap.put(jobId, ji);

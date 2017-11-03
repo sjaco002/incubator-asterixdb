@@ -192,6 +192,12 @@ public class PredistributedJobsTest {
         //confirm the second job is destroyed
         Assert.assertTrue(nc1.getActivityClusterGraph(distributedId2) == null && nc2.getActivityClusterGraph(distributedId2) == null);
         cc.getPreDistributedJobStore().checkForExistingDistributedJobDescriptor(distributedId2);
+
+        //run the second job 100 times in parallel
+        distributedId2 = hcc.distributeJob(spec2);
+        for (int i = 0; i < 100; i++) {
+            hcc.startJob(distributedId2, new HashMap<>());
+        }
     }
 
     @AfterClass

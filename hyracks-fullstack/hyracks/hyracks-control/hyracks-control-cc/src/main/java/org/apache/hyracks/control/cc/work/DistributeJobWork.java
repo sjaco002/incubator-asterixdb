@@ -68,7 +68,6 @@ public class DistributeJobWork extends SynchronizableWork {
             for (NodeControllerState node : nodeManager.getAllNodeControllerStates()) {
                 node.getNodeController().distributeJob(preDistributedId, acgBytes);
             }
-
             callback.setValue(preDistributedId);
         } catch (Exception e) {
             callback.setException(e);

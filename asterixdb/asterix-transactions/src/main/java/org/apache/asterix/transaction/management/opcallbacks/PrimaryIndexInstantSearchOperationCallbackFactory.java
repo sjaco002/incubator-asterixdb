@@ -49,10 +49,9 @@ public class PrimaryIndexInstantSearchOperationCallbackFactory extends AbstractO
             throws HyracksDataException {
         ITransactionSubsystem txnSubsystem = txnSubsystemProvider.getTransactionSubsystem(ctx);
         try {
-            IJobletEventListenerFactory fact = ctx.getJobletContext().getEventListenerFactory();
-            JobId lookupId =
-                    fact instanceof IJobEventListenerFactory ? ((IJobEventListenerFactory) fact).getJobId() : jobId;
-            ITransactionContext txnCtx = txnSubsystem.getTransactionManager().getTransactionContext(lookupId, false);
+            IJobletEventListenerFactory fact = ctx.getJobletContext().getJobletEventListenerFactory();
+            ITransactionContext txnCtx = txnSubsystem.getTransactionManager()
+                    .getTransactionContext(((IJobEventListenerFactory) fact).getJobId(jobId), false);
             return new PrimaryIndexInstantSearchOperationCallback(new DatasetId(datasetId), primaryKeyFields,
                     txnSubsystem.getLockManager(), txnCtx);
         } catch (ACIDException e) {

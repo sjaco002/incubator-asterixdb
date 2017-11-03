@@ -138,7 +138,7 @@ public class Joblet implements IHyracksJobletContext, ICounterContext {
     }
 
     @Override
-    public IJobletEventListenerFactory getEventListenerFactory() {
+    public IJobletEventListenerFactory getJobletEventListenerFactory() {
         return jobletEventListenerFactory;
     }
 

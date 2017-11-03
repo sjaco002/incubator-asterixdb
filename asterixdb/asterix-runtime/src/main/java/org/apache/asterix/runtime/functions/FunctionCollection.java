@@ -158,7 +158,7 @@ import org.apache.asterix.runtime.evaluators.functions.EditDistanceStringIsFilte
 import org.apache.asterix.runtime.evaluators.functions.FullTextContainsDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.FullTextContainsWithoutOptionDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.GetItemDescriptor;
-import org.apache.asterix.runtime.evaluators.functions.GetJobParameterDescriptor;
+import org.apache.asterix.runtime.evaluators.functions.GetJobParameterByNameDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.GramTokensDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.HashedGramTokensDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.HashedWordTokensDescriptor;
@@ -428,7 +428,7 @@ public final class FunctionCollection {
         temp.add(InjectFailureDescriptor.FACTORY);
 
         // Get Job Parameter function
-        temp.add(GetJobParameterDescriptor.FACTORY);
+        temp.add(GetJobParameterByNameDescriptor.FACTORY);
 
         // Switch case
         temp.add(SwitchCaseDescriptor.FACTORY);

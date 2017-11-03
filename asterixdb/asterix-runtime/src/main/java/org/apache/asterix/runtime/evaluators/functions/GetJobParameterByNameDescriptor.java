@@ -33,12 +33,12 @@ import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.apache.hyracks.data.std.api.IPointable;
 import org.apache.hyracks.data.std.primitive.UTF8StringPointable;
 
-public class GetJobParameterDescriptor extends AbstractScalarFunctionDynamicDescriptor {
+public class GetJobParameterByNameDescriptor extends AbstractScalarFunctionDynamicDescriptor {
     private static final long serialVersionUID = 1L;
     public static final IFunctionDescriptorFactory FACTORY = new IFunctionDescriptorFactory() {
         @Override
         public IFunctionDescriptor createFunctionDescriptor() {
-            return new GetJobParameterDescriptor();
+            return new GetJobParameterByNameDescriptor();
         }
     };
 
@@ -50,7 +50,7 @@ public class GetJobParameterDescriptor extends AbstractScalarFunctionDynamicDesc
             @Override
             public IScalarEvaluator createScalarEvaluator(IHyracksTaskContext ctx) throws HyracksDataException {
                 return new AbstractUnaryStringStringEval(ctx, args[0],
-                        GetJobParameterDescriptor.this.getIdentifier()) {
+                        GetJobParameterByNameDescriptor.this.getIdentifier()) {
                     private byte[] result;
 
                     @Override

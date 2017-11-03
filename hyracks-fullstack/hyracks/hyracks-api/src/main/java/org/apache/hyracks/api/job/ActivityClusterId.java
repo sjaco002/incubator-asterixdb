@@ -61,6 +61,6 @@ public final class ActivityClusterId implements Serializable {
 
     @Override
     public String toString() {
-        return "ACID:" + ":" + id;
+        return "ACID:" + id;
     }
 }

@@ -36,15 +36,19 @@ public class JobEventListenerFactory implements IJobEventListenerFactory {
     private static final long serialVersionUID = 1L;
     private JobId jobId;
     private final boolean transactionalWrite;
-    private String jobIdParameterName = "jobIdParameter";
+    private byte[] jobIdParameterName = "jobIdParameter".getBytes();
 
     public JobEventListenerFactory(JobId jobId, boolean transactionalWrite) {
         this.jobId = jobId;
         this.transactionalWrite = transactionalWrite;
     }
 
-    @Override
     public JobId getJobId() {
+        return jobId;
+    }
+
+    @Override
+    public JobId getJobId(JobId compiledJobId) {
         return jobId;
     }
 
@@ -55,11 +59,10 @@ public class JobEventListenerFactory implements IJobEventListenerFactory {
 
     @Override
     public void updateListenerJobParameters(JobParameterByteStore jobParameterByteStore) {
-        byte[] jobIdParameter = jobIdParameterName.getBytes();
-        String jobIdString =
-                new String(jobParameterByteStore.getParameterValue(jobIdParameter, 0, jobIdParameter.length));
-        if (jobIdString.length() > 0) {
-            this.jobId = new JobId(Integer.parseInt(jobIdString));
+        String AsterixTransactionIdString =
+                new String(jobParameterByteStore.getParameterValue(jobIdParameterName, 0, jobIdParameterName.length));
+        if (AsterixTransactionIdString.length() > 0) {
+            this.jobId = new JobId(Integer.parseInt(AsterixTransactionIdString));
         }
     }
 

@@ -57,11 +57,12 @@ public class TestJobletContext implements IHyracksJobletContext {
         return frameManger.allocateFrame(bytes);
     }
 
-    ByteBuffer reallocateFrame(ByteBuffer tobeDeallocate, int newFrameSizeInBytes, boolean copyOldData) throws HyracksDataException {
+    ByteBuffer reallocateFrame(ByteBuffer tobeDeallocate, int newFrameSizeInBytes, boolean copyOldData)
+            throws HyracksDataException {
         return frameManger.reallocateFrame(tobeDeallocate, newFrameSizeInBytes, copyOldData);
     }
 
-    public IJobletEventListenerFactory getEventListenerFactory() {
+    public IJobletEventListenerFactory getJobletEventListenerFactory() {
         return null;
     }
 

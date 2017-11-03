@@ -18,6 +18,7 @@
  */
 package org.apache.asterix.active;
 
+import java.time.Instant;
 import java.util.Date;
 import java.util.Map;
 import java.util.concurrent.Executors;
@@ -37,11 +38,17 @@ import org.apache.hyracks.api.job.PreDistributedId;
 public class PredistributedJobService {
 
     private static final Logger LOGGER = Logger.getLogger(PredistributedJobService.class.getName());
-    private static final String JOB_ID_PARAMETER_NAME = "jobIdParameter";
 
+    //To enable new Asterix JobId for separate job invocations
+    private static final byte[] JOB_ID_PARAMETER_NAME = "jobIdParameter".getBytes();
+
+    //pool size one (only running one thread at a time)
+    private static final int poolSize = 1;
+
+    //Starts running a PreDistributed job periodically with an interval of "duration" seconds
     public static ScheduledExecutorService startRepetitivePreDistributedJob(PreDistributedId distributedId,
             IHyracksClientConnection hcc, long duration, Map<byte[], byte[]> jobParameters, EntityId entityId) {
-        ScheduledExecutorService scheduledExecutorService = Executors.newScheduledThreadPool(1);
+        ScheduledExecutorService scheduledExecutorService = Executors.newScheduledThreadPool(poolSize);
         scheduledExecutorService.scheduleAtFixedRate(new Runnable() {
             @Override
             public void run() {
@@ -72,20 +79,19 @@ public class PredistributedJobService {
         return true;
     }
 
-    public static long runPreDistributedJob(PreDistributedId distributedId, IHyracksClientConnection hcc,
+    public synchronized static long runPreDistributedJob(PreDistributedId distributedId, IHyracksClientConnection hcc,
             Map<byte[], byte[]> jobParameters, EntityId entityId) throws Exception {
         JobId jobId;
-        Date checkStartTime = new Date();
+        long startTime = Instant.now().toEpochMilli();
 
         //Add the Asterix Transaction Id to the map
         byte[] asterixJobId = String.valueOf(JobIdFactory.generateJobId().getId()).getBytes();
-        byte[] jobIdParameter = JOB_ID_PARAMETER_NAME.getBytes();
+        byte[] jobIdParameter = JOB_ID_PARAMETER_NAME;
         jobParameters.put(jobIdParameter, asterixJobId);
         jobId = hcc.startJob(distributedId, jobParameters);
 
         hcc.waitForCompletion(jobId);
-        Date checkEndTime = new Date();
-        long executionMilliseconds = checkEndTime.getTime() - checkStartTime.getTime();
+        long executionMilliseconds = Instant.now().toEpochMilli() - startTime;
 
         LOGGER.log(Level.INFO,
                 "Distributed Job completed for " + entityId.getExtensionName() + " " + entityId.getDataverse() + "."

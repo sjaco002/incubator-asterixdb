@@ -64,10 +64,9 @@ public class UpsertOperationCallbackFactory extends AbstractOperationCallbackFac
         }
 
         try {
-            IJobletEventListenerFactory fact = ctx.getJobletContext().getEventListenerFactory();
-            JobId lookupId =
-                    fact instanceof IJobEventListenerFactory ? ((IJobEventListenerFactory) fact).getJobId() : jobId;
-            ITransactionContext txnCtx = txnSubsystem.getTransactionManager().getTransactionContext(lookupId, false);
+            IJobletEventListenerFactory fact = ctx.getJobletContext().getJobletEventListenerFactory();
+            ITransactionContext txnCtx = txnSubsystem.getTransactionManager()
+                    .getTransactionContext(((IJobEventListenerFactory) fact).getJobId(jobId), false);
             IModificationOperationCallback modCallback = new UpsertOperationCallback(new DatasetId(datasetId),
                     primaryKeyFields, txnCtx, txnSubsystem.getLockManager(), txnSubsystem, resource.getId(),
                     aResource.getPartition(), resourceType, indexOp);

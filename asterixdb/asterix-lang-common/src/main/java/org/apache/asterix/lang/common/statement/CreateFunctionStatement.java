@@ -62,7 +62,7 @@ public class CreateFunctionStatement implements Statement {
         return paramList;
     }
 
-    public FunctionSignature getSignature() {
+    public FunctionSignature getFunctionSignature() {
         return signature;
     }
 

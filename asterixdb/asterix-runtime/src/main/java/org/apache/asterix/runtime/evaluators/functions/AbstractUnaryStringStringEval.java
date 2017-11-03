@@ -48,7 +48,7 @@ abstract class AbstractUnaryStringStringEval implements IScalarEvaluator {
     final GrowableArray resultArray = new GrowableArray();
     final UTF8StringBuilder resultBuilder = new UTF8StringBuilder();
     private final ArrayBackedValueStorage resultStorage = new ArrayBackedValueStorage();
-    protected final DataOutput dataOutput = resultStorage.getDataOutput();
+    private final DataOutput dataOutput = resultStorage.getDataOutput();
     private final FunctionIdentifier funcID;
 
     AbstractUnaryStringStringEval(IHyracksTaskContext context, IScalarEvaluatorFactory argEvalFactory,
@@ -57,7 +57,6 @@ abstract class AbstractUnaryStringStringEval implements IScalarEvaluator {
         this.funcID = funcID;
     }
 
-    @SuppressWarnings("unchecked")
     @Override
     public void evaluate(IFrameTupleReference tuple, IPointable resultPointable) throws HyracksDataException {
         resultStorage.reset();

@@ -57,10 +57,8 @@ public class CommitRuntimeFactory implements IPushRuntimeFactory {
 
     @Override
     public IPushRuntime createPushRuntime(IHyracksTaskContext ctx) throws HyracksDataException {
-        IJobletEventListenerFactory fact = ctx.getJobletContext().getEventListenerFactory();
-        JobId lookupId =
-                fact instanceof IJobEventListenerFactory ? ((IJobEventListenerFactory) fact).getJobId() : jobId;
-        return new CommitRuntime(ctx, lookupId, datasetId,
+        IJobletEventListenerFactory fact = ctx.getJobletContext().getJobletEventListenerFactory();
+        return new CommitRuntime(ctx, ((IJobEventListenerFactory) fact).getJobId(jobId), datasetId,
                 primaryKeyFields, isTemporaryDatasetWriteJob, isWriteTransaction,
                 datasetPartitions[ctx.getTaskAttemptId().getTaskId().getPartition()], isSink);
     }

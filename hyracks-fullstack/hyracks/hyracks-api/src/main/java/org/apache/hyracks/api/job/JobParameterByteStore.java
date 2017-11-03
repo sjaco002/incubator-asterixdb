@@ -28,7 +28,6 @@ public class JobParameterByteStore implements Serializable {
     private static final long serialVersionUID = 1L;
 
     private Map<byte[], byte[]> runtimeValues;
-    private Map<String, byte[]> nonpureSingletonValues;
     private final byte[] empty = new byte[0];
 
     public JobParameterByteStore() {
@@ -60,14 +59,6 @@ public class JobParameterByteStore implements Serializable {
             }
         }
         return empty;
-    }
-
-    public synchronized byte[] getNonpureSingletonValue(String functionName) {
-        byte[] value = nonpureSingletonValues.get(functionName);
-        if (value == null) {
-            nonpureSingletonValues.put(functionName, value);
-        }
-        return value;
     }
 
 }

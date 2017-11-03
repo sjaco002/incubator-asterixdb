@@ -35,7 +35,7 @@ public interface IHyracksJobletContext extends IWorkspaceFileFactory, IDeallocat
 
     Object getGlobalJobData();
 
-    IJobletEventListenerFactory getEventListenerFactory();
+    IJobletEventListenerFactory getJobletEventListenerFactory();
 
     Class<?> loadClass(String className) throws HyracksException;
 
