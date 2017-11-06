@@ -439,7 +439,7 @@ public final class FunctionCollection {
         fc.add(InjectFailureDescriptor.FACTORY);
 
         // Get Job Parameter function
-        temp.add(GetJobParameterByNameDescriptor.FACTORY);
+        fc.add(GetJobParameterByNameDescriptor.FACTORY);
 
         // Switch case
         fc.add(SwitchCaseDescriptor.FACTORY);
@@ -741,8 +741,8 @@ public final class FunctionCollection {
      */
     private static IFunctionDescriptorFactory getGeneratedFunctionDescriptorFactory(Class<?> cl) {
         try {
-            String className = CodeGenHelper.getGeneratedClassName(cl.getName(),
-                    CodeGenHelper.DEFAULT_SUFFIX_FOR_GENERATED_CLASS);
+            String className =
+                    CodeGenHelper.getGeneratedClassName(cl.getName(), CodeGenHelper.DEFAULT_SUFFIX_FOR_GENERATED_CLASS);
             Class<?> generatedCl = cl.getClassLoader().loadClass(className);
             Field factory = generatedCl.getDeclaredField(FACTORY);
             return (IFunctionDescriptorFactory) factory.get(null);
