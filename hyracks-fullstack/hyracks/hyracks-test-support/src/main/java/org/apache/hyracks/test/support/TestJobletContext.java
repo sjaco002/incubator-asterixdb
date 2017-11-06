@@ -30,6 +30,7 @@ import org.apache.hyracks.api.job.IJobletEventListenerFactory;
 import org.apache.hyracks.api.job.JobId;
 import org.apache.hyracks.api.job.profiling.counters.ICounterContext;
 import org.apache.hyracks.api.resources.IDeallocatable;
+import org.apache.hyracks.control.nc.io.IOManager;
 import org.apache.hyracks.control.nc.io.WorkspaceFileFactory;
 import org.apache.hyracks.control.nc.resources.memory.FrameManager;
 
@@ -39,7 +40,6 @@ public class TestJobletContext implements IHyracksJobletContext {
     private final FrameManager frameManger;
     private JobId jobId;
     private WorkspaceFileFactory fileFactory;
-    private IJobletEventListenerFactory jobletEventListenerFactory;
 
     public TestJobletContext(int frameSize, INCServiceContext serviceContext, JobId jobId) throws HyracksException {
         this.frameSize = frameSize;
@@ -62,14 +62,8 @@ public class TestJobletContext implements IHyracksJobletContext {
         return frameManger.reallocateFrame(tobeDeallocate, newFrameSizeInBytes, copyOldData);
     }
 
-    @Override
-    public void setJobletEventListenerFactory(IJobletEventListenerFactory factory) {
-        jobletEventListenerFactory = factory;
-    }
-
-    @Override
     public IJobletEventListenerFactory getJobletEventListenerFactory() {
-        return jobletEventListenerFactory;
+        return null;
     }
 
     void deallocateFrames(int bytes) {

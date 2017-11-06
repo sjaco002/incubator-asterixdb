@@ -296,11 +296,11 @@ public class TestNodeController {
         if (withMessaging) {
             TaskUtil.put(HyracksConstants.KEY_MESSAGE, new VSizeFrame(ctx), ctx);
         }
-        ctx.getJobletContext().setJobletEventListenerFactory(new JobEventListenerFactory(
-                new org.apache.asterix.common.transactions.JobId((int) ctx.getJobletContext().getJobId().getId()),
-                true));
         JobId jobId = newJobId();
         IHyracksJobletContext jobletCtx = Mockito.mock(IHyracksJobletContext.class);
+        JobEventListenerFactory factory = new JobEventListenerFactory(
+                new org.apache.asterix.common.transactions.JobId((int) jobId.getId()), true);
+        Mockito.when(jobletCtx.getJobletEventListenerFactory()).thenReturn(factory);
         Mockito.when(jobletCtx.getServiceContext()).thenReturn(ExecutionTestUtil.integrationUtil.ncs[0].getContext());
         Mockito.when(jobletCtx.getJobId()).thenReturn(jobId);
         ctx = Mockito.spy(ctx);
