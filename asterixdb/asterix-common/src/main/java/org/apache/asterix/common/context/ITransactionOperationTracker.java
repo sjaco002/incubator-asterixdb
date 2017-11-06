@@ -16,23 +16,21 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+package org.apache.asterix.common.context;
 
-package org.apache.asterix.om.functions;
+import org.apache.hyracks.storage.am.lsm.common.api.ILSMOperationTracker;
 
-public interface IFunctionDescriptorFactory {
-
-    /**
-     * the artifact registered in function manager
-     *
-     * @return a new IFunctionDescriptor instance
-     */
-    IFunctionDescriptor createFunctionDescriptor();
+public interface ITransactionOperationTracker extends ILSMOperationTracker {
 
     /**
-     * Creates type inferer for this function
-     * @return an new instance of the type inferer or {@code null} if not provided
+     * Called before a transaction performs any operations on
+     * {@link org.apache.hyracks.storage.am.lsm.common.api.ILSMIndex}
      */
-    default IFunctionTypeInferer createFunctionTypeInferer() {
-        return null;
-    }
+    void beforeTransaction();
+
+    /**
+     * Called after a transaction completes its operations on
+     * {@link org.apache.hyracks.storage.am.lsm.common.api.ILSMIndex}
+     */
+    void afterTransaction();
 }
