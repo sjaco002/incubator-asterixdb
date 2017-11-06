@@ -57,6 +57,7 @@ import org.apache.asterix.om.types.ARecordType;
 import org.apache.asterix.om.types.IAType;
 import org.apache.asterix.runtime.formats.FormatUtils;
 import org.apache.asterix.runtime.formats.NonTaggedDataFormat;
+import org.apache.asterix.runtime.job.listener.JobEventListenerFactory;
 import org.apache.asterix.runtime.operators.LSMPrimaryUpsertOperatorNodePushable;
 import org.apache.asterix.runtime.utils.CcApplicationContext;
 import org.apache.asterix.test.runtime.ExecutionTestUtil;
@@ -295,6 +296,9 @@ public class TestNodeController {
         if (withMessaging) {
             TaskUtil.put(HyracksConstants.KEY_MESSAGE, new VSizeFrame(ctx), ctx);
         }
+        ctx.getJobletContext().setJobletEventListenerFactory(new JobEventListenerFactory(
+                new org.apache.asterix.common.transactions.JobId((int) ctx.getJobletContext().getJobId().getId()),
+                true));
         JobId jobId = newJobId();
         IHyracksJobletContext jobletCtx = Mockito.mock(IHyracksJobletContext.class);
         Mockito.when(jobletCtx.getServiceContext()).thenReturn(ExecutionTestUtil.integrationUtil.ncs[0].getContext());
