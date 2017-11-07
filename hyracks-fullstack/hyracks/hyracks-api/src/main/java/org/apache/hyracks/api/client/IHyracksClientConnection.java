@@ -24,13 +24,13 @@ import java.util.Map;
 
 import org.apache.hyracks.api.comm.NetworkAddress;
 import org.apache.hyracks.api.deployment.DeploymentId;
+import org.apache.hyracks.api.job.DeployedJobSpecId;
 import org.apache.hyracks.api.job.IActivityClusterGraphGeneratorFactory;
 import org.apache.hyracks.api.job.JobFlag;
 import org.apache.hyracks.api.job.JobId;
 import org.apache.hyracks.api.job.JobInfo;
 import org.apache.hyracks.api.job.JobSpecification;
 import org.apache.hyracks.api.job.JobStatus;
-import org.apache.hyracks.api.job.PreDistributedId;
 
 /**
  * Interface used by clients to communicate with the Hyracks Cluster Controller.
@@ -96,27 +96,27 @@ public interface IHyracksClientConnection extends IClusterInfoCollector {
      *            Flags
      * @throws Exception
      */
-    PreDistributedId distributeJob(JobSpecification jobSpec) throws Exception;
+    DeployedJobSpecId deployJobSpec(JobSpecification jobSpec) throws Exception;
 
     /**
-     * Destroy the distributed graph for a pre-distributed job
+     * Remove the deployed Job Spec
      *
-     * @param preDistributedId
-     *            The id of the predistributed job
+     * @param deployedJobSpecId
+     *            The id of the deployed job spec
      * @throws Exception
      */
-    PreDistributedId destroyJob(PreDistributedId preDistributedId) throws Exception;
+    DeployedJobSpecId undeployJobSpec(DeployedJobSpecId deployedJobSpecId) throws Exception;
 
     /**
-     * Used to run a pre-distributed job by id (the same JobId will be returned)
+     * Used to run a deployed Job Spec by id
      *
-     * @param preDistributedId
-     *            The id of the predistributed job
+     * @param deployedJobSpecId
+     *            The id of the deployed job spec
      * @param jobParameters
      *            The serialized job parameters
      * @throws Exception
      */
-    JobId startJob(PreDistributedId preDistributedId, Map<byte[], byte[]> jobParameters) throws Exception;
+    JobId startJob(DeployedJobSpecId deployedJobSpecId, Map<byte[], byte[]> jobParameters) throws Exception;
 
     /**
      * Start the specified Job.

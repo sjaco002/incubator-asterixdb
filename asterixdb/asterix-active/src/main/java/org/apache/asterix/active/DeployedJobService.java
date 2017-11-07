@@ -29,15 +29,15 @@ import java.util.logging.Logger;
 
 import org.apache.asterix.transaction.management.service.transaction.JobIdFactory;
 import org.apache.hyracks.api.client.IHyracksClientConnection;
+import org.apache.hyracks.api.job.DeployedJobSpecId;
 import org.apache.hyracks.api.job.JobId;
-import org.apache.hyracks.api.job.PreDistributedId;
 
 /**
- * Provides functionality for running PreDistributedJobs
+ * Provides functionality for running DeployedJobSpecs
  */
-public class PredistributedJobService {
+public class DeployedJobService {
 
-    private static final Logger LOGGER = Logger.getLogger(PredistributedJobService.class.getName());
+    private static final Logger LOGGER = Logger.getLogger(DeployedJobService.class.getName());
 
     //To enable new Asterix JobId for separate job invocations
     private static final byte[] JOB_ID_PARAMETER_NAME = "jobIdParameter".getBytes();
@@ -45,15 +45,15 @@ public class PredistributedJobService {
     //pool size one (only running one thread at a time)
     private static final int poolSize = 1;
 
-    //Starts running a PreDistributed job periodically with an interval of "duration" seconds
-    public static ScheduledExecutorService startRepetitivePreDistributedJob(PreDistributedId distributedId,
+    //Starts running a deployed job specification periodically with an interval of "duration" seconds
+    public static ScheduledExecutorService startRepetitiveDeployedJobSpec(DeployedJobSpecId distributedId,
             IHyracksClientConnection hcc, long duration, Map<byte[], byte[]> jobParameters, EntityId entityId) {
         ScheduledExecutorService scheduledExecutorService = Executors.newScheduledThreadPool(poolSize);
         scheduledExecutorService.scheduleAtFixedRate(new Runnable() {
             @Override
             public void run() {
                 try {
-                    if (!runRepetitivePreDistributedJob(distributedId, hcc, jobParameters, duration, entityId)) {
+                    if (!runRepetitiveDeployedJobSpec(distributedId, hcc, jobParameters, duration, entityId)) {
                         scheduledExecutorService.shutdown();
                     }
                 } catch (Exception e) {
@@ -65,9 +65,9 @@ public class PredistributedJobService {
         return scheduledExecutorService;
     }
 
-    public static boolean runRepetitivePreDistributedJob(PreDistributedId distributedId, IHyracksClientConnection hcc,
+    public static boolean runRepetitiveDeployedJobSpec(DeployedJobSpecId distributedId, IHyracksClientConnection hcc,
             Map<byte[], byte[]> jobParameters, long duration, EntityId entityId) throws Exception {
-        long executionMilliseconds = runPreDistributedJob(distributedId, hcc, jobParameters, entityId);
+        long executionMilliseconds = runDeployedJobSpec(distributedId, hcc, jobParameters, entityId);
         if (executionMilliseconds > duration && LOGGER.isLoggable(Level.SEVERE)) {
             LOGGER.log(Level.SEVERE,
                     "Periodic job for " + entityId.getExtensionName() + " " + entityId.getDataverse() + "."
@@ -79,7 +79,7 @@ public class PredistributedJobService {
         return true;
     }
 
-    public synchronized static long runPreDistributedJob(PreDistributedId distributedId, IHyracksClientConnection hcc,
+    public synchronized static long runDeployedJobSpec(DeployedJobSpecId distributedId, IHyracksClientConnection hcc,
             Map<byte[], byte[]> jobParameters, EntityId entityId) throws Exception {
         JobId jobId;
         long startTime = Instant.now().toEpochMilli();
@@ -94,7 +94,8 @@ public class PredistributedJobService {
         long executionMilliseconds = Instant.now().toEpochMilli() - startTime;
 
         LOGGER.log(Level.INFO,
-                "Distributed Job completed for " + entityId.getExtensionName() + " " + entityId.getDataverse() + "."
+                "Deployed Job execution completed for " + entityId.getExtensionName() + " " + entityId.getDataverse()
+                        + "."
                         + entityId.getEntityName() + ". Took " + executionMilliseconds + " milliseconds ");
 
         return executionMilliseconds;
@@ -103,7 +104,7 @@ public class PredistributedJobService {
 
     @Override
     public String toString() {
-        return "PreDistributedJobService";
+        return "DeployedJobSpecService";
     }
 
 }

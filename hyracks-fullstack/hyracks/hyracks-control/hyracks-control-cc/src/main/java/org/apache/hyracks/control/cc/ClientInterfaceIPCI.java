@@ -24,16 +24,15 @@ import java.util.logging.Logger;
 import org.apache.hyracks.api.client.HyracksClientInterfaceFunctions;
 import org.apache.hyracks.api.comm.NetworkAddress;
 import org.apache.hyracks.api.dataset.DatasetJobRecord.Status;
+import org.apache.hyracks.api.job.DeployedJobSpecId;
+import org.apache.hyracks.api.job.DeployedJobSpecIdFactory;
 import org.apache.hyracks.api.job.JobIdFactory;
 import org.apache.hyracks.api.job.JobInfo;
-import org.apache.hyracks.api.job.PreDistributedId;
-import org.apache.hyracks.api.job.PreDistributedIdFactory;
 import org.apache.hyracks.control.cc.work.CancelJobWork;
 import org.apache.hyracks.control.cc.work.CliDeployBinaryWork;
 import org.apache.hyracks.control.cc.work.CliUnDeployBinaryWork;
 import org.apache.hyracks.control.cc.work.ClusterShutdownWork;
-import org.apache.hyracks.control.cc.work.DestroyJobWork;
-import org.apache.hyracks.control.cc.work.DistributeJobWork;
+import org.apache.hyracks.control.cc.work.DeployJobSpecWork;
 import org.apache.hyracks.control.cc.work.GetDatasetDirectoryServiceInfoWork;
 import org.apache.hyracks.control.cc.work.GetJobInfoWork;
 import org.apache.hyracks.control.cc.work.GetJobStatusWork;
@@ -43,6 +42,7 @@ import org.apache.hyracks.control.cc.work.GetResultPartitionLocationsWork;
 import org.apache.hyracks.control.cc.work.GetResultStatusWork;
 import org.apache.hyracks.control.cc.work.GetThreadDumpWork;
 import org.apache.hyracks.control.cc.work.JobStartWork;
+import org.apache.hyracks.control.cc.work.UndeployJobSpecWork;
 import org.apache.hyracks.control.cc.work.WaitForJobCompletionWork;
 import org.apache.hyracks.control.common.work.IPCResponder;
 import org.apache.hyracks.ipc.api.IIPCHandle;
@@ -54,12 +54,12 @@ class ClientInterfaceIPCI implements IIPCI {
     private static final Logger LOGGER = Logger.getLogger(ClientInterfaceIPCI.class.getName());
     private final ClusterControllerService ccs;
     private final JobIdFactory jobIdFactory;
-    private final PreDistributedIdFactory preDistributedIdFactory;
+    private final DeployedJobSpecIdFactory deployedJobSpecIdFactory;
 
     ClientInterfaceIPCI(final ClusterControllerService ccs, final JobIdFactory jobIdFactory) {
         this.ccs = ccs;
         this.jobIdFactory = jobIdFactory;
-        this.preDistributedIdFactory = ccs.getPreDistributedIdFactory();
+        this.deployedJobSpecIdFactory = ccs.getDeployedJobSpecIdFactory();
     }
 
     @Override
@@ -86,16 +86,17 @@ class ClientInterfaceIPCI implements IIPCI {
                         new IPCResponder<JobInfo>(handle, mid)));
                 break;
             case DISTRIBUTE_JOB:
-                HyracksClientInterfaceFunctions.DistributeJobFunction djf =
-                        (HyracksClientInterfaceFunctions.DistributeJobFunction) fn;
-                ccs.getWorkQueue().schedule(new DistributeJobWork(ccs, djf.getACGGFBytes(),
-                        preDistributedIdFactory.create(), new IPCResponder<>(handle, mid)));
+                HyracksClientInterfaceFunctions.DeployJobSpecFunction djf =
+                        (HyracksClientInterfaceFunctions.DeployJobSpecFunction) fn;
+                ccs.getWorkQueue().schedule(new DeployJobSpecWork(ccs, djf.getACGGFBytes(),
+                        deployedJobSpecIdFactory.create(), new IPCResponder<>(handle, mid)));
                 break;
             case DESTROY_JOB:
-                HyracksClientInterfaceFunctions.DestroyJobFunction dsjf =
-                        (HyracksClientInterfaceFunctions.DestroyJobFunction) fn;
+                HyracksClientInterfaceFunctions.UndeployJobSpecFunction dsjf =
+                        (HyracksClientInterfaceFunctions.UndeployJobSpecFunction) fn;
                 ccs.getWorkQueue()
-                        .schedule(new DestroyJobWork(ccs, dsjf.getPredistributedId(), new IPCResponder<>(handle, mid)));
+                        .schedule(new UndeployJobSpecWork(ccs, dsjf.getDeployedJobSpecId(),
+                                new IPCResponder<>(handle, mid)));
                 break;
             case CANCEL_JOB:
                 HyracksClientInterfaceFunctions.CancelJobFunction cjf =
@@ -106,7 +107,7 @@ class ClientInterfaceIPCI implements IIPCI {
             case START_JOB:
                 HyracksClientInterfaceFunctions.StartJobFunction sjf =
                         (HyracksClientInterfaceFunctions.StartJobFunction) fn;
-                PreDistributedId id = sjf.getPreDistributedId();
+                DeployedJobSpecId id = sjf.getDeployedJobSpecId();
                 byte[] acggfBytes = null;
                 if (id == null) {
                     //The job is new

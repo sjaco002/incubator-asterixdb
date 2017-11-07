@@ -26,11 +26,11 @@ import java.util.concurrent.TimeUnit;
 
 import org.apache.hyracks.api.comm.NetworkAddress;
 import org.apache.hyracks.api.deployment.DeploymentId;
+import org.apache.hyracks.api.job.DeployedJobSpecId;
 import org.apache.hyracks.api.job.JobFlag;
 import org.apache.hyracks.api.job.JobId;
 import org.apache.hyracks.api.job.JobInfo;
 import org.apache.hyracks.api.job.JobStatus;
-import org.apache.hyracks.api.job.PreDistributedId;
 import org.apache.hyracks.api.topology.ClusterTopology;
 import org.apache.hyracks.ipc.api.IIPCHandle;
 import org.apache.hyracks.ipc.api.RPCInterface;
@@ -77,9 +77,9 @@ public class HyracksClientInterfaceRemoteProxy implements IHyracksClientInterfac
     }
 
     @Override
-    public JobId startJob(PreDistributedId preDistributedId, Map<byte[], byte[]> jobParameters) throws Exception {
+    public JobId startJob(DeployedJobSpecId deployedJobSpecId, Map<byte[], byte[]> jobParameters) throws Exception {
         HyracksClientInterfaceFunctions.StartJobFunction sjf =
-                new HyracksClientInterfaceFunctions.StartJobFunction(preDistributedId, jobParameters);
+                new HyracksClientInterfaceFunctions.StartJobFunction(deployedJobSpecId, jobParameters);
         return (JobId) rpci.call(ipcHandle, sjf);
     }
 
@@ -91,17 +91,17 @@ public class HyracksClientInterfaceRemoteProxy implements IHyracksClientInterfac
     }
 
     @Override
-    public PreDistributedId distributeJob(byte[] acggfBytes) throws Exception {
-        HyracksClientInterfaceFunctions.DistributeJobFunction sjf =
-                new HyracksClientInterfaceFunctions.DistributeJobFunction(acggfBytes);
-        return (PreDistributedId) rpci.call(ipcHandle, sjf);
+    public DeployedJobSpecId deployJobSpec(byte[] acggfBytes) throws Exception {
+        HyracksClientInterfaceFunctions.DeployJobSpecFunction sjf =
+                new HyracksClientInterfaceFunctions.DeployJobSpecFunction(acggfBytes);
+        return (DeployedJobSpecId) rpci.call(ipcHandle, sjf);
     }
 
     @Override
-    public PreDistributedId destroyJob(PreDistributedId preDistributedId) throws Exception {
-        HyracksClientInterfaceFunctions.DestroyJobFunction sjf =
-                new HyracksClientInterfaceFunctions.DestroyJobFunction(preDistributedId);
-        return (PreDistributedId) rpci.call(ipcHandle, sjf);
+    public DeployedJobSpecId undeployJobSpec(DeployedJobSpecId deployedJobSpecId) throws Exception {
+        HyracksClientInterfaceFunctions.UndeployJobSpecFunction sjf =
+                new HyracksClientInterfaceFunctions.UndeployJobSpecFunction(deployedJobSpecId);
+        return (DeployedJobSpecId) rpci.call(ipcHandle, sjf);
     }
 
     @Override

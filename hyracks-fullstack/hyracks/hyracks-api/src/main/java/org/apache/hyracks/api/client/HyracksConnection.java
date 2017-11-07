@@ -36,13 +36,13 @@ import org.apache.hyracks.api.client.impl.JobSpecificationActivityClusterGraphGe
 import org.apache.hyracks.api.comm.NetworkAddress;
 import org.apache.hyracks.api.deployment.DeploymentId;
 import org.apache.hyracks.api.exceptions.HyracksException;
+import org.apache.hyracks.api.job.DeployedJobSpecId;
 import org.apache.hyracks.api.job.IActivityClusterGraphGeneratorFactory;
 import org.apache.hyracks.api.job.JobFlag;
 import org.apache.hyracks.api.job.JobId;
 import org.apache.hyracks.api.job.JobInfo;
 import org.apache.hyracks.api.job.JobSpecification;
 import org.apache.hyracks.api.job.JobStatus;
-import org.apache.hyracks.api.job.PreDistributedId;
 import org.apache.hyracks.api.topology.ClusterTopology;
 import org.apache.hyracks.api.util.JavaSerializationUtils;
 import org.apache.hyracks.ipc.api.RPCInterface;
@@ -110,20 +110,20 @@ public final class HyracksConnection implements IHyracksClientConnection {
     }
 
     @Override
-    public PreDistributedId distributeJob(JobSpecification jobSpec) throws Exception {
+    public DeployedJobSpecId deployJobSpec(JobSpecification jobSpec) throws Exception {
         JobSpecificationActivityClusterGraphGeneratorFactory jsacggf =
                 new JobSpecificationActivityClusterGraphGeneratorFactory(jobSpec);
-        return distributeJob(jsacggf);
+        return deployJobSpec(jsacggf);
     }
 
     @Override
-    public PreDistributedId destroyJob(PreDistributedId preDistributedId) throws Exception {
-        return hci.destroyJob(preDistributedId);
+    public DeployedJobSpecId undeployJobSpec(DeployedJobSpecId deployedJobSpecId) throws Exception {
+        return hci.undeployJobSpec(deployedJobSpecId);
     }
 
     @Override
-    public JobId startJob(PreDistributedId preDistributedId, Map<byte[], byte[]> jobParameters) throws Exception {
-        return hci.startJob(preDistributedId, jobParameters);
+    public JobId startJob(DeployedJobSpecId deployedJobSpecId, Map<byte[], byte[]> jobParameters) throws Exception {
+        return hci.startJob(deployedJobSpecId, jobParameters);
     }
 
     @Override
@@ -131,8 +131,8 @@ public final class HyracksConnection implements IHyracksClientConnection {
         return hci.startJob(JavaSerializationUtils.serialize(acggf), jobFlags);
     }
 
-    public PreDistributedId distributeJob(IActivityClusterGraphGeneratorFactory acggf) throws Exception {
-        return hci.distributeJob(JavaSerializationUtils.serialize(acggf));
+    public DeployedJobSpecId deployJobSpec(IActivityClusterGraphGeneratorFactory acggf) throws Exception {
+        return hci.deployJobSpec(JavaSerializationUtils.serialize(acggf));
     }
 
     @Override

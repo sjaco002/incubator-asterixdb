@@ -20,43 +20,35 @@
 package org.apache.hyracks.control.nc.work;
 
 import org.apache.hyracks.api.exceptions.HyracksException;
-import org.apache.hyracks.api.job.ActivityClusterGraph;
-import org.apache.hyracks.api.job.PreDistributedId;
-import org.apache.hyracks.control.common.deployment.DeploymentUtils;
+import org.apache.hyracks.api.job.DeployedJobSpecId;
 import org.apache.hyracks.control.common.work.AbstractWork;
 import org.apache.hyracks.control.nc.NodeControllerService;
 
 /**
- * pre-distribute a job that can be executed later
+ * remove the deployed job
  *
  */
-public class DistributeJobWork extends AbstractWork {
+public class UndeployJobSpecWork extends AbstractWork {
 
     private final NodeControllerService ncs;
-    private final byte[] acgBytes;
-    private final PreDistributedId preDistributedId;
+    private final DeployedJobSpecId deployedJobSpecId;
 
-    public DistributeJobWork(NodeControllerService ncs, PreDistributedId preDistributedId, byte[] acgBytes) {
+    public UndeployJobSpecWork(NodeControllerService ncs, DeployedJobSpecId deployedJobSpecId) {
         this.ncs = ncs;
-        this.preDistributedId = preDistributedId;
-        this.acgBytes = acgBytes;
+        this.deployedJobSpecId = deployedJobSpecId;
     }
 
     @Override
     public void run() {
         try {
-            ncs.checkForDuplicateDistributedJob(preDistributedId);
-            ActivityClusterGraph acg =
-                    (ActivityClusterGraph) DeploymentUtils.deserialize(acgBytes, null, ncs.getContext());
-            ncs.storeActivityClusterGraph(preDistributedId, acg);
+            ncs.removeActivityClusterGraph(deployedJobSpecId);
         } catch (HyracksException e) {
             try {
-                ncs.getClusterController().notifyDistributedJobFailure(preDistributedId, ncs.getId());
+                ncs.getClusterController().notifyDeployedJobSpecFailure(deployedJobSpecId, ncs.getId());
             } catch (Exception e1) {
                 e1.printStackTrace();
             }
         }
-
     }
 
 }

@@ -48,7 +48,7 @@ public class MultiTransactionJobletEventListenerFactory implements IJobEventList
         this.transactionalWrite = transactionalWrite;
     }
 
-    //TODO: Enable this factory to be usable for PreDistributed Jobs
+    //TODO: Enable this factory to be usable for Deployed Jobs
     @Override
     public JobId getJobId(JobId compiledJobId) {
         return compiledJobId;

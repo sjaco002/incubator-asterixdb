@@ -21,10 +21,10 @@ package org.apache.hyracks.control.cc.work;
 import java.util.EnumSet;
 
 import org.apache.hyracks.api.job.ActivityClusterGraph;
+import org.apache.hyracks.api.job.DeployedJobSpecId;
 import org.apache.hyracks.api.job.IActivityClusterGraphGenerator;
 import org.apache.hyracks.api.job.IActivityClusterGraphGeneratorFactory;
 import org.apache.hyracks.api.job.JobFlag;
-import org.apache.hyracks.api.job.PreDistributedId;
 import org.apache.hyracks.api.util.JavaSerializationUtils;
 import org.apache.hyracks.control.cc.ClusterControllerService;
 import org.apache.hyracks.control.cc.NodeControllerState;
@@ -34,15 +34,15 @@ import org.apache.hyracks.control.common.deployment.DeploymentUtils;
 import org.apache.hyracks.control.common.work.IResultCallback;
 import org.apache.hyracks.control.common.work.SynchronizableWork;
 
-public class DistributeJobWork extends SynchronizableWork {
+public class DeployJobSpecWork extends SynchronizableWork {
     private final ClusterControllerService ccs;
     private final byte[] acggfBytes;
-    private final PreDistributedId preDistributedId;
-    private final IResultCallback<PreDistributedId> callback;
+    private final DeployedJobSpecId deployedJobSpecId;
+    private final IResultCallback<DeployedJobSpecId> callback;
 
-    public DistributeJobWork(ClusterControllerService ccs, byte[] acggfBytes, PreDistributedId preDistributedId,
-            IResultCallback<PreDistributedId> callback) {
-        this.preDistributedId = preDistributedId;
+    public DeployJobSpecWork(ClusterControllerService ccs, byte[] acggfBytes, DeployedJobSpecId deployedJobSpecId,
+            IResultCallback<DeployedJobSpecId> callback) {
+        this.deployedJobSpecId = deployedJobSpecId;
         this.ccs = ccs;
         this.acggfBytes = acggfBytes;
         this.callback = callback;
@@ -52,13 +52,13 @@ public class DistributeJobWork extends SynchronizableWork {
     protected void doRun() throws Exception {
         try {
             final CCServiceContext ccServiceCtx = ccs.getContext();
-            ccs.getPreDistributedJobStore().checkForExistingDistributedJobDescriptor(preDistributedId);
+            ccs.getDeployedJobSpecStore().checkForExistingDeployedJobSpecDescriptor(deployedJobSpecId);
             IActivityClusterGraphGeneratorFactory acggf =
                     (IActivityClusterGraphGeneratorFactory) DeploymentUtils.deserialize(acggfBytes, null, ccServiceCtx);
             IActivityClusterGraphGenerator acgg =
                     acggf.createActivityClusterGraphGenerator(ccServiceCtx, EnumSet.noneOf(JobFlag.class));
             ActivityClusterGraph acg = acgg.initialize();
-            ccs.getPreDistributedJobStore().addDistributedJobDescriptor(preDistributedId, acg,
+            ccs.getDeployedJobSpecStore().addDeployedJobSpecDescriptor(deployedJobSpecId, acg,
                     acggf.getJobSpecification(),
                     acgg.getConstraints());
 
@@ -66,9 +66,9 @@ public class DistributeJobWork extends SynchronizableWork {
 
             INodeManager nodeManager = ccs.getNodeManager();
             for (NodeControllerState node : nodeManager.getAllNodeControllerStates()) {
-                node.getNodeController().distributeJob(preDistributedId, acgBytes);
+                node.getNodeController().deployJobSpec(deployedJobSpecId, acgBytes);
             }
-            callback.setValue(preDistributedId);
+            callback.setValue(deployedJobSpecId);
         } catch (Exception e) {
             callback.setException(e);
         }

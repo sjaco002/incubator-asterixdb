@@ -27,12 +27,12 @@ import org.apache.hyracks.control.nc.work.AbortTasksWork;
 import org.apache.hyracks.control.nc.work.ApplicationMessageWork;
 import org.apache.hyracks.control.nc.work.CleanupJobletWork;
 import org.apache.hyracks.control.nc.work.DeployBinaryWork;
-import org.apache.hyracks.control.nc.work.DestroyJobWork;
-import org.apache.hyracks.control.nc.work.DistributeJobWork;
+import org.apache.hyracks.control.nc.work.DeployJobSpecWork;
 import org.apache.hyracks.control.nc.work.ReportPartitionAvailabilityWork;
 import org.apache.hyracks.control.nc.work.StartTasksWork;
 import org.apache.hyracks.control.nc.work.StateDumpWork;
 import org.apache.hyracks.control.nc.work.UnDeployBinaryWork;
+import org.apache.hyracks.control.nc.work.UndeployJobSpecWork;
 import org.apache.hyracks.ipc.api.IIPCHandle;
 import org.apache.hyracks.ipc.api.IIPCI;
 
@@ -65,7 +65,7 @@ final class NodeControllerIPCI implements IIPCI {
                 ncs.getWorkQueue()
                         .schedule(new StartTasksWork(ncs, stf.getDeploymentId(), stf.getJobId(), stf.getPlanBytes(),
                                 stf.getTaskDescriptors(), stf.getConnectorPolicies(), stf.getFlags(),
-                                stf.getJobParameters(), stf.getPredistributedId()));
+                                stf.getJobParameters(), stf.getDeployedJobSpecId()));
                 return;
             case ABORT_TASKS:
                 CCNCFunctions.AbortTasksFunction atf = (CCNCFunctions.AbortTasksFunction) fn;
@@ -106,13 +106,13 @@ final class NodeControllerIPCI implements IIPCI {
                 return;
 
             case DISTRIBUTE_JOB:
-                CCNCFunctions.DistributeJobFunction djf = (CCNCFunctions.DistributeJobFunction) fn;
-                ncs.getWorkQueue().schedule(new DistributeJobWork(ncs, djf.getPredistributedId(), djf.getacgBytes()));
+                CCNCFunctions.DeployJobSpecFunction djf = (CCNCFunctions.DeployJobSpecFunction) fn;
+                ncs.getWorkQueue().schedule(new DeployJobSpecWork(ncs, djf.getDeployedJobSpecId(), djf.getacgBytes()));
                 return;
 
             case DESTROY_JOB:
-                CCNCFunctions.DestroyJobFunction dsjf = (CCNCFunctions.DestroyJobFunction) fn;
-                ncs.getWorkQueue().schedule(new DestroyJobWork(ncs, dsjf.getPredistributedId()));
+                CCNCFunctions.UndeployJobSpecFunction dsjf = (CCNCFunctions.UndeployJobSpecFunction) fn;
+                ncs.getWorkQueue().schedule(new UndeployJobSpecWork(ncs, dsjf.getDeployedJobSpecId()));
                 return;
 
             case STATE_DUMP_REQUEST:

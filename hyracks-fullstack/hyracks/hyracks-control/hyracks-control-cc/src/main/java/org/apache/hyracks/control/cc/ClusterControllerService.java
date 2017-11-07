@@ -50,10 +50,10 @@ import org.apache.hyracks.api.context.ICCContext;
 import org.apache.hyracks.api.deployment.DeploymentId;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.apache.hyracks.api.exceptions.HyracksException;
+import org.apache.hyracks.api.job.DeployedJobSpecIdFactory;
 import org.apache.hyracks.api.job.JobId;
 import org.apache.hyracks.api.job.JobIdFactory;
 import org.apache.hyracks.api.job.JobParameterByteStore;
-import org.apache.hyracks.api.job.PreDistributedIdFactory;
 import org.apache.hyracks.api.job.resource.IJobCapacityController;
 import org.apache.hyracks.api.service.IControllerService;
 import org.apache.hyracks.api.topology.ClusterTopology;
@@ -110,7 +110,7 @@ public class ClusterControllerService implements IControllerService {
 
     private CCServiceContext serviceCtx;
 
-    private final PreDistributedJobStore preDistributedJobStore = new PreDistributedJobStore();
+    private final DeployedJobSpecStore deployedJobSpecStore = new DeployedJobSpecStore();
 
     private final Map<JobId, JobParameterByteStore> jobParameterByteStoreMap = new HashMap<>();
 
@@ -140,7 +140,7 @@ public class ClusterControllerService implements IControllerService {
 
     private final JobIdFactory jobIdFactory;
 
-    private final PreDistributedIdFactory preDistributedIdFactory;
+    private final DeployedJobSpecIdFactory deployedJobSpecIdFactory;
 
     private IJobManager jobManager;
 
@@ -183,7 +183,7 @@ public class ClusterControllerService implements IControllerService {
 
         jobIdFactory = new JobIdFactory();
 
-        preDistributedIdFactory = new PreDistributedIdFactory();
+        deployedJobSpecIdFactory = new DeployedJobSpecIdFactory();
     }
 
     private static ClusterTopology computeClusterTopology(CCConfig ccConfig) throws Exception {
@@ -356,8 +356,8 @@ public class ClusterControllerService implements IControllerService {
         return nodeManager;
     }
 
-    public PreDistributedJobStore getPreDistributedJobStore() throws HyracksException {
-        return preDistributedJobStore;
+    public DeployedJobSpecStore getDeployedJobSpecStore() throws HyracksException {
+        return deployedJobSpecStore;
     }
 
     public void removeJobParameterByteStore(JobId jobId) throws HyracksException {
@@ -419,8 +419,8 @@ public class ClusterControllerService implements IControllerService {
         return jobIdFactory;
     }
 
-    public PreDistributedIdFactory getPreDistributedIdFactory() {
-        return preDistributedIdFactory;
+    public DeployedJobSpecIdFactory getDeployedJobSpecIdFactory() {
+        return deployedJobSpecIdFactory;
     }
 
     private final class ClusterControllerContext implements ICCContext {

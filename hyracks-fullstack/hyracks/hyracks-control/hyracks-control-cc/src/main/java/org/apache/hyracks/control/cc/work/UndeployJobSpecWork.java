@@ -18,21 +18,21 @@
  */
 package org.apache.hyracks.control.cc.work;
 
-import org.apache.hyracks.api.job.PreDistributedId;
+import org.apache.hyracks.api.job.DeployedJobSpecId;
 import org.apache.hyracks.control.cc.ClusterControllerService;
 import org.apache.hyracks.control.cc.NodeControllerState;
 import org.apache.hyracks.control.cc.cluster.INodeManager;
 import org.apache.hyracks.control.common.work.IResultCallback;
 import org.apache.hyracks.control.common.work.SynchronizableWork;
 
-public class DestroyJobWork extends SynchronizableWork {
+public class UndeployJobSpecWork extends SynchronizableWork {
     private final ClusterControllerService ccs;
-    private final PreDistributedId preDistributedId;
-    private final IResultCallback<PreDistributedId> callback;
+    private final DeployedJobSpecId deployedJobSpecId;
+    private final IResultCallback<DeployedJobSpecId> callback;
 
-    public DestroyJobWork(ClusterControllerService ccs, PreDistributedId preDistributedId,
-            IResultCallback<PreDistributedId> callback) {
-        this.preDistributedId = preDistributedId;
+    public UndeployJobSpecWork(ClusterControllerService ccs, DeployedJobSpecId deployedJobSpecId,
+            IResultCallback<DeployedJobSpecId> callback) {
+        this.deployedJobSpecId = deployedJobSpecId;
         this.ccs = ccs;
         this.callback = callback;
     }
@@ -40,12 +40,12 @@ public class DestroyJobWork extends SynchronizableWork {
     @Override
     protected void doRun() throws Exception {
         try {
-            ccs.getPreDistributedJobStore().removeDistributedJobDescriptor(preDistributedId);
+            ccs.getDeployedJobSpecStore().removeDeployedJobSpecDescriptor(deployedJobSpecId);
             INodeManager nodeManager = ccs.getNodeManager();
             for (NodeControllerState node : nodeManager.getAllNodeControllerStates()) {
-                node.getNodeController().destroyJob(preDistributedId);
+                node.getNodeController().undeployJobSpec(deployedJobSpecId);
             }
-            callback.setValue(preDistributedId);
+            callback.setValue(deployedJobSpecId);
         } catch (Exception e) {
             callback.setException(e);
         }

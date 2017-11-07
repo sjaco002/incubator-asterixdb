@@ -20,14 +20,14 @@ package org.apache.hyracks.api.job;
 
 import java.util.concurrent.atomic.AtomicLong;
 
-public class PreDistributedIdFactory {
+public class DeployedJobSpecIdFactory {
     private final AtomicLong id = new AtomicLong(0);
 
-    public PreDistributedId create() {
-        return new PreDistributedId(id.getAndIncrement());
+    public DeployedJobSpecId create() {
+        return new DeployedJobSpecId(id.getAndIncrement());
     }
 
-    public long maxPredistributedId() {
+    public long maxDeployedJobSpecId() {
         return id.get();
     }
 

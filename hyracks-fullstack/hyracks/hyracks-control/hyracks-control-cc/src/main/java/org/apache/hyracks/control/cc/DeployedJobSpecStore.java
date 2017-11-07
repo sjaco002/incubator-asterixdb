@@ -26,53 +26,53 @@ import org.apache.hyracks.api.constraints.Constraint;
 import org.apache.hyracks.api.exceptions.ErrorCode;
 import org.apache.hyracks.api.exceptions.HyracksException;
 import org.apache.hyracks.api.job.ActivityClusterGraph;
+import org.apache.hyracks.api.job.DeployedJobSpecId;
 import org.apache.hyracks.api.job.JobSpecification;
-import org.apache.hyracks.api.job.PreDistributedId;
 
-public class PreDistributedJobStore {
+public class DeployedJobSpecStore {
 
-    private final Map<PreDistributedId, PreDistributedJobDescriptor> preDistributedJobDescriptorMap;
+    private final Map<DeployedJobSpecId, DeployedJobSpecDescriptor> deployedJobSpecDescriptorMap;
 
-    public PreDistributedJobStore() {
-        preDistributedJobDescriptorMap = new Hashtable<>();
+    public DeployedJobSpecStore() {
+        deployedJobSpecDescriptorMap = new Hashtable<>();
     }
 
-    public void addDistributedJobDescriptor(PreDistributedId preDistributedId,
+    public void addDeployedJobSpecDescriptor(DeployedJobSpecId deployedJobSpecId,
             ActivityClusterGraph activityClusterGraph,
             JobSpecification jobSpecification, Set<Constraint> activityClusterGraphConstraints)
                     throws HyracksException {
-        if (preDistributedJobDescriptorMap.get(preDistributedId) != null) {
-            throw HyracksException.create(ErrorCode.DUPLICATE_DISTRIBUTED_JOB, preDistributedId);
+        if (deployedJobSpecDescriptorMap.get(deployedJobSpecId) != null) {
+            throw HyracksException.create(ErrorCode.DUPLICATE_DEPLOYED_JOB, deployedJobSpecId);
         }
-        PreDistributedJobDescriptor descriptor =
-                new PreDistributedJobDescriptor(activityClusterGraph, jobSpecification, activityClusterGraphConstraints);
-        preDistributedJobDescriptorMap.put(preDistributedId, descriptor);
+        DeployedJobSpecDescriptor descriptor =
+                new DeployedJobSpecDescriptor(activityClusterGraph, jobSpecification, activityClusterGraphConstraints);
+        deployedJobSpecDescriptorMap.put(deployedJobSpecId, descriptor);
     }
 
-    public void checkForExistingDistributedJobDescriptor(PreDistributedId preDistributedId) throws HyracksException {
-        if (preDistributedJobDescriptorMap.get(preDistributedId) != null) {
-            throw HyracksException.create(ErrorCode.DUPLICATE_DISTRIBUTED_JOB, preDistributedId);
+    public void checkForExistingDeployedJobSpecDescriptor(DeployedJobSpecId deployedJobSpecId) throws HyracksException {
+        if (deployedJobSpecDescriptorMap.get(deployedJobSpecId) != null) {
+            throw HyracksException.create(ErrorCode.DUPLICATE_DEPLOYED_JOB, deployedJobSpecId);
         }
     }
 
-    public PreDistributedJobDescriptor getDistributedJobDescriptor(PreDistributedId preDistributedId)
+    public DeployedJobSpecDescriptor getDeployedJobSpecDescriptor(DeployedJobSpecId deployedJobSpecId)
             throws HyracksException {
-        PreDistributedJobDescriptor descriptor = preDistributedJobDescriptorMap.get(preDistributedId);
+        DeployedJobSpecDescriptor descriptor = deployedJobSpecDescriptorMap.get(deployedJobSpecId);
         if (descriptor == null) {
-            throw HyracksException.create(ErrorCode.ERROR_FINDING_DISTRIBUTED_JOB, preDistributedId);
+            throw HyracksException.create(ErrorCode.ERROR_FINDING_DEPLOYED_JOB, deployedJobSpecId);
         }
         return descriptor;
     }
 
-    public void removeDistributedJobDescriptor(PreDistributedId preDistributedId) throws HyracksException {
-        PreDistributedJobDescriptor descriptor = preDistributedJobDescriptorMap.get(preDistributedId);
+    public void removeDeployedJobSpecDescriptor(DeployedJobSpecId deployedJobSpecId) throws HyracksException {
+        DeployedJobSpecDescriptor descriptor = deployedJobSpecDescriptorMap.get(deployedJobSpecId);
         if (descriptor == null) {
-            throw HyracksException.create(ErrorCode.ERROR_FINDING_DISTRIBUTED_JOB, preDistributedId);
+            throw HyracksException.create(ErrorCode.ERROR_FINDING_DEPLOYED_JOB, deployedJobSpecId);
         }
-        preDistributedJobDescriptorMap.remove(preDistributedId);
+        deployedJobSpecDescriptorMap.remove(deployedJobSpecId);
     }
 
-    public class PreDistributedJobDescriptor {
+    public class DeployedJobSpecDescriptor {
 
         private final ActivityClusterGraph activityClusterGraph;
 
@@ -80,7 +80,7 @@ public class PreDistributedJobStore {
 
         private final Set<Constraint> activityClusterGraphConstraints;
 
-        private PreDistributedJobDescriptor(ActivityClusterGraph activityClusterGraph,
+        private DeployedJobSpecDescriptor(ActivityClusterGraph activityClusterGraph,
                 JobSpecification jobSpecification, Set<Constraint> activityClusterGraphConstraints) {
             this.activityClusterGraph = activityClusterGraph;
             this.jobSpecification = jobSpecification;

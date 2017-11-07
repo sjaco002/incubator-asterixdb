@@ -51,10 +51,10 @@ import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.apache.hyracks.api.exceptions.HyracksException;
 import org.apache.hyracks.api.job.ActivityCluster;
 import org.apache.hyracks.api.job.ActivityClusterGraph;
+import org.apache.hyracks.api.job.DeployedJobSpecId;
 import org.apache.hyracks.api.job.IJobletEventListenerFactory;
 import org.apache.hyracks.api.job.JobFlag;
 import org.apache.hyracks.api.job.JobId;
-import org.apache.hyracks.api.job.PreDistributedId;
 import org.apache.hyracks.api.partitions.PartitionId;
 import org.apache.hyracks.comm.channels.NetworkInputChannel;
 import org.apache.hyracks.control.common.deployment.DeploymentUtils;
@@ -80,7 +80,7 @@ public class StartTasksWork extends AbstractWork {
 
     private final JobId jobId;
 
-    private final PreDistributedId preDistributedId;
+    private final DeployedJobSpecId deployedJobSpecId;
 
     private final byte[] acgBytes;
 
@@ -95,11 +95,11 @@ public class StartTasksWork extends AbstractWork {
     public StartTasksWork(NodeControllerService ncs, DeploymentId deploymentId, JobId jobId, byte[] acgBytes,
             List<TaskAttemptDescriptor> taskDescriptors,
             Map<ConnectorDescriptorId, IConnectorPolicy> connectorPoliciesMap, Set<JobFlag> flags,
-            Map<byte[], byte[]> jobParameters, PreDistributedId preDistributedId) {
+            Map<byte[], byte[]> jobParameters, DeployedJobSpecId deployedJobSpecId) {
         this.ncs = ncs;
         this.deploymentId = deploymentId;
         this.jobId = jobId;
-        this.preDistributedId = preDistributedId;
+        this.deployedJobSpecId = deployedJobSpecId;
         this.acgBytes = acgBytes;
         this.taskDescriptors = taskDescriptors;
         this.connectorPoliciesMap = connectorPoliciesMap;
@@ -203,12 +203,12 @@ public class StartTasksWork extends AbstractWork {
         Map<JobId, Joblet> jobletMap = ncs.getJobletMap();
         Joblet ji = jobletMap.get(jobId);
         if (ji == null) {
-            ActivityClusterGraph acg = (preDistributedId != null) ? ncs.getActivityClusterGraph(preDistributedId)
+            ActivityClusterGraph acg = (deployedJobSpecId != null) ? ncs.getActivityClusterGraph(deployedJobSpecId)
                     : (ActivityClusterGraph) DeploymentUtils.deserialize(acgBytes, deploymentId, appCtx);
             ncs.createOrGetJobParameterByteStore(jobId).setParameters(jobParameters);
             IJobletEventListenerFactory listenerFactory = acg.getJobletEventListenerFactory();
             if (listenerFactory != null) {
-                if (preDistributedId != null) {
+                if (deployedJobSpecId != null) {
                     listenerFactory = acg.getJobletEventListenerFactory().copyFactory();
                 }
                 listenerFactory.updateListenerJobParameters(ncs.createOrGetJobParameterByteStore(jobId));

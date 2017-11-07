@@ -26,8 +26,8 @@ import org.apache.hyracks.api.comm.NetworkAddress;
 import org.apache.hyracks.api.dataflow.TaskAttemptId;
 import org.apache.hyracks.api.dataset.ResultSetId;
 import org.apache.hyracks.api.deployment.DeploymentId;
+import org.apache.hyracks.api.job.DeployedJobSpecId;
 import org.apache.hyracks.api.job.JobId;
-import org.apache.hyracks.api.job.PreDistributedId;
 import org.apache.hyracks.control.common.base.IClusterController;
 import org.apache.hyracks.control.common.controllers.NodeRegistration;
 import org.apache.hyracks.control.common.deployment.DeploymentStatus;
@@ -42,7 +42,7 @@ import org.apache.hyracks.control.common.ipc.CCNCFunctions.RegisterNodeFunction;
 import org.apache.hyracks.control.common.ipc.CCNCFunctions.RegisterPartitionProviderFunction;
 import org.apache.hyracks.control.common.ipc.CCNCFunctions.RegisterPartitionRequestFunction;
 import org.apache.hyracks.control.common.ipc.CCNCFunctions.RegisterResultPartitionLocationFunction;
-import org.apache.hyracks.control.common.ipc.CCNCFunctions.ReportDistributedJobFailureFunction;
+import org.apache.hyracks.control.common.ipc.CCNCFunctions.ReportDeployedJobSpecFailureFunction;
 import org.apache.hyracks.control.common.ipc.CCNCFunctions.ReportProfileFunction;
 import org.apache.hyracks.control.common.ipc.CCNCFunctions.ReportResultPartitionWriteCompletionFunction;
 import org.apache.hyracks.control.common.ipc.CCNCFunctions.SendApplicationMessageFunction;
@@ -168,8 +168,8 @@ public class ClusterControllerRemoteProxy extends ControllerRemoteProxy implemen
     }
 
     @Override
-    public void notifyDistributedJobFailure(PreDistributedId preDistributedId, String nodeId) throws Exception {
-        ReportDistributedJobFailureFunction fn = new ReportDistributedJobFailureFunction(preDistributedId, nodeId);
+    public void notifyDeployedJobSpecFailure(DeployedJobSpecId deployedJobSpecId, String nodeId) throws Exception {
+        ReportDeployedJobSpecFailureFunction fn = new ReportDeployedJobSpecFailureFunction(deployedJobSpecId, nodeId);
         ensureIpcHandle().send(-1, fn, null);
     }
 

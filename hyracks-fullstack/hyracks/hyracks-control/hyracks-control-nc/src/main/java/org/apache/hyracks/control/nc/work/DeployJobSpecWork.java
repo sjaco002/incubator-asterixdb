@@ -20,35 +20,43 @@
 package org.apache.hyracks.control.nc.work;
 
 import org.apache.hyracks.api.exceptions.HyracksException;
-import org.apache.hyracks.api.job.PreDistributedId;
+import org.apache.hyracks.api.job.ActivityClusterGraph;
+import org.apache.hyracks.api.job.DeployedJobSpecId;
+import org.apache.hyracks.control.common.deployment.DeploymentUtils;
 import org.apache.hyracks.control.common.work.AbstractWork;
 import org.apache.hyracks.control.nc.NodeControllerService;
 
 /**
- * destroy a pre-distributed job
+ * pre-distribute a job that can be executed later
  *
  */
-public class DestroyJobWork extends AbstractWork {
+public class DeployJobSpecWork extends AbstractWork {
 
     private final NodeControllerService ncs;
-    private final PreDistributedId preDistributedId;
+    private final byte[] acgBytes;
+    private final DeployedJobSpecId deployedJobSpecId;
 
-    public DestroyJobWork(NodeControllerService ncs, PreDistributedId preDistributedId) {
+    public DeployJobSpecWork(NodeControllerService ncs, DeployedJobSpecId deployedJobSpecId, byte[] acgBytes) {
         this.ncs = ncs;
-        this.preDistributedId = preDistributedId;
+        this.deployedJobSpecId = deployedJobSpecId;
+        this.acgBytes = acgBytes;
     }
 
     @Override
     public void run() {
         try {
-            ncs.removeActivityClusterGraph(preDistributedId);
+            ncs.checkForDuplicateDeployedJobSpec(deployedJobSpecId);
+            ActivityClusterGraph acg =
+                    (ActivityClusterGraph) DeploymentUtils.deserialize(acgBytes, null, ncs.getContext());
+            ncs.storeActivityClusterGraph(deployedJobSpecId, acg);
         } catch (HyracksException e) {
             try {
-                ncs.getClusterController().notifyDistributedJobFailure(preDistributedId, ncs.getId());
+                ncs.getClusterController().notifyDeployedJobSpecFailure(deployedJobSpecId, ncs.getId());
             } catch (Exception e1) {
                 e1.printStackTrace();
             }
         }
+
     }
 
 }

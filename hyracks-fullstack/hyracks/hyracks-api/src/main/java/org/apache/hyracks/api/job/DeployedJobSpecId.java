@@ -27,23 +27,23 @@ import org.apache.hyracks.api.exceptions.ErrorCode;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.apache.hyracks.api.io.IWritable;
 
-public final class PreDistributedId implements IWritable, Serializable {
+public final class DeployedJobSpecId implements IWritable, Serializable {
 
-    public static final PreDistributedId INVALID = new PreDistributedId(-1l);
+    public static final DeployedJobSpecId INVALID = new DeployedJobSpecId(-1l);
 
     private static final long serialVersionUID = 1L;
     private long id;
 
-    public static PreDistributedId create(DataInput dis) throws IOException {
-        PreDistributedId preDistributedId = new PreDistributedId();
-        preDistributedId.readFields(dis);
-        return preDistributedId;
+    public static DeployedJobSpecId create(DataInput dis) throws IOException {
+        DeployedJobSpecId deployedJobSpecId = new DeployedJobSpecId();
+        deployedJobSpecId.readFields(dis);
+        return deployedJobSpecId;
     }
 
-    private PreDistributedId() {
+    private DeployedJobSpecId() {
     }
 
-    public PreDistributedId(long id) {
+    public DeployedJobSpecId(long id) {
         this.id = id;
     }
 
@@ -61,10 +61,10 @@ public final class PreDistributedId implements IWritable, Serializable {
         if (o == this) {
             return true;
         }
-        if (!(o instanceof PreDistributedId)) {
+        if (!(o instanceof DeployedJobSpecId)) {
             return false;
         }
-        return ((PreDistributedId) o).id == id;
+        return ((DeployedJobSpecId) o).id == id;
     }
 
     @Override
@@ -72,9 +72,9 @@ public final class PreDistributedId implements IWritable, Serializable {
         return "PDJID:" + id;
     }
 
-    public static PreDistributedId parse(String str) throws HyracksDataException {
+    public static DeployedJobSpecId parse(String str) throws HyracksDataException {
         if (str.startsWith("PDJID:")) {
-            return new PreDistributedId(Long.parseLong(str.substring(4)));
+            return new DeployedJobSpecId(Long.parseLong(str.substring(4)));
         }
         throw HyracksDataException.create(ErrorCode.NOT_A_JOBID, str);
     }

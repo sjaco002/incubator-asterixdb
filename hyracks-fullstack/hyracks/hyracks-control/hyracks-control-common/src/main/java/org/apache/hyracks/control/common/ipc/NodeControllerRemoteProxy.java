@@ -30,17 +30,16 @@ import org.apache.hyracks.api.dataflow.ConnectorDescriptorId;
 import org.apache.hyracks.api.dataflow.TaskAttemptId;
 import org.apache.hyracks.api.dataflow.connectors.IConnectorPolicy;
 import org.apache.hyracks.api.deployment.DeploymentId;
+import org.apache.hyracks.api.job.DeployedJobSpecId;
 import org.apache.hyracks.api.job.JobFlag;
 import org.apache.hyracks.api.job.JobId;
 import org.apache.hyracks.api.job.JobStatus;
-import org.apache.hyracks.api.job.PreDistributedId;
 import org.apache.hyracks.api.partitions.PartitionId;
 import org.apache.hyracks.control.common.base.INodeController;
 import org.apache.hyracks.control.common.ipc.CCNCFunctions.AbortTasksFunction;
 import org.apache.hyracks.control.common.ipc.CCNCFunctions.CleanupJobletFunction;
 import org.apache.hyracks.control.common.ipc.CCNCFunctions.DeployBinaryFunction;
-import org.apache.hyracks.control.common.ipc.CCNCFunctions.DestroyJobFunction;
-import org.apache.hyracks.control.common.ipc.CCNCFunctions.DistributeJobFunction;
+import org.apache.hyracks.control.common.ipc.CCNCFunctions.DeployJobSpecFunction;
 import org.apache.hyracks.control.common.ipc.CCNCFunctions.ReportPartitionAvailabilityFunction;
 import org.apache.hyracks.control.common.ipc.CCNCFunctions.SendApplicationMessageFunction;
 import org.apache.hyracks.control.common.ipc.CCNCFunctions.ShutdownRequestFunction;
@@ -48,6 +47,7 @@ import org.apache.hyracks.control.common.ipc.CCNCFunctions.StartTasksFunction;
 import org.apache.hyracks.control.common.ipc.CCNCFunctions.StateDumpRequestFunction;
 import org.apache.hyracks.control.common.ipc.CCNCFunctions.ThreadDumpRequestFunction;
 import org.apache.hyracks.control.common.ipc.CCNCFunctions.UnDeployBinaryFunction;
+import org.apache.hyracks.control.common.ipc.CCNCFunctions.UndeployJobSpecFunction;
 import org.apache.hyracks.control.common.job.TaskAttemptDescriptor;
 import org.apache.hyracks.ipc.impl.IPCSystem;
 
@@ -72,9 +72,10 @@ public class NodeControllerRemoteProxy extends ControllerRemoteProxy implements 
     @Override
     public void startTasks(DeploymentId deploymentId, JobId jobId, byte[] planBytes,
             List<TaskAttemptDescriptor> taskDescriptors, Map<ConnectorDescriptorId, IConnectorPolicy> connectorPolicies,
-            Set<JobFlag> flags, Map<byte[], byte[]> jobParameters, PreDistributedId preDistributedId) throws Exception {
+            Set<JobFlag> flags, Map<byte[], byte[]> jobParameters, DeployedJobSpecId deployedJobSpecId)
+            throws Exception {
         StartTasksFunction stf = new StartTasksFunction(deploymentId, jobId, planBytes,
-                taskDescriptors, connectorPolicies, flags, jobParameters, preDistributedId);
+                taskDescriptors, connectorPolicies, flags, jobParameters, deployedJobSpecId);
         ensureIpcHandle().send(-1, stf, null);
     }
 
@@ -110,14 +111,14 @@ public class NodeControllerRemoteProxy extends ControllerRemoteProxy implements 
     }
 
     @Override
-    public void distributeJob(PreDistributedId preDistributedId, byte[] planBytes) throws Exception {
-        DistributeJobFunction fn = new DistributeJobFunction(preDistributedId, planBytes);
+    public void deployJobSpec(DeployedJobSpecId deployedJobSpecId, byte[] planBytes) throws Exception {
+        DeployJobSpecFunction fn = new DeployJobSpecFunction(deployedJobSpecId, planBytes);
         ensureIpcHandle().send(-1, fn, null);
     }
 
     @Override
-    public void destroyJob(PreDistributedId preDistributedId) throws Exception {
-        DestroyJobFunction fn = new DestroyJobFunction(preDistributedId);
+    public void undeployJobSpec(DeployedJobSpecId deployedJobSpecId) throws Exception {
+        UndeployJobSpecFunction fn = new UndeployJobSpecFunction(deployedJobSpecId);
         ensureIpcHandle().send(-1, fn, null);
     }
 
