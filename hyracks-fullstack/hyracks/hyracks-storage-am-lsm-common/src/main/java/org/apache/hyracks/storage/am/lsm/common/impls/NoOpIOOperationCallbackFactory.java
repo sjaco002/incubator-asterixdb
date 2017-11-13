@@ -20,46 +20,59 @@ package org.apache.hyracks.storage.am.lsm.common.impls;
 
 import java.util.List;
 
+import org.apache.hyracks.api.application.INCServiceContext;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMComponent;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMDiskComponent;
+import org.apache.hyracks.storage.am.lsm.common.api.ILSMIOOperation.LSMIOOperationType;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMIOOperationCallback;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMIOOperationCallbackFactory;
-import org.apache.hyracks.storage.am.lsm.common.api.LSMOperationType;
+import org.apache.hyracks.storage.am.lsm.common.api.ILSMIndex;
+import org.apache.hyracks.storage.am.lsm.common.api.ILSMMemoryComponent;
 
 public enum NoOpIOOperationCallbackFactory implements ILSMIOOperationCallbackFactory {
     INSTANCE;
 
     @Override
-    public ILSMIOOperationCallback createIoOpCallback() {
+    public ILSMIOOperationCallback createIoOpCallback(ILSMIndex index) {
         return NoOpIOOperationCallback.INSTANCE;
+    }
+
+    @Override
+    public void initialize(INCServiceContext ncCtx) {
+        // No op
     }
 
     public static class NoOpIOOperationCallback implements ILSMIOOperationCallback {
         private static final NoOpIOOperationCallback INSTANCE = new NoOpIOOperationCallback();
 
         private NoOpIOOperationCallback() {
-
         }
 
         @Override
-        public void beforeOperation(LSMOperationType opType) throws HyracksDataException {
+        public void beforeOperation(LSMIOOperationType opType) throws HyracksDataException {
             // Do nothing.
         }
 
         @Override
-        public void afterOperation(LSMOperationType opType, List<ILSMComponent> oldComponents,
+        public void afterOperation(LSMIOOperationType opType, List<ILSMComponent> oldComponents,
                 ILSMDiskComponent newComponent) throws HyracksDataException {
             // Do nothing.
         }
 
         @Override
-        public void afterFinalize(LSMOperationType opType, ILSMDiskComponent newComponent) throws HyracksDataException {
+        public void afterFinalize(LSMIOOperationType opType, ILSMDiskComponent newComponent)
+                throws HyracksDataException {
             // Do nothing.
         }
 
         @Override
-        public void setNumOfMutableComponents(int count) {
+        public void recycled(ILSMMemoryComponent component) {
+            // Do nothing.
+        }
+
+        @Override
+        public void allocated(ILSMMemoryComponent component) {
             // Do nothing.
         }
     }

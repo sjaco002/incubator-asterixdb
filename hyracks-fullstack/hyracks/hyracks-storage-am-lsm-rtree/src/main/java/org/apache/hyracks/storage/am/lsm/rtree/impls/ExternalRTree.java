@@ -41,7 +41,9 @@ import org.apache.hyracks.storage.am.lsm.common.api.ILSMComponent;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMDiskComponent;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMDiskComponentFactory;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMIOOperation;
+import org.apache.hyracks.storage.am.lsm.common.api.ILSMIOOperation.LSMIOOperationType;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMIOOperationCallback;
+import org.apache.hyracks.storage.am.lsm.common.api.ILSMIOOperationCallbackFactory;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMIOOperationScheduler;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMIndexAccessor;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMIndexFileManager;
@@ -49,14 +51,13 @@ import org.apache.hyracks.storage.am.lsm.common.api.ILSMIndexOperationContext;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMMergePolicy;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMOperationTracker;
 import org.apache.hyracks.storage.am.lsm.common.api.ITwoPCIndex;
-import org.apache.hyracks.storage.am.lsm.common.api.LSMOperationType;
 import org.apache.hyracks.storage.am.lsm.common.impls.BlockingIOOperationCallbackWrapper;
 import org.apache.hyracks.storage.am.lsm.common.impls.ExternalIndexHarness;
 import org.apache.hyracks.storage.am.lsm.common.impls.LSMComponentFileReferences;
 import org.apache.hyracks.storage.am.rtree.impls.SearchPredicate;
+import org.apache.hyracks.storage.common.IIndexAccessParameters;
 import org.apache.hyracks.storage.common.IIndexBulkLoader;
 import org.apache.hyracks.storage.common.IIndexCursor;
-import org.apache.hyracks.storage.common.IModificationOperationCallback;
 import org.apache.hyracks.storage.common.ISearchOperationCallback;
 import org.apache.hyracks.storage.common.ISearchPredicate;
 import org.apache.hyracks.storage.common.buffercache.IBufferCache;
@@ -86,12 +87,13 @@ public class ExternalRTree extends LSMRTree implements ITwoPCIndex {
             double bloomFilterFalsePositiveRate, int fieldCount, IBinaryComparatorFactory[] rtreeCmpFactories,
             IBinaryComparatorFactory[] btreeCmpFactories, ILinearizeComparatorFactory linearizer,
             int[] comparatorFields, IBinaryComparatorFactory[] linearizerArray, ILSMMergePolicy mergePolicy,
-            ILSMOperationTracker opTracker, ILSMIOOperationScheduler ioScheduler, ILSMIOOperationCallback ioOpCallback,
-            int[] buddyBTreeFields, boolean durable, boolean isPointMBR) {
+            ILSMOperationTracker opTracker, ILSMIOOperationScheduler ioScheduler,
+            ILSMIOOperationCallbackFactory ioOpCallbackFactory, int[] buddyBTreeFields, boolean durable,
+            boolean isPointMBR) {
         super(ioManager, rtreeInteriorFrameFactory, rtreeLeafFrameFactory, btreeInteriorFrameFactory,
                 btreeLeafFrameFactory, diskBufferCache, fileNameManager, componentFactory, bloomFilterFalsePositiveRate,
                 rtreeCmpFactories, btreeCmpFactories, linearizer, comparatorFields, linearizerArray, mergePolicy,
-                opTracker, ioScheduler, ioOpCallback, buddyBTreeFields, durable, isPointMBR);
+                opTracker, ioScheduler, ioOpCallbackFactory, buddyBTreeFields, durable, isPointMBR);
         this.secondDiskComponents = new LinkedList<>();
         this.fieldCount = fieldCount;
     }
@@ -326,7 +328,7 @@ public class ExternalRTree extends LSMRTree implements ITwoPCIndex {
 
         if (flushOnExit) {
             BlockingIOOperationCallbackWrapper cb = new BlockingIOOperationCallbackWrapper(ioOpCallback);
-            cb.afterFinalize(LSMOperationType.FLUSH, null);
+            cb.afterFinalize(LSMIOOperationType.FLUSH, null);
         }
 
         for (ILSMDiskComponent c : diskComponents) {
@@ -610,9 +612,9 @@ public class ExternalRTree extends LSMRTree implements ITwoPCIndex {
     // The accessor for disk only indexes don't use modification callback and
     // always carry the target index version with them
     @Override
-    public ILSMIndexAccessor createAccessor(IModificationOperationCallback modificationCallback,
-            ISearchOperationCallback searchCallback) {
-        return new LSMRTreeAccessor(getLsmHarness(), createOpContext(searchCallback, version), buddyBTreeFields);
+    public ILSMIndexAccessor createAccessor(IIndexAccessParameters iap) {
+        return new LSMRTreeAccessor(getLsmHarness(), createOpContext(iap.getSearchOperationCallback(), version),
+                buddyBTreeFields);
     }
 
     @Override
@@ -655,11 +657,6 @@ public class ExternalRTree extends LSMRTree implements ITwoPCIndex {
     @Override
     public void recoverTransaction() throws HyracksDataException {
         fileManager.recoverTransaction();
-    }
-
-    @Override
-    public boolean hasMemoryComponents() {
-        return false;
     }
 
     @Override

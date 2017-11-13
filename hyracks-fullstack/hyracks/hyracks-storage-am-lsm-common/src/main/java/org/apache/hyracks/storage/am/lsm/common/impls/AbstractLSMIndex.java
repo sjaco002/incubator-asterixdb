@@ -37,17 +37,22 @@ import org.apache.hyracks.api.replication.IReplicationJob.ReplicationExecutionTy
 import org.apache.hyracks.api.replication.IReplicationJob.ReplicationOperation;
 import org.apache.hyracks.dataflow.common.data.accessors.ITupleReference;
 import org.apache.hyracks.storage.am.common.impls.AbstractSearchPredicate;
+import org.apache.hyracks.storage.am.common.impls.NoOpIndexAccessParameters;
 import org.apache.hyracks.storage.am.common.impls.NoOpOperationCallback;
 import org.apache.hyracks.storage.am.common.ophelpers.IndexOperation;
 import org.apache.hyracks.storage.am.lsm.common.api.IComponentFilterHelper;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMComponent;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMComponent.ComponentState;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMComponentFilterFrameFactory;
+import org.apache.hyracks.storage.am.lsm.common.api.ILSMComponentId;
+import org.apache.hyracks.storage.am.lsm.common.api.ILSMComponentId.IdCompareResult;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMDiskComponent;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMDiskComponentFactory;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMHarness;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMIOOperation;
+import org.apache.hyracks.storage.am.lsm.common.api.ILSMIOOperation.LSMIOOperationType;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMIOOperationCallback;
+import org.apache.hyracks.storage.am.lsm.common.api.ILSMIOOperationCallbackFactory;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMIOOperationScheduler;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMIndex;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMIndexAccessor;
@@ -100,7 +105,7 @@ public abstract class AbstractLSMIndex implements ILSMIndex {
     public AbstractLSMIndex(IIOManager ioManager, List<IVirtualBufferCache> virtualBufferCaches,
             IBufferCache diskBufferCache, ILSMIndexFileManager fileManager, double bloomFilterFalsePositiveRate,
             ILSMMergePolicy mergePolicy, ILSMOperationTracker opTracker, ILSMIOOperationScheduler ioScheduler,
-            ILSMIOOperationCallback ioOpCallback, ILSMDiskComponentFactory componentFactory,
+            ILSMIOOperationCallbackFactory ioOpCallbackFactory, ILSMDiskComponentFactory componentFactory,
             ILSMDiskComponentFactory bulkLoadComponentFactory, ILSMComponentFilterFrameFactory filterFrameFactory,
             LSMComponentFilterManager filterManager, int[] filterFields, boolean durable,
             IComponentFilterHelper filterHelper, int[] treeFields, ITracer tracer) {
@@ -110,10 +115,9 @@ public abstract class AbstractLSMIndex implements ILSMIndex {
         this.fileManager = fileManager;
         this.bloomFilterFalsePositiveRate = bloomFilterFalsePositiveRate;
         this.ioScheduler = ioScheduler;
-        this.ioOpCallback = ioOpCallback;
+        this.ioOpCallback = ioOpCallbackFactory.createIoOpCallback(this);
         this.componentFactory = componentFactory;
         this.bulkLoadComponentFactory = bulkLoadComponentFactory;
-        this.ioOpCallback.setNumOfMutableComponents(virtualBufferCaches.size());
         this.filterHelper = filterHelper;
         this.filterFrameFactory = filterFrameFactory;
         this.filterManager = filterManager;
@@ -136,7 +140,7 @@ public abstract class AbstractLSMIndex implements ILSMIndex {
     // The constructor used by external indexes
     public AbstractLSMIndex(IIOManager ioManager, IBufferCache diskBufferCache, ILSMIndexFileManager fileManager,
             double bloomFilterFalsePositiveRate, ILSMMergePolicy mergePolicy, ILSMOperationTracker opTracker,
-            ILSMIOOperationScheduler ioScheduler, ILSMIOOperationCallback ioOpCallback,
+            ILSMIOOperationScheduler ioScheduler, ILSMIOOperationCallbackFactory ioOpCallbackFactory,
             ILSMDiskComponentFactory componentFactory, ILSMDiskComponentFactory bulkLoadComponentFactory,
             boolean durable) {
         this.ioManager = ioManager;
@@ -144,7 +148,7 @@ public abstract class AbstractLSMIndex implements ILSMIndex {
         this.fileManager = fileManager;
         this.bloomFilterFalsePositiveRate = bloomFilterFalsePositiveRate;
         this.ioScheduler = ioScheduler;
-        this.ioOpCallback = ioOpCallback;
+        this.ioOpCallback = ioOpCallbackFactory.createIoOpCallback(this);
         this.componentFactory = componentFactory;
         this.bulkLoadComponentFactory = bulkLoadComponentFactory;
         this.durable = durable;
@@ -153,7 +157,7 @@ public abstract class AbstractLSMIndex implements ILSMIndex {
         diskComponents = new LinkedList<>();
         this.inactiveDiskComponents = new LinkedList<>();
         // Memory related objects are nulled
-        this.virtualBufferCaches = null;
+        virtualBufferCaches = null;
         memoryComponents = null;
         currentMutableComponentId = null;
         flushRequests = null;
@@ -214,7 +218,7 @@ public abstract class AbstractLSMIndex implements ILSMIndex {
 
     protected void flushMemoryComponent() throws HyracksDataException {
         BlockingIOOperationCallbackWrapper cb = new BlockingIOOperationCallbackWrapper(ioOpCallback);
-        ILSMIndexAccessor accessor = createAccessor(NoOpOperationCallback.INSTANCE, NoOpOperationCallback.INSTANCE);
+        ILSMIndexAccessor accessor = createAccessor(NoOpIndexAccessParameters.INSTANCE);
         accessor.scheduleFlush(cb);
         try {
             cb.waitForIO();
@@ -396,6 +400,7 @@ public abstract class AbstractLSMIndex implements ILSMIndex {
 
     public IIndexBulkLoader createBulkLoader(float fillLevel, boolean verifyInput, long numElementsHint)
             throws HyracksDataException {
+        ioOpCallback.beforeOperation(LSMIOOperationType.LOAD);
         return new LSMIndexDiskComponentBulkLoader(this, fillLevel, verifyInput, numElementsHint);
     }
 
@@ -425,6 +430,7 @@ public abstract class AbstractLSMIndex implements ILSMIndex {
         }
         for (ILSMMemoryComponent c : memoryComponents) {
             c.allocate();
+            ioOpCallback.allocated(c);
         }
         memoryComponentsAllocated = true;
     }
@@ -434,6 +440,7 @@ public abstract class AbstractLSMIndex implements ILSMIndex {
         if (c != EmptyComponent.INSTANCE) {
             diskComponents.add(0, c);
         }
+        assert checkComponentIds();
     }
 
     @Override
@@ -444,6 +451,25 @@ public abstract class AbstractLSMIndex implements ILSMIndex {
         if (newComponent != EmptyComponent.INSTANCE) {
             diskComponents.add(swapIndex, newComponent);
         }
+        assert checkComponentIds();
+    }
+
+    /**
+     * A helper method to ensure disk components have proper Ids (non-decreasing)
+     * We may get rid of this method once component Id is stablized
+     *
+     * @throws HyracksDataException
+     */
+    private boolean checkComponentIds() throws HyracksDataException {
+        for (int i = 0; i < diskComponents.size() - 1; i++) {
+            ILSMComponentId id1 = diskComponents.get(i).getId();
+            ILSMComponentId id2 = diskComponents.get(i + 1).getId();
+            IdCompareResult cmp = id1.compareTo(id2);
+            if (cmp != IdCompareResult.UNKNOWN && cmp != IdCompareResult.GREATER_THAN) {
+                return false;
+            }
+        }
+        return true;
     }
 
     @Override
@@ -507,8 +533,8 @@ public abstract class AbstractLSMIndex implements ILSMIndex {
     }
 
     @Override
-    public boolean hasMemoryComponents() {
-        return true;
+    public final int getNumberOfAllMemoryComponents() {
+        return virtualBufferCaches == null ? 0 : virtualBufferCaches.size();
     }
 
     @Override

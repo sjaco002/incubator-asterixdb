@@ -22,10 +22,9 @@ package org.apache.hyracks.storage.am.lsm.invertedindex;
 import java.io.IOException;
 
 import org.apache.hyracks.storage.am.common.datagen.TupleGenerator;
-import org.apache.hyracks.storage.am.common.impls.NoOpOperationCallback;
+import org.apache.hyracks.storage.am.common.impls.NoOpIndexAccessParameters;
 import org.apache.hyracks.storage.am.config.AccessMethodTestsConfig;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMIndexAccessor;
-import org.apache.hyracks.storage.am.lsm.common.impls.NoOpIOOperationCallbackFactory;
 import org.apache.hyracks.storage.am.lsm.invertedindex.common.AbstractInvertedIndexLoadTest;
 import org.apache.hyracks.storage.am.lsm.invertedindex.impls.LSMInvertedIndex;
 import org.apache.hyracks.storage.am.lsm.invertedindex.util.LSMInvertedIndexTestContext;
@@ -46,8 +45,8 @@ public class LSMInvertedIndexMergeTest extends AbstractInvertedIndexLoadTest {
         IIndex invIndex = testCtx.getIndex();
         invIndex.create();
         invIndex.activate();
-        ILSMIndexAccessor invIndexAccessor = (ILSMIndexAccessor) invIndex.createAccessor(NoOpOperationCallback.INSTANCE,
-                NoOpOperationCallback.INSTANCE);
+        ILSMIndexAccessor invIndexAccessor =
+                (ILSMIndexAccessor) invIndex.createAccessor(NoOpIndexAccessParameters.INSTANCE);
 
         for (int i = 0; i < maxTreesToMerge; i++) {
             for (int j = 0; j < i; j++) {
@@ -57,7 +56,7 @@ public class LSMInvertedIndexMergeTest extends AbstractInvertedIndexLoadTest {
                 invIndex.activate();
             }
             // Perform merge.
-            invIndexAccessor.scheduleMerge(NoOpIOOperationCallbackFactory.INSTANCE.createIoOpCallback(),
+            invIndexAccessor.scheduleMerge(((LSMInvertedIndex) invIndex).getIOOperationCallback(),
                     ((LSMInvertedIndex) invIndex).getDiskComponents());
             validateAndCheckIndex(testCtx);
             runTinySearchWorkload(testCtx, tupleGen);

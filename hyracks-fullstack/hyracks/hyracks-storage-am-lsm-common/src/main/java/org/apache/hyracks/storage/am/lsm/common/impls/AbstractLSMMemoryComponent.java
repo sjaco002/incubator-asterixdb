@@ -22,9 +22,12 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMComponentFilter;
+import org.apache.hyracks.storage.am.lsm.common.api.ILSMComponentId;
+import org.apache.hyracks.storage.am.lsm.common.api.ILSMComponentId.IdCompareResult;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMMemoryComponent;
 import org.apache.hyracks.storage.am.lsm.common.api.IVirtualBufferCache;
 import org.apache.hyracks.storage.am.lsm.common.api.LSMOperationType;
+import org.apache.hyracks.storage.am.lsm.common.util.LSMComponentIdUtils;
 import org.apache.hyracks.storage.common.buffercache.IBufferCache;
 
 public abstract class AbstractLSMMemoryComponent extends AbstractLSMComponent implements ILSMMemoryComponent {
@@ -34,9 +37,11 @@ public abstract class AbstractLSMMemoryComponent extends AbstractLSMComponent im
     private int writerCount;
     private boolean requestedToBeActive;
     private final MemoryComponentMetadata metadata;
+    private ILSMComponentId componentId;
 
-    public AbstractLSMMemoryComponent(IVirtualBufferCache vbc, boolean isActive, ILSMComponentFilter filter) {
-        super(filter);
+    public AbstractLSMMemoryComponent(AbstractLSMIndex lsmIndex, IVirtualBufferCache vbc, boolean isActive,
+            ILSMComponentFilter filter) {
+        super(lsmIndex, filter);
         this.vbc = vbc;
         writerCount = 0;
         if (isActive) {
@@ -53,6 +58,7 @@ public abstract class AbstractLSMMemoryComponent extends AbstractLSMComponent im
         if (state == ComponentState.INACTIVE && requestedToBeActive) {
             state = ComponentState.READABLE_WRITABLE;
             requestedToBeActive = false;
+            lsmIndex.getIOOperationCallback().recycled(this);
         }
         switch (opType) {
             case FORCE_MODIFICATION:
@@ -245,6 +251,7 @@ public abstract class AbstractLSMMemoryComponent extends AbstractLSMComponent im
     protected void doDeallocate() throws HyracksDataException {
         getIndex().deactivate();
         getIndex().destroy();
+        componentId = null;
     }
 
     @Override
@@ -256,5 +263,20 @@ public abstract class AbstractLSMMemoryComponent extends AbstractLSMComponent im
     public long getSize() {
         IBufferCache virtualBufferCache = getIndex().getBufferCache();
         return virtualBufferCache.getPageBudget() * (long) virtualBufferCache.getPageSize();
+    }
+
+    @Override
+    public ILSMComponentId getId() {
+        return componentId;
+    }
+
+    @Override
+    public void resetId(ILSMComponentId componentId) throws HyracksDataException {
+        if (this.componentId != null && this.componentId.compareTo(componentId) != IdCompareResult.LESS_THAN) {
+            throw new IllegalStateException(
+                    "LSM memory component receives illegal id. Old id " + this.componentId + ", new id " + componentId);
+        }
+        this.componentId = componentId;
+        LSMComponentIdUtils.persist(this.componentId, metadata);
     }
 }

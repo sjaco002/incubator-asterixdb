@@ -23,8 +23,8 @@ import java.util.Map;
 import org.apache.asterix.common.dataflow.DatasetLocalResource;
 import org.apache.asterix.common.metadata.MetadataIndexImmutableProperties;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
+import org.apache.hyracks.storage.am.lsm.common.api.ILSMComponentIdGenerator;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMIndex;
-import org.apache.hyracks.storage.common.IIndex;
 import org.apache.hyracks.storage.common.LocalResource;
 
 /**
@@ -43,12 +43,15 @@ public class DatasetResource implements Comparable<DatasetResource> {
     private final DatasetInfo datasetInfo;
     private final PrimaryIndexOperationTracker datasetPrimaryOpTracker;
     private final DatasetVirtualBufferCaches datasetVirtualBufferCaches;
+    private final ILSMComponentIdGenerator datasetComponentIdGenerator;
 
     public DatasetResource(DatasetInfo datasetInfo, PrimaryIndexOperationTracker datasetPrimaryOpTracker,
-            DatasetVirtualBufferCaches datasetVirtualBufferCaches) {
+            DatasetVirtualBufferCaches datasetVirtualBufferCaches,
+            ILSMComponentIdGenerator datasetComponentIdGenerator) {
         this.datasetInfo = datasetInfo;
         this.datasetPrimaryOpTracker = datasetPrimaryOpTracker;
         this.datasetVirtualBufferCaches = datasetVirtualBufferCaches;
+        this.datasetComponentIdGenerator = datasetComponentIdGenerator;
     }
 
     public boolean isRegistered() {
@@ -88,14 +91,14 @@ public class DatasetResource implements Comparable<DatasetResource> {
         return (iInfo == null) ? null : iInfo.getIndex();
     }
 
-    public void register(LocalResource resource, IIndex index) throws HyracksDataException {
+    public void register(LocalResource resource, ILSMIndex index) throws HyracksDataException {
         long resourceID = resource.getId();
         if (!datasetInfo.isRegistered()) {
             synchronized (datasetInfo) {
                 if (!datasetInfo.isRegistered()) {
-                    datasetInfo.setExternal(!index.hasMemoryComponents());
+                    datasetInfo.setExternal(index.getNumberOfAllMemoryComponents() == 0);
                     datasetInfo.setRegistered(true);
-                    datasetInfo.setDurable(((ILSMIndex) index).isDurable());
+                    datasetInfo.setDurable(index.isDurable());
                 }
             }
         }
@@ -105,8 +108,8 @@ public class DatasetResource implements Comparable<DatasetResource> {
         if (index == null) {
             throw new HyracksDataException("Attempt to register a null index");
         }
-        datasetInfo.getIndexes().put(resourceID, new IndexInfo((ILSMIndex) index, datasetInfo.getDatasetID(),
-                resourceID, ((DatasetLocalResource) resource.getResource()).getPartition()));
+        datasetInfo.getIndexes().put(resourceID, new IndexInfo(index, datasetInfo.getDatasetID(), resourceID,
+                ((DatasetLocalResource) resource.getResource()).getPartition()));
     }
 
     public DatasetInfo getDatasetInfo() {
@@ -115,6 +118,10 @@ public class DatasetResource implements Comparable<DatasetResource> {
 
     public PrimaryIndexOperationTracker getOpTracker() {
         return datasetPrimaryOpTracker;
+    }
+
+    public ILSMComponentIdGenerator getIdGenerator() {
+        return datasetComponentIdGenerator;
     }
 
     @Override

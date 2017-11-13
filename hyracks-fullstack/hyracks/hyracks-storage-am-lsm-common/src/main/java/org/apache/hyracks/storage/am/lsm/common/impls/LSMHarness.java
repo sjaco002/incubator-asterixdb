@@ -34,7 +34,7 @@ import org.apache.hyracks.data.std.api.IValueReference;
 import org.apache.hyracks.dataflow.common.comm.io.FrameTupleAccessor;
 import org.apache.hyracks.dataflow.common.data.accessors.FrameTupleReference;
 import org.apache.hyracks.dataflow.common.data.accessors.ITupleReference;
-import org.apache.hyracks.storage.am.common.impls.NoOpOperationCallback;
+import org.apache.hyracks.storage.am.common.impls.NoOpIndexAccessParameters;
 import org.apache.hyracks.storage.am.common.ophelpers.IndexOperation;
 import org.apache.hyracks.storage.am.lsm.common.api.IFrameOperationCallback;
 import org.apache.hyracks.storage.am.lsm.common.api.IFrameTupleProcessor;
@@ -44,6 +44,7 @@ import org.apache.hyracks.storage.am.lsm.common.api.ILSMComponent.LSMComponentTy
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMDiskComponent;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMHarness;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMIOOperation;
+import org.apache.hyracks.storage.am.lsm.common.api.ILSMIOOperation.LSMIOOperationType;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMIOOperationCallback;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMIndex;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMIndexAccessor;
@@ -94,19 +95,27 @@ public class LSMHarness implements ILSMHarness {
                 // Before entering the components, prune those corner cases that indeed should not proceed.
                 switch (opType) {
                     case FLUSH:
-                        ILSMComponent flushingComponent = ctx.getComponentHolder().get(0);
-                        if (!((AbstractLSMMemoryComponent) flushingComponent).isModified()) {
-                            //The mutable component has not been modified by any writer. There is nothing to flush.
-                            //since the component is empty, set its state back to READABLE_WRITABLE
-                            if (((AbstractLSMIndex) lsmIndex)
-                                    .getCurrentMutableComponentState() == ComponentState.READABLE_UNWRITABLE) {
-                                ((AbstractLSMIndex) lsmIndex)
-                                        .setCurrentMutableComponentState(ComponentState.READABLE_WRITABLE);
+                        // if the lsm index does not have memory components allocated, then nothing to flush
+                        if (!lsmIndex.isMemoryComponentsAllocated()) {
+                            return false;
+                        }
+                        ILSMMemoryComponent flushingComponent = (ILSMMemoryComponent) ctx.getComponentHolder().get(0);
+                        if (!flushingComponent.isModified()) {
+                            if (flushingComponent.getState() == ComponentState.READABLE_UNWRITABLE) {
+                                //The mutable component has not been modified by any writer. There is nothing to flush.
+                                //since the component is empty, set its state back to READABLE_WRITABLE only when it's
+                                //state has been set to READABLE_UNWRITABLE
+                                flushingComponent.setState(ComponentState.READABLE_WRITABLE);
                                 opTracker.notifyAll();
+
+                                // Call recycled only when we change it's state is reset back to READABLE_WRITABLE
+                                // Otherwise, if the component is in other state, e.g., INACTIVE, or
+                                // READABLE_UNWRITABLE_FLUSHING, it's not considered as being recycled here.
+                                lsmIndex.getIOOperationCallback().recycled(flushingComponent);
                             }
                             return false;
                         }
-                        if (((AbstractLSMMemoryComponent) flushingComponent).getWriterCount() > 0) {
+                        if (flushingComponent.getWriterCount() > 0) {
                             /*
                              * This case is a case where even though FLUSH log was flushed to disk and scheduleFlush is triggered,
                              * the current in-memory component (whose state was changed to READABLE_WRITABLE (RW)
@@ -194,7 +203,7 @@ public class LSMHarness implements ILSMHarness {
         // Check if there is any action that is needed to be taken based on the operation type
         switch (opType) {
             case FLUSH:
-                lsmIndex.getIOOperationCallback().beforeOperation(LSMOperationType.FLUSH);
+                lsmIndex.getIOOperationCallback().beforeOperation(LSMIOOperationType.FLUSH);
                 // Changing the flush status should *always* precede changing the mutable component.
                 lsmIndex.changeFlushStatusForCurrentMutableCompoent(false);
                 lsmIndex.changeMutableComponent();
@@ -203,7 +212,7 @@ public class LSMHarness implements ILSMHarness {
                 opTracker.notifyAll();
                 break;
             case MERGE:
-                lsmIndex.getIOOperationCallback().beforeOperation(LSMOperationType.MERGE);
+                lsmIndex.getIOOperationCallback().beforeOperation(LSMIOOperationType.MERGE);
                 break;
             default:
                 break;
@@ -505,7 +514,7 @@ public class LSMHarness implements ILSMHarness {
     public void scheduleFlush(ILSMIndexOperationContext ctx, ILSMIOOperationCallback callback)
             throws HyracksDataException {
         if (!getAndEnterComponents(ctx, LSMOperationType.FLUSH, true)) {
-            callback.afterFinalize(LSMOperationType.FLUSH, null);
+            callback.afterFinalize(LSMIOOperationType.FLUSH, null);
             return;
         }
         lsmIndex.scheduleFlush(ctx, callback);
@@ -521,7 +530,7 @@ public class LSMHarness implements ILSMHarness {
         boolean failedOperation = false;
         try {
             newComponent = lsmIndex.flush(operation);
-            operation.getCallback().afterOperation(LSMOperationType.FLUSH, null, newComponent);
+            operation.getCallback().afterOperation(LSMIOOperationType.FLUSH, null, newComponent);
             newComponent.markAsValid(lsmIndex.isDurable());
         } catch (Throwable e) {
             failedOperation = true;
@@ -531,7 +540,7 @@ public class LSMHarness implements ILSMHarness {
             throw e;
         } finally {
             exitComponents(ctx, LSMOperationType.FLUSH, newComponent, failedOperation);
-            operation.getCallback().afterFinalize(LSMOperationType.FLUSH, newComponent);
+            operation.getCallback().afterFinalize(LSMIOOperationType.FLUSH, newComponent);
         }
         if (LOGGER.isLoggable(Level.INFO)) {
             LOGGER.info("Finished the flush operation for index: " + lsmIndex);
@@ -542,7 +551,7 @@ public class LSMHarness implements ILSMHarness {
     public void scheduleMerge(ILSMIndexOperationContext ctx, ILSMIOOperationCallback callback)
             throws HyracksDataException {
         if (!getAndEnterComponents(ctx, LSMOperationType.MERGE, true)) {
-            callback.afterFinalize(LSMOperationType.MERGE, null);
+            callback.afterFinalize(LSMIOOperationType.MERGE, null);
             return;
         }
         lsmIndex.scheduleMerge(ctx, callback);
@@ -555,7 +564,7 @@ public class LSMHarness implements ILSMHarness {
         if (!getAndEnterComponents(ctx, LSMOperationType.MERGE, true)) {
             // If the merge cannot be scheduled because there is already an ongoing merge on subset/all of the components, then
             // whenever the current merge has finished, it will schedule the full merge again.
-            callback.afterFinalize(LSMOperationType.MERGE, null);
+            callback.afterFinalize(LSMIOOperationType.MERGE, null);
             return;
         }
         fullMergeIsRequested.set(false);
@@ -572,7 +581,7 @@ public class LSMHarness implements ILSMHarness {
         boolean failedOperation = false;
         try {
             newComponent = lsmIndex.merge(operation);
-            operation.getCallback().afterOperation(LSMOperationType.MERGE, ctx.getComponentHolder(), newComponent);
+            operation.getCallback().afterOperation(LSMIOOperationType.MERGE, ctx.getComponentHolder(), newComponent);
             newComponent.markAsValid(lsmIndex.isDurable());
         } catch (Throwable e) {
             failedOperation = true;
@@ -597,7 +606,7 @@ public class LSMHarness implements ILSMHarness {
             // 8. completeOperation (decrement the numOfIoOperations)
             opTracker.completeOperation(lsmIndex, LSMOperationType.MERGE, ctx.getSearchOperationCallback(),
                     ctx.getModificationCallback());
-            operation.getCallback().afterFinalize(LSMOperationType.MERGE, newComponent);
+            operation.getCallback().afterFinalize(LSMIOOperationType.MERGE, newComponent);
         }
         if (LOGGER.isLoggable(Level.INFO)) {
             LOGGER.info("Finished the merge operation for index: " + lsmIndex);
@@ -625,8 +634,7 @@ public class LSMHarness implements ILSMHarness {
 
     protected void triggerReplication(List<ILSMDiskComponent> lsmComponents, boolean bulkload, LSMOperationType opType)
             throws HyracksDataException {
-        ILSMIndexAccessor accessor =
-                lsmIndex.createAccessor(NoOpOperationCallback.INSTANCE, NoOpOperationCallback.INSTANCE);
+        ILSMIndexAccessor accessor = lsmIndex.createAccessor(NoOpIndexAccessParameters.INSTANCE);
         accessor.scheduleReplication(lsmComponents, bulkload, opType);
     }
 

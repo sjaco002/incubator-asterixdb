@@ -29,8 +29,10 @@ import org.apache.asterix.common.transactions.ILogManager;
 import org.apache.asterix.common.transactions.LogRecord;
 import org.apache.asterix.common.utils.TransactionUtil;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
+import org.apache.hyracks.storage.am.common.impls.NoOpIndexAccessParameters;
 import org.apache.hyracks.storage.am.common.impls.NoOpOperationCallback;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMComponent.ComponentState;
+import org.apache.hyracks.storage.am.lsm.common.api.ILSMComponentIdGenerator;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMIndex;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMIndexAccessor;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMMemoryComponent;
@@ -44,13 +46,16 @@ public class PrimaryIndexOperationTracker extends BaseOperationTracker {
     // Number of active operations on an ILSMIndex instance.
     private final AtomicInteger numActiveOperations;
     private final ILogManager logManager;
+    private final ILSMComponentIdGenerator idGenerator;
     private boolean flushOnExit = false;
     private boolean flushLogCreated = false;
 
-    public PrimaryIndexOperationTracker(int datasetID, ILogManager logManager, DatasetInfo dsInfo) {
+    public PrimaryIndexOperationTracker(int datasetID, ILogManager logManager, DatasetInfo dsInfo,
+            ILSMComponentIdGenerator idGenerator) {
         super(datasetID, dsInfo);
         this.logManager = logManager;
         this.numActiveOperations = new AtomicInteger();
+        this.idGenerator = idGenerator;
     }
 
     @Override
@@ -141,10 +146,10 @@ public class PrimaryIndexOperationTracker extends BaseOperationTracker {
 
     //This method is called sequentially by LogPage.notifyFlushTerminator in the sequence flushes were scheduled.
     public synchronized void triggerScheduleFlush(LogRecord logRecord) throws HyracksDataException {
+        idGenerator.refresh();
         for (ILSMIndex lsmIndex : dsInfo.getDatasetIndexes()) {
             //get resource
-            ILSMIndexAccessor accessor =
-                    lsmIndex.createAccessor(NoOpOperationCallback.INSTANCE, NoOpOperationCallback.INSTANCE);
+            ILSMIndexAccessor accessor = lsmIndex.createAccessor(NoOpIndexAccessParameters.INSTANCE);
             //update resource lsn
             AbstractLSMIOOperationCallback ioOpCallback =
                     (AbstractLSMIOOperationCallback) lsmIndex.getIOOperationCallback();

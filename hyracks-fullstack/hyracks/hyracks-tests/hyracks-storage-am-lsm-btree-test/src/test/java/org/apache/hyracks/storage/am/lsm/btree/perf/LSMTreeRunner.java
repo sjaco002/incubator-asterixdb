@@ -33,7 +33,7 @@ import org.apache.hyracks.api.io.FileReference;
 import org.apache.hyracks.control.nc.io.IOManager;
 import org.apache.hyracks.storage.am.common.datagen.DataGenThread;
 import org.apache.hyracks.storage.am.common.datagen.TupleBatch;
-import org.apache.hyracks.storage.am.common.impls.NoOpOperationCallback;
+import org.apache.hyracks.storage.am.common.impls.NoOpIndexAccessParameters;
 import org.apache.hyracks.storage.am.lsm.btree.impls.LSMBTree;
 import org.apache.hyracks.storage.am.lsm.btree.utils.LSMBTreeUtil;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMIOOperationScheduler;
@@ -108,9 +108,9 @@ public class LSMTreeRunner implements IExperimentRunner {
 
         lsmtree = LSMBTreeUtil.createLSMTree(ioManager, virtualBufferCaches, file, bufferCache, typeTraits,
                 cmpFactories, bloomFilterKeyFields, bloomFilterFalsePositiveRate, new NoMergePolicy(),
-                new ThreadCountingTracker(), ioScheduler, NoOpIOOperationCallbackFactory.INSTANCE.createIoOpCallback(),
-                true, null, null, null, null, true, TestStorageManagerComponentHolder.getMetadataPageManagerFactory(),
-                false, ITracer.NONE);
+                new ThreadCountingTracker(), ioScheduler, NoOpIOOperationCallbackFactory.INSTANCE, true, null, null,
+                null, null, true, TestStorageManagerComponentHolder.getMetadataPageManagerFactory(), false,
+                ITracer.NONE);
     }
 
     @Override
@@ -170,7 +170,7 @@ public class LSMTreeRunner implements IExperimentRunner {
         public LSMTreeThread(DataGenThread dataGen, LSMBTree lsmTree, int numBatches) {
             this.dataGen = dataGen;
             this.numBatches = numBatches;
-            lsmTreeAccessor = lsmTree.createAccessor(NoOpOperationCallback.INSTANCE, NoOpOperationCallback.INSTANCE);
+            lsmTreeAccessor = lsmTree.createAccessor(NoOpIndexAccessParameters.INSTANCE);
         }
 
         @Override

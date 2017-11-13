@@ -44,7 +44,9 @@ import org.apache.hyracks.storage.am.lsm.common.api.ILSMDiskComponent;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMDiskComponentBulkLoader;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMDiskComponentFactory;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMIOOperation;
+import org.apache.hyracks.storage.am.lsm.common.api.ILSMIOOperation.LSMIOOperationType;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMIOOperationCallback;
+import org.apache.hyracks.storage.am.lsm.common.api.ILSMIOOperationCallbackFactory;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMIOOperationScheduler;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMIndexAccessor;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMIndexFileManager;
@@ -52,12 +54,12 @@ import org.apache.hyracks.storage.am.lsm.common.api.ILSMIndexOperationContext;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMMergePolicy;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMOperationTracker;
 import org.apache.hyracks.storage.am.lsm.common.api.ITwoPCIndex;
-import org.apache.hyracks.storage.am.lsm.common.api.LSMOperationType;
 import org.apache.hyracks.storage.am.lsm.common.impls.AbstractLSMIndex;
 import org.apache.hyracks.storage.am.lsm.common.impls.AbstractLSMIndexOperationContext;
 import org.apache.hyracks.storage.am.lsm.common.impls.ExternalIndexHarness;
 import org.apache.hyracks.storage.am.lsm.common.impls.LSMComponentFileReferences;
 import org.apache.hyracks.storage.am.lsm.common.impls.LSMTreeIndexAccessor;
+import org.apache.hyracks.storage.common.IIndexAccessParameters;
 import org.apache.hyracks.storage.common.IIndexBulkLoader;
 import org.apache.hyracks.storage.common.IIndexCursor;
 import org.apache.hyracks.storage.common.IModificationOperationCallback;
@@ -86,10 +88,10 @@ public class ExternalBTreeWithBuddy extends AbstractLSMIndex implements ITreeInd
             IBufferCache diskBufferCache, ILSMIndexFileManager fileManager, ILSMDiskComponentFactory componentFactory,
             ILSMDiskComponentFactory bulkLoadComponentFactory, double bloomFilterFalsePositiveRate,
             ILSMMergePolicy mergePolicy, ILSMOperationTracker opTracker, ILSMIOOperationScheduler ioScheduler,
-            ILSMIOOperationCallback ioOpCallback, IBinaryComparatorFactory[] btreeCmpFactories,
+            ILSMIOOperationCallbackFactory ioOpCallbackFactory, IBinaryComparatorFactory[] btreeCmpFactories,
             IBinaryComparatorFactory[] buddyBtreeCmpFactories, int[] buddyBTreeFields, boolean durable) {
         super(ioManager, diskBufferCache, fileManager, bloomFilterFalsePositiveRate, mergePolicy, opTracker,
-                ioScheduler, ioOpCallback, componentFactory, bulkLoadComponentFactory, durable);
+                ioScheduler, ioOpCallbackFactory, componentFactory, bulkLoadComponentFactory, durable);
         this.btreeCmpFactories = btreeCmpFactories;
         this.buddyBtreeCmpFactories = buddyBtreeCmpFactories;
         this.buddyBTreeFields = buddyBTreeFields;
@@ -179,9 +181,8 @@ public class ExternalBTreeWithBuddy extends AbstractLSMIndex implements ITreeInd
     }
 
     @Override
-    public ILSMIndexAccessor createAccessor(IModificationOperationCallback modificationCallback,
-            ISearchOperationCallback searchCallback) throws HyracksDataException {
-        return new LSMTreeIndexAccessor(getLsmHarness(), createOpContext(searchCallback, version),
+    public ILSMIndexAccessor createAccessor(IIndexAccessParameters iap) throws HyracksDataException {
+        return new LSMTreeIndexAccessor(getLsmHarness(), createOpContext(iap.getSearchOperationCallback(), version),
                 ctx -> new LSMBTreeWithBuddySearchCursor(ctx, buddyBTreeFields));
     }
 
@@ -431,7 +432,7 @@ public class ExternalBTreeWithBuddy extends AbstractLSMIndex implements ITreeInd
             throw new HyracksDataException("Failed to deactivate the index since it is already deactivated.");
         }
         if (flushOnExit) {
-            ioOpCallback.afterFinalize(LSMOperationType.FLUSH, null);
+            ioOpCallback.afterFinalize(LSMIOOperationType.FLUSH, null);
         }
         // Even though, we deactivate the index, we don't exit components or
         // modify any of the lists to make sure they
@@ -619,11 +620,6 @@ public class ExternalBTreeWithBuddy extends AbstractLSMIndex implements ITreeInd
     @Override
     public void recoverTransaction() throws HyracksDataException {
         fileManager.recoverTransaction();
-    }
-
-    @Override
-    public boolean hasMemoryComponents() {
-        return false;
     }
 
     @Override

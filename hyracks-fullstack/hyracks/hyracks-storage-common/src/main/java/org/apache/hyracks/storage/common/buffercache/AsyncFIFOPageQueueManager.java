@@ -66,8 +66,8 @@ public class AsyncFIFOPageQueueManager implements Runnable {
                     throw new HyracksDataException("Queue is closing");
                 }
             } catch (InterruptedException e) {
-                // TODO Auto-generated catch block
-                e.printStackTrace();
+                Thread.currentThread().interrupt();
+                throw HyracksDataException.create(e);
             }
         }
     }
@@ -113,7 +113,7 @@ public class AsyncFIFOPageQueueManager implements Runnable {
         }
     }
 
-    public void finishQueue() {
+    public void finishQueue() throws HyracksDataException {
         if (writerThread == null) {
             synchronized (this) {
                 if (writerThread == null) {
@@ -121,23 +121,20 @@ public class AsyncFIFOPageQueueManager implements Runnable {
                 }
             }
         }
-        if(DEBUG) System.out.println("[FIFO] Finishing Queue");
         try {
             //Dummy cached page to act as low water mark
             CachedPage lowWater = new CachedPage();
-            lowWater.setQueueInfo(new QueueInfo(true,false));
-            synchronized(lowWater){
+            lowWater.setQueueInfo(new QueueInfo(true, false));
+            synchronized (lowWater) {
                 queue.put(lowWater);
-                while(queue.contains(lowWater)){
-                        lowWater.wait();
+                while (queue.contains(lowWater)) {
+                    lowWater.wait();
                 }
             }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            // TODO what do we do here?
-            e.printStackTrace();
+            throw HyracksDataException.create(e);
         }
-        if(DEBUG) System.out.println("[FIFO] Queue finished");
     }
 
     @Override
