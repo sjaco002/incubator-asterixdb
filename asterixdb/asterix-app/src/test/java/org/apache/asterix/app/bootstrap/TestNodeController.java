@@ -40,6 +40,7 @@ import org.apache.asterix.common.dataflow.LSMInsertDeleteOperatorNodePushable;
 import org.apache.asterix.common.exceptions.ACIDException;
 import org.apache.asterix.common.transactions.IRecoveryManager.ResourceType;
 import org.apache.asterix.common.transactions.ITransactionManager;
+import org.apache.asterix.common.transactions.TxnId;
 import org.apache.asterix.dataflow.data.nontagged.MissingWriterFactory;
 import org.apache.asterix.file.StorageComponentProvider;
 import org.apache.asterix.formats.nontagged.SerializerDeserializerProvider;
@@ -153,8 +154,8 @@ public class TestNodeController {
         ExecutionTestUtil.tearDown(cleanupOnStop);
     }
 
-    public org.apache.asterix.common.transactions.JobId getTxnJobId(IHyracksTaskContext ctx) {
-        return new org.apache.asterix.common.transactions.JobId((int) ctx.getJobletContext().getJobId().getId());
+    public TxnId getTxnJobId(IHyracksTaskContext ctx) {
+        return new TxnId(ctx.getJobletContext().getJobId().getId());
     }
 
     public Pair<LSMInsertDeleteOperatorNodePushable, CommitRuntime> getInsertPipeline(IHyracksTaskContext ctx,
@@ -298,8 +299,7 @@ public class TestNodeController {
         }
         JobId jobId = newJobId();
         IHyracksJobletContext jobletCtx = Mockito.mock(IHyracksJobletContext.class);
-        JobEventListenerFactory factory = new JobEventListenerFactory(
-                new org.apache.asterix.common.transactions.JobId((int) jobId.getId()), true);
+        JobEventListenerFactory factory = new JobEventListenerFactory(new TxnId(jobId.getId()), true);
         Mockito.when(jobletCtx.getJobletEventListenerFactory()).thenReturn(factory);
         Mockito.when(jobletCtx.getServiceContext()).thenReturn(ExecutionTestUtil.integrationUtil.ncs[0].getContext());
         Mockito.when(jobletCtx.getJobId()).thenReturn(jobId);

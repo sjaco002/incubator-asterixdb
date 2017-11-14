@@ -27,7 +27,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-import org.apache.asterix.transaction.management.service.transaction.JobIdFactory;
+import org.apache.asterix.transaction.management.service.transaction.TxnIdFactory;
 import org.apache.hyracks.api.client.IHyracksClientConnection;
 import org.apache.hyracks.api.job.DeployedJobSpecId;
 import org.apache.hyracks.api.job.JobId;
@@ -39,8 +39,8 @@ public class DeployedJobService {
 
     private static final Logger LOGGER = Logger.getLogger(DeployedJobService.class.getName());
 
-    //To enable new Asterix JobId for separate job invocations
-    private static final byte[] JOB_ID_PARAMETER_NAME = "jobIdParameter".getBytes();
+    //To enable new Asterix TxnId for separate deployed job spec invocations
+    private static final byte[] TRANSACTION_ID_PARAMETER_NAME = "TxnIdParameter".getBytes();
 
     //pool size one (only running one thread at a time)
     private static final int POOL_SIZE = 1;
@@ -85,9 +85,7 @@ public class DeployedJobService {
         long startTime = Instant.now().toEpochMilli();
 
         //Add the Asterix Transaction Id to the map
-        byte[] asterixJobId = String.valueOf(JobIdFactory.generateJobId().getId()).getBytes();
-        byte[] jobIdParameter = JOB_ID_PARAMETER_NAME;
-        jobParameters.put(jobIdParameter, asterixJobId);
+        jobParameters.put(TRANSACTION_ID_PARAMETER_NAME, String.valueOf(TxnIdFactory.create().getId()).getBytes());
         jobId = hcc.startJob(distributedId, jobParameters);
 
         hcc.waitForCompletion(jobId);

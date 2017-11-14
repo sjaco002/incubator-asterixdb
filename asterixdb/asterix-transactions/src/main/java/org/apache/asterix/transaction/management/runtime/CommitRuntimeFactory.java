@@ -20,7 +20,7 @@
 package org.apache.asterix.transaction.management.runtime;
 
 import org.apache.asterix.common.api.IJobEventListenerFactory;
-import org.apache.asterix.common.transactions.JobId;
+import org.apache.asterix.common.transactions.TxnId;
 import org.apache.hyracks.algebricks.runtime.base.IPushRuntime;
 import org.apache.hyracks.algebricks.runtime.base.IPushRuntimeFactory;
 import org.apache.hyracks.api.context.IHyracksTaskContext;
@@ -31,7 +31,7 @@ public class CommitRuntimeFactory implements IPushRuntimeFactory {
 
     private static final long serialVersionUID = 1L;
 
-    protected final JobId jobId;
+    protected final TxnId txnId;
     protected final int datasetId;
     protected final int[] primaryKeyFields;
     protected final boolean isTemporaryDatasetWriteJob;
@@ -39,9 +39,9 @@ public class CommitRuntimeFactory implements IPushRuntimeFactory {
     protected int[] datasetPartitions;
     protected final boolean isSink;
 
-    public CommitRuntimeFactory(JobId jobId, int datasetId, int[] primaryKeyFields, boolean isTemporaryDatasetWriteJob,
+    public CommitRuntimeFactory(TxnId txnId, int datasetId, int[] primaryKeyFields, boolean isTemporaryDatasetWriteJob,
             boolean isWriteTransaction, int[] datasetPartitions, boolean isSink) {
-        this.jobId = jobId;
+        this.txnId = txnId;
         this.datasetId = datasetId;
         this.primaryKeyFields = primaryKeyFields;
         this.isTemporaryDatasetWriteJob = isTemporaryDatasetWriteJob;
@@ -58,7 +58,7 @@ public class CommitRuntimeFactory implements IPushRuntimeFactory {
     @Override
     public IPushRuntime createPushRuntime(IHyracksTaskContext ctx) throws HyracksDataException {
         IJobletEventListenerFactory fact = ctx.getJobletContext().getJobletEventListenerFactory();
-        return new CommitRuntime(ctx, ((IJobEventListenerFactory) fact).getJobId(jobId), datasetId,
+        return new CommitRuntime(ctx, ((IJobEventListenerFactory) fact).getTxnId(txnId), datasetId,
                 primaryKeyFields, isTemporaryDatasetWriteJob, isWriteTransaction,
                 datasetPartitions[ctx.getTaskAttemptId().getTaskId().getPartition()], isSink);
     }

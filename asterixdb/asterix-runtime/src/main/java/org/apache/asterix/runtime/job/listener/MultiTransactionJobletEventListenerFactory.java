@@ -26,7 +26,7 @@ import org.apache.asterix.common.exceptions.ACIDException;
 import org.apache.asterix.common.transactions.DatasetId;
 import org.apache.asterix.common.transactions.ITransactionContext;
 import org.apache.asterix.common.transactions.ITransactionManager;
-import org.apache.asterix.common.transactions.JobId;
+import org.apache.asterix.common.transactions.TxnId;
 import org.apache.hyracks.api.context.IHyracksJobletContext;
 import org.apache.hyracks.api.job.IJobletEventListener;
 import org.apache.hyracks.api.job.IJobletEventListenerFactory;
@@ -40,23 +40,23 @@ import org.apache.hyracks.api.job.JobStatus;
 public class MultiTransactionJobletEventListenerFactory implements IJobEventListenerFactory {
 
     private static final long serialVersionUID = 1L;
-    private final List<JobId> jobIds;
+    private final List<TxnId> txnIds;
     private final boolean transactionalWrite;
 
-    public MultiTransactionJobletEventListenerFactory(List<JobId> jobIds, boolean transactionalWrite) {
-        this.jobIds = jobIds;
+    public MultiTransactionJobletEventListenerFactory(List<TxnId> txnIds, boolean transactionalWrite) {
+        this.txnIds = txnIds;
         this.transactionalWrite = transactionalWrite;
     }
 
     //TODO: Enable this factory to be usable for Deployed Jobs
     @Override
-    public JobId getJobId(JobId compiledJobId) {
-        return compiledJobId;
+    public TxnId getTxnId(TxnId compiledTxnId) {
+        return compiledTxnId;
     }
 
     @Override
     public IJobletEventListenerFactory copyFactory() {
-        return new MultiTransactionJobletEventListenerFactory(jobIds, transactionalWrite);
+        return new MultiTransactionJobletEventListenerFactory(txnIds, transactionalWrite);
     }
 
     @Override
@@ -74,8 +74,8 @@ public class MultiTransactionJobletEventListenerFactory implements IJobEventList
                     ITransactionManager txnManager =
                             ((INcApplicationContext) jobletContext.getServiceContext().getApplicationContext())
                                     .getTransactionSubsystem().getTransactionManager();
-                    for (JobId jobId : jobIds) {
-                        ITransactionContext txnContext = txnManager.getTransactionContext(jobId, false);
+                    for (TxnId txnId : txnIds) {
+                        ITransactionContext txnContext = txnManager.getTransactionContext(txnId, false);
                         txnContext.setWriteTxn(transactionalWrite);
                         txnManager.completedTransaction(txnContext, DatasetId.NULL, -1,
                                 !(jobStatus == JobStatus.FAILURE));
@@ -88,9 +88,9 @@ public class MultiTransactionJobletEventListenerFactory implements IJobEventList
             @Override
             public void jobletStart() {
                 try {
-                    for (JobId jobId : jobIds) {
+                    for (TxnId txnId : txnIds) {
                         ((INcApplicationContext) jobletContext.getServiceContext().getApplicationContext())
-                                .getTransactionSubsystem().getTransactionManager().getTransactionContext(jobId, true);
+                                .getTransactionSubsystem().getTransactionManager().getTransactionContext(txnId, true);
                     }
                 } catch (ACIDException e) {
                     throw new Error(e);

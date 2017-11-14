@@ -18,7 +18,7 @@
  */
 package org.apache.asterix.common.api;
 
-import org.apache.asterix.common.transactions.JobId;
+import org.apache.asterix.common.transactions.TxnId;
 import org.apache.hyracks.api.job.IJobletEventListenerFactory;
 
 /**
@@ -26,5 +26,5 @@ import org.apache.hyracks.api.job.IJobletEventListenerFactory;
  */
 public interface IJobEventListenerFactory extends IJobletEventListenerFactory {
 
-    JobId getJobId(JobId compiledJobId);
+    TxnId getTxnId(TxnId compiledTxnId);
 }
