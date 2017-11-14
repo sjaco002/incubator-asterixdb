@@ -51,6 +51,7 @@ public class DeployedJobSpecsTest {
 
     private static final String NC1_ID = "nc1";
     private static final String NC2_ID = "nc2";
+    private static final int FIVE_SECONDS = 5000;
 
     private static ClusterControllerService cc;
     private static NodeControllerService nc1;
@@ -91,7 +92,7 @@ public class DeployedJobSpecsTest {
         ncConfig1.setClusterListenAddress("127.0.0.1");
         ncConfig1.setDataListenAddress("127.0.0.1");
         ncConfig1.setResultListenAddress("127.0.0.1");
-        ncConfig1.setResultSweepThreshold(5000);
+        ncConfig1.setResultSweepThreshold(FIVE_SECONDS);
         ncConfig1.setIODevices(new String[] { joinPath(System.getProperty("user.dir"), "target", "data", "device0") });
         NodeControllerService nc1Base = new NodeControllerService(ncConfig1);
         nc1 = Mockito.spy(nc1Base);
@@ -103,7 +104,7 @@ public class DeployedJobSpecsTest {
         ncConfig2.setClusterListenAddress("127.0.0.1");
         ncConfig2.setDataListenAddress("127.0.0.1");
         ncConfig2.setResultListenAddress("127.0.0.1");
-        ncConfig2.setResultSweepThreshold(5000);
+        ncConfig2.setResultSweepThreshold(FIVE_SECONDS);
         ncConfig2.setIODevices(new String[] { joinPath(System.getProperty("user.dir"), "target", "data", "device1") });
         NodeControllerService nc2Base = new NodeControllerService(ncConfig2);
         nc2 = Mockito.spy(nc2Base);
@@ -126,11 +127,11 @@ public class DeployedJobSpecsTest {
 
         //make sure it finished
         //cc will get the store once to check for duplicate insertion and once to insert per job
-        verify(cc, Mockito.timeout(5000).times(4)).getDeployedJobSpecStore();
-        verify(nc1, Mockito.timeout(5000).times(2)).storeActivityClusterGraph(any(), any());
-        verify(nc2, Mockito.timeout(5000).times(2)).storeActivityClusterGraph(any(), any());
-        verify(nc1, Mockito.timeout(5000).times(2)).checkForDuplicateDeployedJobSpec(any());
-        verify(nc2, Mockito.timeout(5000).times(2)).checkForDuplicateDeployedJobSpec(any());
+        verify(cc, Mockito.timeout(FIVE_SECONDS).times(4)).getDeployedJobSpecStore();
+        verify(nc1, Mockito.timeout(FIVE_SECONDS).times(2)).storeActivityClusterGraph(any(), any());
+        verify(nc2, Mockito.timeout(FIVE_SECONDS).times(2)).storeActivityClusterGraph(any(), any());
+        verify(nc1, Mockito.timeout(FIVE_SECONDS).times(2)).checkForDuplicateDeployedJobSpec(any());
+        verify(nc2, Mockito.timeout(FIVE_SECONDS).times(2)).checkForDuplicateDeployedJobSpec(any());
 
         //confirm that both jobs are distributed
         Assert.assertTrue(nc1.getActivityClusterGraph(distributedId1) != null && nc2.getActivityClusterGraph(distributedId1) != null);
@@ -143,17 +144,17 @@ public class DeployedJobSpecsTest {
         hcc.waitForCompletion(jobRunId1);
 
         //Make sure the job parameter map was removed
-        verify(cc, Mockito.timeout(5000).times(1)).removeJobParameterByteStore(any());
-        verify(nc1, Mockito.timeout(5000).times(1)).removeJobParameterByteStore(any());
-        verify(nc2, Mockito.timeout(5000).times(1)).removeJobParameterByteStore(any());
+        verify(cc, Mockito.timeout(FIVE_SECONDS).times(1)).removeJobParameterByteStore(any());
+        verify(nc1, Mockito.timeout(FIVE_SECONDS).times(1)).removeJobParameterByteStore(any());
+        verify(nc2, Mockito.timeout(FIVE_SECONDS).times(1)).removeJobParameterByteStore(any());
 
         //destroy the first job
         hcc.undeployJobSpec(distributedId1);
 
         //make sure it finished
-        verify(cc, Mockito.timeout(5000).times(8)).getDeployedJobSpecStore();
-        verify(nc1, Mockito.timeout(5000).times(1)).removeActivityClusterGraph(any());
-        verify(nc2, Mockito.timeout(5000).times(1)).removeActivityClusterGraph(any());
+        verify(cc, Mockito.timeout(FIVE_SECONDS).times(8)).getDeployedJobSpecStore();
+        verify(nc1, Mockito.timeout(FIVE_SECONDS).times(1)).removeActivityClusterGraph(any());
+        verify(nc2, Mockito.timeout(FIVE_SECONDS).times(1)).removeActivityClusterGraph(any());
 
         //confirm the first job is destroyed
         Assert.assertTrue(nc1.getActivityClusterGraph(distributedId1) == null && nc2.getActivityClusterGraph(distributedId1) == null);
@@ -164,30 +165,26 @@ public class DeployedJobSpecsTest {
         hcc.waitForCompletion(jobRunId2);
 
         //Make sure the job parameter map was removed
-        verify(cc, Mockito.timeout(5000).times(2)).removeJobParameterByteStore(any());
-        verify(nc1, Mockito.timeout(5000).times(2)).removeJobParameterByteStore(any());
-        verify(nc2, Mockito.timeout(5000).times(2)).removeJobParameterByteStore(any());
-
-        //wait ten seconds to ensure the result sweeper does not break the job
-        //The result sweeper runs every 5 seconds during the tests
-        Thread.sleep(10000);
+        verify(cc, Mockito.timeout(FIVE_SECONDS).times(2)).removeJobParameterByteStore(any());
+        verify(nc1, Mockito.timeout(FIVE_SECONDS).times(2)).removeJobParameterByteStore(any());
+        verify(nc2, Mockito.timeout(FIVE_SECONDS).times(2)).removeJobParameterByteStore(any());
 
         //run the second job again
         JobId jobRunId3 = hcc.startJob(distributedId2, new HashMap<>());
         hcc.waitForCompletion(jobRunId3);
 
         //Make sure the job parameter map was removed
-        verify(cc, Mockito.timeout(5000).times(3)).removeJobParameterByteStore(any());
-        verify(nc1, Mockito.timeout(5000).times(3)).removeJobParameterByteStore(any());
-        verify(nc2, Mockito.timeout(5000).times(3)).removeJobParameterByteStore(any());
+        verify(cc, Mockito.timeout(FIVE_SECONDS).times(3)).removeJobParameterByteStore(any());
+        verify(nc1, Mockito.timeout(FIVE_SECONDS).times(3)).removeJobParameterByteStore(any());
+        verify(nc2, Mockito.timeout(FIVE_SECONDS).times(3)).removeJobParameterByteStore(any());
 
         //destroy the second job
         hcc.undeployJobSpec(distributedId2);
 
         //make sure it finished
-        verify(cc, Mockito.timeout(5000).times(12)).getDeployedJobSpecStore();
-        verify(nc1, Mockito.timeout(5000).times(2)).removeActivityClusterGraph(any());
-        verify(nc2, Mockito.timeout(5000).times(2)).removeActivityClusterGraph(any());
+        verify(cc, Mockito.timeout(FIVE_SECONDS).times(12)).getDeployedJobSpecStore();
+        verify(nc1, Mockito.timeout(FIVE_SECONDS).times(2)).removeActivityClusterGraph(any());
+        verify(nc2, Mockito.timeout(FIVE_SECONDS).times(2)).removeActivityClusterGraph(any());
 
         //confirm the second job is destroyed
         Assert.assertTrue(nc1.getActivityClusterGraph(distributedId2) == null && nc2.getActivityClusterGraph(distributedId2) == null);

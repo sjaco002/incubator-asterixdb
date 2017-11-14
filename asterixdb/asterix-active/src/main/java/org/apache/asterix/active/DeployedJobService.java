@@ -43,12 +43,12 @@ public class DeployedJobService {
     private static final byte[] JOB_ID_PARAMETER_NAME = "jobIdParameter".getBytes();
 
     //pool size one (only running one thread at a time)
-    private static final int poolSize = 1;
+    private static final int POOL_SIZE = 1;
 
     //Starts running a deployed job specification periodically with an interval of "duration" seconds
     public static ScheduledExecutorService startRepetitiveDeployedJobSpec(DeployedJobSpecId distributedId,
             IHyracksClientConnection hcc, long duration, Map<byte[], byte[]> jobParameters, EntityId entityId) {
-        ScheduledExecutorService scheduledExecutorService = Executors.newScheduledThreadPool(poolSize);
+        ScheduledExecutorService scheduledExecutorService = Executors.newScheduledThreadPool(POOL_SIZE);
         scheduledExecutorService.scheduleAtFixedRate(new Runnable() {
             @Override
             public void run() {
