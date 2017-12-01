@@ -334,7 +334,8 @@ public class BuiltinFunctions {
     public static final FunctionIdentifier STRING_SPLIT = new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "split",
             2);
 
-    public static final FunctionIdentifier DATASET = new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "dataset", 1);
+    public static final FunctionIdentifier DATASET =
+            new FunctionIdentifier(FunctionConstants.ASTERIX_NS, FunctionConstants.DATASET, 1);
     public static final FunctionIdentifier FEED_COLLECT = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
             "feed-collect", 6);
     public static final FunctionIdentifier FEED_INTERCEPT = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,

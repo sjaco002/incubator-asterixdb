@@ -133,6 +133,7 @@ public class ErrorCode {
     public static final int COMPILATION_FAILED_DUE_TO_REPLICATE_OP = 1054;
     public static final int COMPILATION_INCOMPATIBLE_FUNCTION_LANGUAGE = 1055;
     public static final int TOO_MANY_OPTIONS_FOR_FUNCTION = 1056;
+    public static final int UNKNOWN_FUNCTION = 1057;
 
     // Feed errors
     public static final int DATAFLOW_ILLEGAL_STATE = 3001;

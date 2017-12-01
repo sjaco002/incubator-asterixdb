@@ -21,5 +21,6 @@ package org.apache.asterix.common.functions;
 public interface FunctionConstants {
 
     public static final String ASTERIX_NS = "asterix";
+    public static final String DATASET = "dataset";
 
 }

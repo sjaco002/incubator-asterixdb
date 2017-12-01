@@ -27,7 +27,14 @@ import org.apache.asterix.common.exceptions.CompilationException;
 import org.apache.asterix.common.functions.FunctionConstants;
 import org.apache.asterix.common.functions.FunctionSignature;
 import org.apache.asterix.lang.common.base.Expression;
+import org.apache.asterix.lang.common.clause.LetClause;
+import org.apache.asterix.lang.common.expression.CallExpr;
+import org.apache.asterix.lang.common.expression.LiteralExpr;
+import org.apache.asterix.lang.common.expression.VariableExpr;
+import org.apache.asterix.lang.common.literal.StringLiteral;
+import org.apache.asterix.lang.common.statement.CreateFunctionStatement;
 import org.apache.asterix.lang.common.statement.FunctionDecl;
+import org.apache.asterix.lang.common.struct.VarIdentifier;
 import org.apache.asterix.metadata.MetadataManager;
 import org.apache.asterix.metadata.MetadataTransactionContext;
 import org.apache.asterix.metadata.declared.MetadataProvider;
@@ -52,7 +59,7 @@ public class FunctionUtil {
 
     @FunctionalInterface
     public interface IFunctionCollector {
-        Set<FunctionSignature> getFunctionCalls(Expression expression) throws CompilationException;
+        Set<CallExpr> getFunctionCalls(Expression expression) throws CompilationException;
     }
 
     @FunctionalInterface
@@ -95,8 +102,9 @@ public class FunctionUtil {
         }
         String value = metadataProvider.getConfig().get(FunctionUtil.IMPORT_PRIVATE_FUNCTIONS);
         boolean includePrivateFunctions = (value != null) ? Boolean.valueOf(value.toLowerCase()) : false;
-        Set<FunctionSignature> functionCalls = functionCollector.getFunctionCalls(expression);
-        for (FunctionSignature signature : functionCalls) {
+        Set<CallExpr> functionCalls = functionCollector.getFunctionCalls(expression);
+        for (CallExpr functionCall : functionCalls) {
+            FunctionSignature signature = functionCall.getFunctionSignature();
             if (declaredFunctions != null && declaredFunctions.contains(signature)) {
                 continue;
             }
@@ -161,6 +169,38 @@ public class FunctionUtil {
             return null;
         }
         return MetadataManager.INSTANCE.getFunction(mdTxnCtx, signature);
+    }
+
+    /**
+     *
+     * Create lets to represent the parameters of a functions
+     * Enabling the function to be compiled to test for usability
+     *
+     * @param cfs
+     *            The statement that is trying to create a function
+     * @return
+     */
+    public static List<LetClause> createLetsToTestFunction(CreateFunctionStatement cfs) {
+        List<LetClause> lets = new ArrayList<>();
+        FunctionIdentifier getJobParameter = BuiltinFunctions.GET_JOB_PARAMETER;
+        FunctionSignature sig = new FunctionSignature(getJobParameter.getNamespace(), getJobParameter.getName(),
+                getJobParameter.getArity());
+
+        List<VariableExpr> varList = new ArrayList<>();
+        List<String> vars = cfs.getParamList();
+        for (int i = 0; i < vars.size(); i++) {
+            varList.add(new VariableExpr(new VarIdentifier(vars.get(i), i)));
+        }
+
+        for (VariableExpr var : varList) {
+            List<Expression> strListForCall = new ArrayList<>();
+            LiteralExpr l = new LiteralExpr(new StringLiteral(var.getVar().getValue()));
+            strListForCall.add(l);
+            Expression con = new CallExpr(sig, strListForCall);
+            LetClause let = new LetClause(var, con);
+            lets.add(let);
+        }
+        return lets;
     }
 
 }
