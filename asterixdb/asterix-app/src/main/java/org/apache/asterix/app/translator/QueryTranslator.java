@@ -124,6 +124,7 @@ import org.apache.asterix.lang.common.statement.TypeDecl;
 import org.apache.asterix.lang.common.statement.TypeDropStatement;
 import org.apache.asterix.lang.common.statement.WriteStatement;
 import org.apache.asterix.lang.common.struct.Identifier;
+import org.apache.asterix.lang.common.util.CommonFunctionMapUtil;
 import org.apache.asterix.lang.common.util.FunctionUtil;
 import org.apache.asterix.lang.sqlpp.expression.SelectExpression;
 import org.apache.asterix.lang.sqlpp.rewrites.SqlppRewriterFactory;
@@ -1707,7 +1708,8 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
             //Check all function calls to make sure that they are valid
             for (CallExpr functionCall : functionCalls) {
                 FunctionSignature signature = functionCall.getFunctionSignature();
-                if (BuiltinFunctions.isBuiltinCompilerFunction(signature, false)) {
+                if (BuiltinFunctions.isBuiltinCompilerFunction(
+                        CommonFunctionMapUtil.normalizeBuiltinFunctionSignature(signature), false)) {
                     continue;
                 }
                 FunctionIdentifier fid =
