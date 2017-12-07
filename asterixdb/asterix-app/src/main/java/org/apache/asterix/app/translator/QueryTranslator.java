@@ -1698,8 +1698,7 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
                 s.setBody(cfs.getFunctionBodyExpression());
                 List<LetClause> lets = FunctionUtil.createLetsToTestFunction(cfs);
                 ((SelectExpression) s.getBody()).getLetList().addAll(lets);
-                Pair<IReturningStatement, Integer> rewrittenResult =
-                        apiFramework.reWriteQuery(declaredFunctions, metadataProvider, s, sessionOutput);
+                apiFramework.reWriteQuery(declaredFunctions, metadataProvider, s, sessionOutput);
             }
 
             Set<CallExpr> functionCalls =
