@@ -19,10 +19,8 @@
 package org.apache.asterix.lang.common.base;
 
 import java.util.List;
-import java.util.Set;
 
 import org.apache.asterix.common.exceptions.CompilationException;
-import org.apache.asterix.lang.common.expression.CallExpr;
 import org.apache.asterix.lang.common.rewrites.LangRewritingContext;
 import org.apache.asterix.lang.common.statement.FunctionDecl;
 import org.apache.asterix.metadata.declared.MetadataProvider;
@@ -43,9 +41,4 @@ public interface IQueryRewriter {
      */
     void rewrite(List<FunctionDecl> declaredFunctions, IReturningStatement topExpr,
             MetadataProvider metadataProvider, LangRewritingContext context) throws CompilationException;
-
-    /**
-     * Find the function calls used by a given expression
-     */
-    Set<CallExpr> getFunctionCalls(Expression expression) throws CompilationException;
 }

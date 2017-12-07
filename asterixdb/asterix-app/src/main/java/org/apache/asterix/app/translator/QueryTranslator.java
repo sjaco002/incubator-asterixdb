@@ -1692,21 +1692,6 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
                 apiFramework.reWriteQuery(declaredFunctions, metadataProvider, q, sessionOutput);
             }
 
-            //            Set<CallExpr> functionCalls =
-            //                    rewriterFactory.createQueryRewriter().getFunctionCalls(cfs.getFunctionBodyExpression());
-            //
-            //            //Check all function calls to make sure that they are valid
-            //            for (CallExpr functionCall : functionCalls) {
-            //                FunctionSignature signature = functionCall.getFunctionSignature();
-            //                //make sure the function exists
-            //                if (BuiltinFunctions.isBuiltinCompilerFunction(
-            //                        CommonFunctionMapUtil.normalizeBuiltinFunctionSignature(signature), false)) {
-            //                    continue;
-            //                } else if (MetadataManager.INSTANCE.getFunction(mdTxnCtx, signature) == null) {
-            //                    throw AsterixException.create(ErrorCode.UNKNOWN_FUNCTION, signature);
-            //                }
-            //            }
-
             Function function = new Function(dataverse, functionName, cfs.getFunctionSignature().getArity(),
                     cfs.getParamList(), Function.RETURNTYPE_VOID, cfs.getFunctionBody(),
                     sqlFunction ? Function.LANGUAGE_SQLPP : Function.LANGUAGE_AQL,
