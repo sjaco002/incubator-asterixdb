@@ -25,6 +25,8 @@ import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+import org.apache.asterix.api.http.server.ServletConstants;
+import org.apache.asterix.api.http.server.StorageApiServlet;
 import org.apache.asterix.app.nc.NCAppRuntimeContext;
 import org.apache.asterix.app.replication.message.RegistrationTasksRequestMessage;
 import org.apache.asterix.common.api.AsterixThreadFactory;
@@ -41,12 +43,13 @@ import org.apache.asterix.common.transactions.Checkpoint;
 import org.apache.asterix.common.transactions.IRecoveryManager;
 import org.apache.asterix.common.transactions.IRecoveryManager.SystemState;
 import org.apache.asterix.common.utils.PrintUtil;
+import org.apache.asterix.common.utils.Servlets;
+import org.apache.asterix.common.utils.StorageConstants;
 import org.apache.asterix.common.utils.StoragePathUtil;
 import org.apache.asterix.event.schema.cluster.Cluster;
 import org.apache.asterix.event.schema.cluster.Node;
 import org.apache.asterix.messaging.MessagingChannelInterfaceFactory;
 import org.apache.asterix.messaging.NCMessageBroker;
-import org.apache.asterix.transaction.management.resource.PersistentLocalResourceRepository;
 import org.apache.asterix.utils.CompatibilityUtil;
 import org.apache.hyracks.api.application.INCServiceContext;
 import org.apache.hyracks.api.application.IServiceContext;
@@ -59,6 +62,7 @@ import org.apache.hyracks.api.messages.IMessageBroker;
 import org.apache.hyracks.control.common.controllers.NCConfig;
 import org.apache.hyracks.control.nc.BaseNCApplication;
 import org.apache.hyracks.control.nc.NodeControllerService;
+import org.apache.hyracks.http.server.HttpServer;
 import org.apache.hyracks.http.server.WebManager;
 
 public class NCApplication extends BaseNCApplication {
@@ -120,22 +124,13 @@ public class NCApplication extends BaseNCApplication {
         if (latestCheckpoint != null) {
             CompatibilityUtil.ensureCompatibility(controllerService, latestCheckpoint.getStorageVersion());
         }
-        IRecoveryManager recoveryMgr = runtimeContext.getTransactionSubsystem().getRecoveryManager();
-        final SystemState stateOnStartup = recoveryMgr.getSystemState();
-        if (stateOnStartup == SystemState.PERMANENT_DATA_LOSS) {
-            if (LOGGER.isLoggable(Level.INFO)) {
-                LOGGER.info("System state: " + SystemState.PERMANENT_DATA_LOSS);
-                LOGGER.info("Node ID: " + nodeId);
-                LOGGER.info("Stores: " + PrintUtil.toString(metadataProperties.getStores()));
-                LOGGER.info("Root Metadata Store: " + metadataProperties.getStores().get(nodeId)[0]);
-            }
-            PersistentLocalResourceRepository localResourceRepository =
-                    (PersistentLocalResourceRepository) runtimeContext.getLocalResourceRepository();
-            localResourceRepository.initializeNewUniverse(ClusterProperties.INSTANCE.getStorageDirectoryName());
+        if (LOGGER.isLoggable(Level.INFO)) {
+            IRecoveryManager recoveryMgr = runtimeContext.getTransactionSubsystem().getRecoveryManager();
+            LOGGER.info("System state: " + recoveryMgr.getSystemState());
+            LOGGER.info("Node ID: " + nodeId);
+            LOGGER.info("Stores: " + PrintUtil.toString(metadataProperties.getStores()));
         }
-
         webManager = new WebManager();
-
         performLocalCleanUp();
     }
 
@@ -146,7 +141,11 @@ public class NCApplication extends BaseNCApplication {
     }
 
     protected void configureServers() throws Exception {
-        // override to start web services on NC nodes
+        HttpServer apiServer = new HttpServer(webManager.getBosses(), webManager.getWorkers(),
+                getApplicationContext().getExternalProperties().getNcApiPort());
+        apiServer.setAttribute(ServletConstants.SERVICE_CONTEXT_ATTR, ncServiceCtx);
+        apiServer.addServlet(new StorageApiServlet(apiServer.ctx(), getApplicationContext(), Servlets.STORAGE));
+        webManager.add(apiServer);
     }
 
     protected List<AsterixExtension> getExtensions() {
@@ -219,8 +218,8 @@ public class NCApplication extends BaseNCApplication {
         StorageProperties storageProperties = runtimeContext.getStorageProperties();
         // Deducts the reserved buffer cache size and memory component size from the maxium heap size,
         // and deducts one core for processing heartbeats.
-        long memorySize = Runtime.getRuntime().maxMemory() - storageProperties.getBufferCacheSize()
-                - storageProperties.getMemoryComponentGlobalBudget();
+        long memorySize = Runtime.getRuntime().maxMemory() - storageProperties.getBufferCacheSize() - storageProperties
+                .getMemoryComponentGlobalBudget();
         int allCores = Runtime.getRuntime().availableProcessors();
         int maximumCoresForComputation = allCores > 1 ? allCores - 1 : allCores;
         return new NodeCapacity(memorySize, maximumCoresForComputation);
@@ -256,7 +255,7 @@ public class NCApplication extends BaseNCApplication {
             for (Node node : nodes) {
                 String ncId = asterixInstanceName + "_" + node.getId();
                 if (ncId.equalsIgnoreCase(nodeId)) {
-                    String storeDir = ClusterProperties.INSTANCE.getStorageDirectoryName();
+                    String storeDir = StorageConstants.STORAGE_ROOT_DIR_NAME;
                     String nodeIoDevices = node.getIodevices() == null ? cluster.getIodevices() : node.getIodevices();
                     String[] ioDevicePaths = nodeIoDevices.trim().split(",");
                     for (int i = 0; i < ioDevicePaths.length; i++) {
