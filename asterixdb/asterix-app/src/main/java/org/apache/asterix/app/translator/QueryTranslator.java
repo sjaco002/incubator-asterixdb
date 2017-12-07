@@ -85,10 +85,7 @@ import org.apache.asterix.lang.common.base.IReturningStatement;
 import org.apache.asterix.lang.common.base.IRewriterFactory;
 import org.apache.asterix.lang.common.base.IStatementRewriter;
 import org.apache.asterix.lang.common.base.Statement;
-import org.apache.asterix.lang.common.clause.LetClause;
-import org.apache.asterix.lang.common.expression.CallExpr;
 import org.apache.asterix.lang.common.expression.IndexedTypeExpression;
-import org.apache.asterix.lang.common.expression.LiteralExpr;
 import org.apache.asterix.lang.common.statement.CompactStatement;
 import org.apache.asterix.lang.common.statement.ConnectFeedStatement;
 import org.apache.asterix.lang.common.statement.CreateDataverseStatement;
@@ -124,10 +121,8 @@ import org.apache.asterix.lang.common.statement.TypeDecl;
 import org.apache.asterix.lang.common.statement.TypeDropStatement;
 import org.apache.asterix.lang.common.statement.WriteStatement;
 import org.apache.asterix.lang.common.struct.Identifier;
-import org.apache.asterix.lang.common.util.CommonFunctionMapUtil;
-import org.apache.asterix.lang.common.util.FunctionUtil;
-import org.apache.asterix.lang.sqlpp.expression.SelectExpression;
 import org.apache.asterix.lang.sqlpp.rewrites.SqlppRewriterFactory;
+import org.apache.asterix.lang.sqlpp.util.SqlppRewriteUtil;
 import org.apache.asterix.metadata.IDatasetDetails;
 import org.apache.asterix.metadata.MetadataManager;
 import org.apache.asterix.metadata.MetadataTransactionContext;
@@ -157,7 +152,6 @@ import org.apache.asterix.metadata.utils.KeyFieldTypeUtil;
 import org.apache.asterix.metadata.utils.MetadataConstants;
 import org.apache.asterix.metadata.utils.MetadataLockUtil;
 import org.apache.asterix.metadata.utils.MetadataUtil;
-import org.apache.asterix.om.functions.BuiltinFunctions;
 import org.apache.asterix.om.types.ARecordType;
 import org.apache.asterix.om.types.ATypeTag;
 import org.apache.asterix.om.types.IAType;
@@ -188,7 +182,6 @@ import org.apache.commons.lang3.tuple.Triple;
 import org.apache.hyracks.algebricks.common.exceptions.AlgebricksException;
 import org.apache.hyracks.algebricks.common.utils.Pair;
 import org.apache.hyracks.algebricks.core.algebra.expressions.AbstractFunctionCallExpression.FunctionKind;
-import org.apache.hyracks.algebricks.core.algebra.functions.FunctionIdentifier;
 import org.apache.hyracks.algebricks.data.IAWriterFactory;
 import org.apache.hyracks.algebricks.data.IResultSerializerFactoryProvider;
 import org.apache.hyracks.algebricks.runtime.serializer.ResultSerializerFactoryProvider;
@@ -1686,50 +1679,37 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
         metadataProvider.setMetadataTxnContext(mdTxnCtx);
         MetadataLockUtil.functionStatementBegin(lockManager, metadataProvider.getLocks(), dataverse,
                 dataverse + "." + functionName);
+        boolean sqlFunction = rewriterFactory instanceof SqlppRewriterFactory;
         try {
             Dataverse dv = MetadataManager.INSTANCE.getDataverse(mdTxnCtx, dataverse);
             if (dv == null) {
                 throw new AlgebricksException("There is no dataverse with this name " + dataverse + ".");
             }
 
-            //If the function is a select, we need to find out which datasets
-            //it tries to use by rewriting it
-            if (cfs.getFunctionBodyExpression() instanceof SelectExpression) {
-                Query s = new Query(false);
-                s.setBody(cfs.getFunctionBodyExpression());
-                List<LetClause> lets = FunctionUtil.createLetsToTestFunction(cfs);
-                ((SelectExpression) s.getBody()).getLetList().addAll(lets);
-                apiFramework.reWriteQuery(declaredFunctions, metadataProvider, s, sessionOutput);
+            //Test compilation of the function
+            if (sqlFunction) {
+                Query q = SqlppRewriteUtil.createQueryToTestFunction(cfs);
+                apiFramework.reWriteQuery(declaredFunctions, metadataProvider, q, sessionOutput);
             }
 
-            Set<CallExpr> functionCalls =
-                    rewriterFactory.createQueryRewriter().getFunctionCalls(cfs.getFunctionBodyExpression());
-
-            //Check all function calls to make sure that they are valid
-            for (CallExpr functionCall : functionCalls) {
-                FunctionSignature signature = functionCall.getFunctionSignature();
-                if (BuiltinFunctions.isBuiltinCompilerFunction(
-                        CommonFunctionMapUtil.normalizeBuiltinFunctionSignature(signature), false)) {
-                    continue;
-                }
-                FunctionIdentifier fid =
-                        new FunctionIdentifier(signature.getNamespace(), signature.getName(), signature.getArity());
-                if (fid.equals(BuiltinFunctions.DATASET)) {
-                    String[] datasetPath =
-                            ((LiteralExpr) functionCall.getExprList().get(0)).getValue().getStringValue().split("\\.");
-                    Dataset ds = metadataProvider.findDataset(datasetPath[0], datasetPath[1]);
-                    if (ds == null) {
-                        throw CompilationException.create(ErrorCode.NO_METADATA_FOR_DATASET, datasetPath);
-                    }
-
-                } else if (MetadataManager.INSTANCE.getFunction(mdTxnCtx, signature) == null) {
-                    throw AsterixException.create(ErrorCode.UNKNOWN_FUNCTION, signature);
-                }
-            }
+            //            Set<CallExpr> functionCalls =
+            //                    rewriterFactory.createQueryRewriter().getFunctionCalls(cfs.getFunctionBodyExpression());
+            //
+            //            //Check all function calls to make sure that they are valid
+            //            for (CallExpr functionCall : functionCalls) {
+            //                FunctionSignature signature = functionCall.getFunctionSignature();
+            //                //make sure the function exists
+            //                if (BuiltinFunctions.isBuiltinCompilerFunction(
+            //                        CommonFunctionMapUtil.normalizeBuiltinFunctionSignature(signature), false)) {
+            //                    continue;
+            //                } else if (MetadataManager.INSTANCE.getFunction(mdTxnCtx, signature) == null) {
+            //                    throw AsterixException.create(ErrorCode.UNKNOWN_FUNCTION, signature);
+            //                }
+            //            }
 
             Function function = new Function(dataverse, functionName, cfs.getFunctionSignature().getArity(),
                     cfs.getParamList(), Function.RETURNTYPE_VOID, cfs.getFunctionBody(),
-                    rewriterFactory instanceof SqlppRewriterFactory ? Function.LANGUAGE_SQLPP : Function.LANGUAGE_AQL,
+                    sqlFunction ? Function.LANGUAGE_SQLPP : Function.LANGUAGE_AQL,
                     FunctionKind.SCALAR.toString());
             MetadataManager.INSTANCE.addFunction(mdTxnCtx, function);
 
