@@ -28,8 +28,8 @@ RecordConstructor [
             FunctionCall asterix.resolve@-1[
               LiteralExpr [STRING] [profit]
               Variable [ Name=$g ]
-              Variable [ Name=$nation ]
               Variable [ Name=$o_year ]
+              Variable [ Name=$nation ]
             ]
             ]
             FROM [              Variable [ Name=$g ]

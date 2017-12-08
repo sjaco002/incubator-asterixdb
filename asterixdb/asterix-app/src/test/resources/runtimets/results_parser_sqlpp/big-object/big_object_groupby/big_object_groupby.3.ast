@@ -15,8 +15,8 @@ RecordConstructor [
       SELECT ELEMENT [
       FunctionCall asterix.resolve@-1[
         LiteralExpr [STRING] [i]
-        Variable [ Name=$partkey ]
         Variable [ Name=$g ]
+        Variable [ Name=$partkey ]
       ]
       ]
       FROM [        Variable [ Name=$g ]

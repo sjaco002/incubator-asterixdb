@@ -64,8 +64,8 @@ FROM [  (
                       SELECT ELEMENT [
                       FunctionCall asterix.resolve@-1[
                         LiteralExpr [STRING] [l]
-                        Variable [ Name=$l_suppkey ]
                         Variable [ Name=$g ]
+                        Variable [ Name=$l_suppkey ]
                         Variable [ Name=$l_partkey ]
                       ]
                       ]

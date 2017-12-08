@@ -54,18 +54,18 @@ FROM [  FunctionCall asterix.dataset@1[
   FunctionCall fuzzyjoin.subset-collection@3[
     FunctionCall asterix.resolve@-1[
       LiteralExpr [STRING] [tokensCSX]
+      Variable [ Name=$paperCSX ]
       Variable [ Name=$prefixTokenDBLP ]
       Variable [ Name=$paperDBLP ]
-      Variable [ Name=$paperCSX ]
     ]
     LiteralExpr [LONG] [0]
     FunctionCall fuzzyjoin.prefix-len-jaccard@2[
       FunctionCall fuzzyjoin.len@1[
         FunctionCall asterix.resolve@-1[
           LiteralExpr [STRING] [tokensCSX]
+          Variable [ Name=$paperCSX ]
           Variable [ Name=$prefixTokenDBLP ]
           Variable [ Name=$paperDBLP ]
-          Variable [ Name=$paperCSX ]
         ]
       ]
       LiteralExpr [FLOAT] [0.5]

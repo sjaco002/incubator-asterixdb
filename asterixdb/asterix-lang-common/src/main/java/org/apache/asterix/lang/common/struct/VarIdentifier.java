@@ -22,14 +22,12 @@ import org.apache.commons.lang3.ObjectUtils;
 
 public final class VarIdentifier extends Identifier {
     private int id = 0;
-    private boolean namedValueAccess = false;
 
     public VarIdentifier() {
-        super();
     }
 
     public VarIdentifier(VarIdentifier v){
-        this(v.getValue(), v.getId(), v.namedValueAccess());
+        this(v.getValue(), v.getId());
     }
 
     public VarIdentifier(String value) {
@@ -37,16 +35,9 @@ public final class VarIdentifier extends Identifier {
     }
 
     public VarIdentifier(String value, int id) {
-        this(value, id, false);
-    }
-
-    private VarIdentifier(String value, int id, boolean namedValueAccess) {
-        super();
         this.value = value;
         this.id = id;
-        this.namedValueAccess = namedValueAccess;
     }
-
 
     public void setId(int id) {
         this.id = id;
@@ -58,17 +49,7 @@ public final class VarIdentifier extends Identifier {
 
     @Override
     public VarIdentifier clone() {
-        VarIdentifier vi = new VarIdentifier(this.value);
-        vi.setId(this.id);
-        return vi;
-    }
-
-    public void setNamedValueAccess(boolean namedValueAccess) {
-        this.namedValueAccess = namedValueAccess;
-    }
-
-    public boolean namedValueAccess() {
-        return namedValueAccess;
+        return new VarIdentifier(value, id);
     }
 
     @Override

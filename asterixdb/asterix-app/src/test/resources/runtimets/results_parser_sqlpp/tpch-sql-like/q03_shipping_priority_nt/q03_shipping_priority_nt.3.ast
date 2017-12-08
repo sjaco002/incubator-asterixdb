@@ -147,8 +147,8 @@ Let Variable [ Name=$revenue ]
           SELECT ELEMENT [
           FunctionCall asterix.resolve@-1[
             LiteralExpr [STRING] [l]
-            Variable [ Name=$o_shippriority ]
             Variable [ Name=$g ]
+            Variable [ Name=$o_shippriority ]
             Variable [ Name=$o_orderdate ]
             Variable [ Name=$l_orderkey ]
           ]

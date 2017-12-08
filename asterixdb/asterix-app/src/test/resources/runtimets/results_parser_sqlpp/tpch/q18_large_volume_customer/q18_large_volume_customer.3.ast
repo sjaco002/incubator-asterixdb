@@ -43,11 +43,11 @@ RecordConstructor [
             FunctionCall asterix.resolve@-1[
               LiteralExpr [STRING] [l]
               Variable [ Name=$g ]
-              Variable [ Name=$o_orderdate ]
-              Variable [ Name=$c_name ]
-              Variable [ Name=$o_orderkey ]
               Variable [ Name=$o_totalprice ]
+              Variable [ Name=$o_orderdate ]
+              Variable [ Name=$o_orderkey ]
               Variable [ Name=$c_custkey ]
+              Variable [ Name=$c_name ]
             ]
             ]
             FROM [              Variable [ Name=$g ]
@@ -94,10 +94,10 @@ FROM [  FunctionCall asterix.dataset@1[
                 SELECT ELEMENT [
                 FunctionCall asterix.resolve@-1[
                   LiteralExpr [STRING] [l]
-                  Variable [ Name=$o ]
-                  Variable [ Name=$l_orderkey ]
                   Variable [ Name=$g2 ]
                   Variable [ Name=$c ]
+                  Variable [ Name=$o ]
+                  Variable [ Name=$l_orderkey ]
                 ]
                 ]
                 FROM [                  Variable [ Name=$g2 ]
