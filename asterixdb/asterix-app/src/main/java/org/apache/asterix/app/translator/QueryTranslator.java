@@ -127,6 +127,7 @@ import org.apache.asterix.lang.common.statement.TypeDropStatement;
 import org.apache.asterix.lang.common.statement.WriteStatement;
 import org.apache.asterix.lang.common.struct.Identifier;
 import org.apache.asterix.lang.sqlpp.rewrites.SqlppRewriterFactory;
+import org.apache.asterix.lang.sqlpp.util.SqlppRewriteUtil;
 import org.apache.asterix.metadata.IDatasetDetails;
 import org.apache.asterix.metadata.MetadataManager;
 import org.apache.asterix.metadata.MetadataTransactionContext;
@@ -1684,14 +1685,22 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
         metadataProvider.setMetadataTxnContext(mdTxnCtx);
         MetadataLockUtil.functionStatementBegin(lockManager, metadataProvider.getLocks(), dataverse,
                 dataverse + "." + functionName);
+        boolean sqlFunction = rewriterFactory instanceof SqlppRewriterFactory;
         try {
             Dataverse dv = MetadataManager.INSTANCE.getDataverse(mdTxnCtx, dataverse);
             if (dv == null) {
                 throw new AlgebricksException("There is no dataverse with this name " + dataverse + ".");
             }
+
+            //Test compilation of the function
+            if (sqlFunction) {
+                Query q = SqlppRewriteUtil.createQueryToTestFunction(cfs);
+                apiFramework.reWriteQuery(declaredFunctions, metadataProvider, q, sessionOutput);
+            }
+
             Function function = new Function(dataverse, functionName, cfs.getFunctionSignature().getArity(),
                     cfs.getParamList(), Function.RETURNTYPE_VOID, cfs.getFunctionBody(),
-                    rewriterFactory instanceof SqlppRewriterFactory ? Function.LANGUAGE_SQLPP : Function.LANGUAGE_AQL,
+                    sqlFunction ? Function.LANGUAGE_SQLPP : Function.LANGUAGE_AQL,
                     FunctionKind.SCALAR.toString());
             MetadataManager.INSTANCE.addFunction(mdTxnCtx, function);
 
@@ -1736,7 +1745,7 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
         try {
             Function function = MetadataManager.INSTANCE.getFunction(mdTxnCtx, signature);
             if (function == null && !stmtDropFunction.getIfExists()) {
-                throw new AlgebricksException("Unknonw function " + signature);
+                throw AsterixException.create(ErrorCode.UNKNOWN_FUNCTION, signature);
             } else if (checkWhetherFunctionIsBeingUsed(mdTxnCtx, signature.getNamespace(), signature.getName(),
                     signature.getArity(), null)) {
                 throw new MetadataException(ErrorCode.METADATA_DROP_FUCTION_IN_USE, signature);

@@ -39,6 +39,6 @@ public interface IQueryRewriter {
      * @param context,
      *            manages ids of variables and guarantees uniqueness of variables.
      */
-    public void rewrite(List<FunctionDecl> declaredFunctions, IReturningStatement topExpr,
+    void rewrite(List<FunctionDecl> declaredFunctions, IReturningStatement topExpr,
             MetadataProvider metadataProvider, LangRewritingContext context) throws CompilationException;
 }

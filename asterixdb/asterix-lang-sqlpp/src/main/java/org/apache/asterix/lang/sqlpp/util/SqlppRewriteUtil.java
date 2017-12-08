@@ -18,20 +18,40 @@
  */
 package org.apache.asterix.lang.sqlpp.util;
 
+import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
 import org.apache.asterix.common.exceptions.CompilationException;
+import org.apache.asterix.common.functions.FunctionSignature;
 import org.apache.asterix.lang.common.base.Expression;
 import org.apache.asterix.lang.common.base.ILangExpression;
+import org.apache.asterix.lang.common.clause.LetClause;
+import org.apache.asterix.lang.common.expression.CallExpr;
+import org.apache.asterix.lang.common.expression.LiteralExpr;
 import org.apache.asterix.lang.common.expression.VariableExpr;
+import org.apache.asterix.lang.common.literal.StringLiteral;
 import org.apache.asterix.lang.common.rewrites.LangRewritingContext;
+import org.apache.asterix.lang.common.statement.CreateFunctionStatement;
 import org.apache.asterix.lang.common.statement.Query;
+import org.apache.asterix.lang.common.struct.VarIdentifier;
+import org.apache.asterix.lang.sqlpp.clause.FromClause;
+import org.apache.asterix.lang.sqlpp.clause.FromTerm;
+import org.apache.asterix.lang.sqlpp.clause.Projection;
+import org.apache.asterix.lang.sqlpp.clause.SelectBlock;
+import org.apache.asterix.lang.sqlpp.clause.SelectClause;
+import org.apache.asterix.lang.sqlpp.clause.SelectRegular;
+import org.apache.asterix.lang.sqlpp.clause.SelectSetOperation;
+import org.apache.asterix.lang.sqlpp.expression.SelectExpression;
+import org.apache.asterix.lang.sqlpp.struct.SetOperationInput;
 import org.apache.asterix.lang.sqlpp.visitor.CheckSubqueryVisitor;
 import org.apache.asterix.lang.sqlpp.visitor.DeepCopyVisitor;
 import org.apache.asterix.lang.sqlpp.visitor.FreeVariableVisitor;
 import org.apache.asterix.lang.sqlpp.visitor.SqlppSubstituteExpressionVisitor;
+import org.apache.asterix.om.functions.BuiltinFunctions;
+import org.apache.hyracks.algebricks.core.algebra.functions.FunctionIdentifier;
 
 public class SqlppRewriteUtil {
 
@@ -89,4 +109,62 @@ public class SqlppRewriteUtil {
         wrapper.accept(visitor, wrapper);
         return wrapper.getBody();
     }
+
+    /**
+     *
+     * Creates a set of lets to represent the parameters of a functions
+     * Enabling the function to be compiled to test for usability
+     *
+     * @param cfs
+     *            The statement that is trying to create a function
+     * @return List<LetClause>
+     */
+    public static List<LetClause> createLetsToTestFunction(CreateFunctionStatement cfs) {
+        List<LetClause> lets = new ArrayList<>();
+        FunctionIdentifier getJobParameter = BuiltinFunctions.GET_JOB_PARAMETER;
+        FunctionSignature sig = new FunctionSignature(getJobParameter.getNamespace(), getJobParameter.getName(),
+                getJobParameter.getArity());
+
+        List<VariableExpr> varList = new ArrayList<>();
+        List<String> vars = cfs.getParamList();
+        for (int i = 0; i < vars.size(); i++) {
+            varList.add(new VariableExpr(new VarIdentifier(vars.get(i), i)));
+        }
+
+        for (VariableExpr var : varList) {
+            List<Expression> strListForCall = new ArrayList<>();
+            LiteralExpr l = new LiteralExpr(new StringLiteral(var.getVar().getValue()));
+            strListForCall.add(l);
+            Expression con = new CallExpr(sig, strListForCall);
+            LetClause let = new LetClause(var, con);
+            lets.add(let);
+        }
+        return lets;
+    }
+
+    /**
+     *
+     * Creates a query to test usability of function by compilation
+     *
+     * @param cfs
+     *            The statement that is trying to create a function
+     * @return Query
+     */
+    public static Query createQueryToTestFunction(CreateFunctionStatement cfs) {
+        List<FromTerm> froms = new ArrayList<>();
+        FromTerm ft = new FromTerm(cfs.getFunctionBodyExpression(), new VariableExpr(new VarIdentifier()), null, null);
+        froms.add(ft);
+        FromClause from = new FromClause(froms);
+        Projection p = new Projection(null, null, true, false);
+        List<Projection> ps = new ArrayList<>();
+        ps.add(p);
+        SelectClause selectClause = new SelectClause(null, new SelectRegular(ps), false);
+        SelectBlock block = new SelectBlock(selectClause, from, createLetsToTestFunction(cfs), null, null, null, null);
+        SelectSetOperation ssop = new SelectSetOperation(new SetOperationInput(block, null), null);
+        SelectExpression se = new SelectExpression(null, ssop, null, null, true);
+        Query q = new Query(false);
+        q.setBody(se);
+        return q;
+    }
+
 }

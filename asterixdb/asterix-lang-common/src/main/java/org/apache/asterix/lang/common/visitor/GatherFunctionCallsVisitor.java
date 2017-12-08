@@ -53,7 +53,7 @@ import org.apache.asterix.lang.common.visitor.base.AbstractQueryExpressionVisito
 
 public class GatherFunctionCallsVisitor extends AbstractQueryExpressionVisitor<Void, Void> {
 
-    protected final Set<FunctionSignature> calls = new HashSet<FunctionSignature>();
+    protected final Set<FunctionSignature> calls = new HashSet<>();
 
     @Override
     public Void visit(CallExpr pf, Void arg) throws CompilationException {
