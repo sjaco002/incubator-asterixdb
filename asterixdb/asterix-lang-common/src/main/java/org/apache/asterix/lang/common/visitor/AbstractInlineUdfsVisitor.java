@@ -321,7 +321,7 @@ public abstract class AbstractInlineUdfsVisitor extends AbstractQueryExpressionV
         return new Pair<>(changed, newList);
     }
 
-    protected Expression rewriteFunctionBody(Expression expr, List<VarIdentifier> paramList)
+    public Expression rewriteFunctionBody(Expression expr, List<VarIdentifier> paramList)
             throws CompilationException {
         Query wrappedQuery = new Query(false);
         wrappedQuery.setBody(expr);

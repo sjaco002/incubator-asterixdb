@@ -126,8 +126,9 @@ import org.apache.asterix.lang.common.statement.TypeDecl;
 import org.apache.asterix.lang.common.statement.TypeDropStatement;
 import org.apache.asterix.lang.common.statement.WriteStatement;
 import org.apache.asterix.lang.common.struct.Identifier;
+import org.apache.asterix.lang.common.struct.VarIdentifier;
+import org.apache.asterix.lang.common.util.MergePolicyUtils;
 import org.apache.asterix.lang.sqlpp.rewrites.SqlppRewriterFactory;
-import org.apache.asterix.lang.sqlpp.util.SqlppRewriteUtil;
 import org.apache.asterix.metadata.IDatasetDetails;
 import org.apache.asterix.metadata.MetadataManager;
 import org.apache.asterix.metadata.MetadataTransactionContext;
@@ -161,7 +162,6 @@ import org.apache.asterix.om.types.ARecordType;
 import org.apache.asterix.om.types.ATypeTag;
 import org.apache.asterix.om.types.IAType;
 import org.apache.asterix.om.types.TypeSignature;
-import org.apache.asterix.lang.common.util.MergePolicyUtils;
 import org.apache.asterix.transaction.management.service.transaction.DatasetIdFactory;
 import org.apache.asterix.translator.AbstractLangTranslator;
 import org.apache.asterix.translator.CompiledStatements.CompiledDeleteStatement;
@@ -1693,10 +1693,16 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
             }
 
             //Test compilation of the function
-            if (sqlFunction) {
-                Query q = SqlppRewriteUtil.createQueryToTestFunction(cfs);
-                apiFramework.reWriteQuery(declaredFunctions, metadataProvider, q, sessionOutput);
+
+            Query wrappedQuery = new Query(false);
+            wrappedQuery.setBody(cfs.getFunctionBodyExpression());
+            wrappedQuery.setTopLevel(false);
+            List<VarIdentifier> varIds = new ArrayList<>();
+            for (String v : cfs.getParamList()) {
+                varIds.add(new VarIdentifier(v));
             }
+            wrappedQuery.setExternalVars(varIds);
+            apiFramework.reWriteQuery(declaredFunctions, metadataProvider, wrappedQuery, sessionOutput);
 
             Function function = new Function(dataverse, functionName, cfs.getFunctionSignature().getArity(),
                     cfs.getParamList(), Function.RETURNTYPE_VOID, cfs.getFunctionBody(),
