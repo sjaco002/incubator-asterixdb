@@ -92,7 +92,7 @@ Let Variable [ Name=$tokensDBLP ]
         ]
       )
       AS Variable [ Name=$tokenRanked ]
- AT
+ AT 
 Variable [ Name=$i ]
     ]
     Where
@@ -143,7 +143,7 @@ Let Variable [ Name=$tokensCSX ]
         ]
       )
       AS Variable [ Name=$tokenRanked ]
- AT
+ AT 
 Variable [ Name=$i ]
     ]
     Where
@@ -176,6 +176,12 @@ Groupby
     prefixTokenDBLP:=Variable [ Name=$prefixTokenDBLP ]
     paperCSX:=Variable [ Name=$paperCSX ]
     prefixTokenCSX:=Variable [ Name=$prefixTokenCSX ]
+    idDBLP:=Variable [ Name=$idDBLP ]
+    unrankedTokensDBLP:=Variable [ Name=$unrankedTokensDBLP ]
+    tokensDBLP:=Variable [ Name=$tokensDBLP ]
+    idCSX:=Variable [ Name=$idCSX ]
+    unrankedTokensCSX:=Variable [ Name=$unrankedTokensCSX ]
+    tokensCSX:=Variable [ Name=$tokensCSX ]
   )
 
 Orderby

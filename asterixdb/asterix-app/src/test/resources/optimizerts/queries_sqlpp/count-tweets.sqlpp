@@ -39,5 +39,5 @@ select element {'word':tok,'count':count(token)}
 from  TwitterData as t,
       tokens as token
 with  tokens as twitter.`word-tokens`(t.text)
-group by token as tok
+group by token as tok group as g(t as t, token as token)
 ;

@@ -87,88 +87,6 @@ FunctionDecl q22_customer_tmp([]) {
 }
 
 Query:
-Let Variable [ Name=$avg ]
-  :=
-  FunctionCall asterix.avg@1[
-    (
-      SELECT ELEMENT [
-      FieldAccessor [
-        Variable [ Name=$c ]
-        Field=c_acctbal
-      ]
-      ]
-      FROM [        FunctionCall asterix.dataset@1[
-          LiteralExpr [STRING] [Customer]
-        ]
-        AS Variable [ Name=$c ]
-      ]
-      Let Variable [ Name=$phone_substr ]
-        :=
-        FunctionCall tpch.substring@3[
-          FieldAccessor [
-            Variable [ Name=$c ]
-            Field=c_phone
-          ]
-          LiteralExpr [LONG] [1]
-          LiteralExpr [LONG] [2]
-        ]
-      Where
-        OperatorExpr [
-          OperatorExpr [
-            FieldAccessor [
-              Variable [ Name=$c ]
-              Field=c_acctbal
-            ]
-            >
-            LiteralExpr [DOUBLE] [0.0]
-          ]
-          and
-          OperatorExpr [
-            OperatorExpr [
-              Variable [ Name=$phone_substr ]
-              =
-              LiteralExpr [STRING] [13]
-            ]
-            or
-            OperatorExpr [
-              Variable [ Name=$phone_substr ]
-              =
-              LiteralExpr [STRING] [31]
-            ]
-            or
-            OperatorExpr [
-              Variable [ Name=$phone_substr ]
-              =
-              LiteralExpr [STRING] [23]
-            ]
-            or
-            OperatorExpr [
-              Variable [ Name=$phone_substr ]
-              =
-              LiteralExpr [STRING] [29]
-            ]
-            or
-            OperatorExpr [
-              Variable [ Name=$phone_substr ]
-              =
-              LiteralExpr [STRING] [30]
-            ]
-            or
-            OperatorExpr [
-              Variable [ Name=$phone_substr ]
-              =
-              LiteralExpr [STRING] [18]
-            ]
-            or
-            OperatorExpr [
-              Variable [ Name=$phone_substr ]
-              =
-              LiteralExpr [STRING] [17]
-            ]
-          ]
-        ]
-    )
-  ]
 SELECT ELEMENT [
 RecordConstructor [
   (
@@ -206,10 +124,9 @@ RecordConstructor [
         ]
         FROM [          (
             SELECT ELEMENT [
-            FunctionCall asterix.resolve@-1[
-              LiteralExpr [STRING] [ct]
+            FunctionCall asterix.field-access-by-name@2[
               Variable [ Name=$g ]
-              Variable [ Name=$cntrycode ]
+              LiteralExpr [STRING] [ct]
             ]
             ]
             FROM [              Variable [ Name=$g ]
