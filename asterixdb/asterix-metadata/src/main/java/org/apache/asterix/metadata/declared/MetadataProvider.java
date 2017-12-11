@@ -144,7 +144,6 @@ public class MetadataProvider implements IMetadataProvider<DataSourceId, String>
     private final IStorageComponentProvider storageComponentProvider;
     private final StorageProperties storageProperties;
     private final IFunctionManager functionManager;
-    private final Dataverse defaultDataverse;
     private final LockList locks;
     private final Map<String, String> config;
 
@@ -154,6 +153,7 @@ public class MetadataProvider implements IMetadataProvider<DataSourceId, String>
     private FileSplit outputFile;
     private boolean asyncResults;
     private ResultSetId resultSetId;
+    private Dataverse defaultDataverse;
     private IResultSerializerFactoryProvider resultSerializerFactoryProvider;
     private TxnId txnId;
     private Map<String, Integer> externalDataLocks;
@@ -192,6 +192,10 @@ public class MetadataProvider implements IMetadataProvider<DataSourceId, String>
 
     public Dataverse getDefaultDataverse() {
         return defaultDataverse;
+    }
+
+    public void setDefaultDataverse(Dataverse defaultDataverse) {
+        this.defaultDataverse = defaultDataverse;
     }
 
     public String getDefaultDataverseName() {
