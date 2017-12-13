@@ -56,7 +56,6 @@ public class FunctionTupleTranslator extends AbstractTupleTranslator<Function> {
     // Payload field containing serialized Function.
     public static final int FUNCTION_PAYLOAD_TUPLE_FIELD_INDEX = 3;
 
-    @SuppressWarnings("unchecked")
     private ISerializerDeserializer<ARecord> recordSerDes =
             SerializerDeserializerProvider.INSTANCE.getSerializerDeserializer(MetadataRecordTypes.FUNCTION_RECORDTYPE);
 
@@ -104,8 +103,33 @@ public class FunctionTupleTranslator extends AbstractTupleTranslator<Function> {
         String functionKind =
                 ((AString) functionRecord.getValueByPos(MetadataRecordTypes.FUNCTION_ARECORD_FUNCTION_KIND_FIELD_INDEX))
                         .getStringValue();
+
+        IACursor dependenciesCursor = ((AOrderedList) functionRecord
+                .getValueByPos(MetadataRecordTypes.FUNCTION_ARECORD_FUNCTION_DEPENDENCIES_FIELD_INDEX)).getCursor();
+        List<List<List<String>>> dependencies = new ArrayList<>();
+        AOrderedList dependencyList;
+        AOrderedList quilifiedList;
+        int i = 0;
+        while (dependenciesCursor.next()) {
+            dependencies.add(new ArrayList<>());
+            dependencyList = (AOrderedList) dependenciesCursor.get();
+            IACursor qualifiedDependencyCursor = (dependencyList.getCursor());
+            int j = 0;
+            while (qualifiedDependencyCursor.next()) {
+                quilifiedList = (AOrderedList) qualifiedDependencyCursor.get();
+                IACursor qualifiedNameCursor = (quilifiedList.getCursor());
+                dependencies.get(i).add(new ArrayList<>());
+                while (qualifiedNameCursor.next()) {
+                    dependencies.get(i).get(j).add(((AString) qualifiedNameCursor.get()).getStringValue());
+                }
+                j++;
+            }
+            i++;
+
+        }
+
         return new Function(dataverseName, functionName, Integer.parseInt(arity), params, returnType, definition,
-                language, functionKind);
+                language, functionKind, dependencies);
 
     }
 

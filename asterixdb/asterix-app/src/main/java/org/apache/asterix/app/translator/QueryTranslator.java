@@ -26,6 +26,7 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.rmi.RemoteException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Date;
@@ -1706,13 +1707,13 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
                 varIds.add(new VarIdentifier(v));
             }
             wrappedQuery.setExternalVars(varIds);
-            apiFramework.reWriteQuery(declaredFunctions, metadataProvider, wrappedQuery, sessionOutput);
+            apiFramework.reWriteQuery(declaredFunctions, metadataProvider, wrappedQuery, sessionOutput, false);
 
             Set<CallExpr> functionCalls =
                     rewriterFactory.createQueryRewriter().getFunctionCalls(cfs.getFunctionBodyExpression());
 
             //Get the List of used functions and used datasets
-            List<List<Pair<String, String>>> dependencies = new ArrayList<>();
+            List<List<List<String>>> dependencies = new ArrayList<>();
             //dataset dependencies
             dependencies.add(new ArrayList<>());
             //functional dependencies
@@ -1724,14 +1725,15 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
                 if (fid.equals(BuiltinFunctions.DATASET)) {
                     Pair<String, String> path = MetadataBuiltinFunctions.getDatasetInfo(metadataProvider,
                             ((LiteralExpr) functionCall.getExprList().get(0)).getValue().getStringValue());
-                    dependencies.get(0).add(path);
+                    dependencies.get(0).add(new ArrayList<>(Arrays.asList(path.first, path.second)));
                 }
 
                 else if (BuiltinFunctions.isBuiltinCompilerFunction(
                         CommonFunctionMapUtil.normalizeBuiltinFunctionSignature(signature), false)) {
                     continue;
                 } else {
-                    dependencies.get(1).add(new Pair<>(signature.getNamespace(), signature.getName()));
+                    dependencies.get(1)
+                            .add(new ArrayList<>(Arrays.asList(signature.getNamespace(), signature.getName())));
                 }
             }
             metadataProvider.setDefaultDataverse(activeDataverse);
@@ -1739,7 +1741,7 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
             Function function = new Function(dataverse, functionName, cfs.getFunctionSignature().getArity(),
                     cfs.getParamList(), Function.RETURNTYPE_VOID, cfs.getFunctionBody(),
                     rewriterFactory instanceof SqlppRewriterFactory ? Function.LANGUAGE_SQLPP : Function.LANGUAGE_AQL,
-                    FunctionKind.SCALAR.toString());
+                    FunctionKind.SCALAR.toString(), dependencies);
             MetadataManager.INSTANCE.addFunction(mdTxnCtx, function);
 
             MetadataManager.INSTANCE.commitTransaction(mdTxnCtx);
@@ -1930,7 +1932,7 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
 
         // Query Rewriting (happens under the same ongoing metadata transaction)
         Pair<IReturningStatement, Integer> rewrittenResult =
-                apiFramework.reWriteQuery(declaredFunctions, metadataProvider, query, sessionOutput);
+                apiFramework.reWriteQuery(declaredFunctions, metadataProvider, query, sessionOutput, true);
 
         // Query Compilation (happens under the same ongoing metadata transaction)
         return apiFramework.compileQuery(clusterInfoCollector, metadataProvider, (Query) rewrittenResult.first,
@@ -1944,7 +1946,7 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
         // Insert/upsert statement rewriting (happens under the same ongoing metadata
         // transaction)
         Pair<IReturningStatement, Integer> rewrittenResult =
-                apiFramework.reWriteQuery(declaredFunctions, metadataProvider, insertUpsert, sessionOutput);
+                apiFramework.reWriteQuery(declaredFunctions, metadataProvider, insertUpsert, sessionOutput, true);
 
         InsertStatement rewrittenInsertUpsert = (InsertStatement) rewrittenResult.first;
         String dataverseName = getActiveDataverse(rewrittenInsertUpsert.getDataverseName());

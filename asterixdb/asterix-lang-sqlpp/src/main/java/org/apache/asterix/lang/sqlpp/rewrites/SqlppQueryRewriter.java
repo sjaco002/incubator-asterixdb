@@ -87,7 +87,8 @@ class SqlppQueryRewriter implements IQueryRewriter {
 
     @Override
     public void rewrite(List<FunctionDecl> declaredFunctions, IReturningStatement topStatement,
-            MetadataProvider metadataProvider, LangRewritingContext context) throws CompilationException {
+            MetadataProvider metadataProvider, LangRewritingContext context, boolean inlineUdfs)
+            throws CompilationException {
         if (topStatement == null) {
             return;
         }
@@ -127,7 +128,9 @@ class SqlppQueryRewriter implements IQueryRewriter {
         rewriteListInputFunctions();
 
         // Inlines functions.
-        inlineDeclaredUdfs();
+        if (inlineUdfs) {
+            inlineDeclaredUdfs();
+        }
 
         // Rewrites function names.
         // This should be done after inlineDeclaredUdfs() because user-defined function
