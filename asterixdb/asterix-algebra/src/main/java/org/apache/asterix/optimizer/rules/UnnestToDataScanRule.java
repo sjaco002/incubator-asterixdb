@@ -31,12 +31,12 @@ import org.apache.asterix.metadata.declared.DataSourceId;
 import org.apache.asterix.metadata.declared.FeedDataSource;
 import org.apache.asterix.metadata.declared.MetadataProvider;
 import org.apache.asterix.metadata.entities.Dataset;
-import org.apache.asterix.metadata.entities.Dataverse;
 import org.apache.asterix.metadata.entities.Feed;
 import org.apache.asterix.metadata.entities.FeedConnection;
 import org.apache.asterix.metadata.entities.FeedPolicyEntity;
 import org.apache.asterix.metadata.entities.InternalDatasetDetails;
 import org.apache.asterix.metadata.feeds.BuiltinFeedPolicies;
+import org.apache.asterix.metadata.functions.MetadataBuiltinFunctions;
 import org.apache.asterix.om.base.AString;
 import org.apache.asterix.om.constants.AsterixConstantValue;
 import org.apache.asterix.om.functions.BuiltinFunctions;
@@ -270,20 +270,10 @@ public class UnnestToDataScanRule implements IAlgebraicRewriteRule {
 
     private Pair<String, String> parseDatasetReference(MetadataProvider metadataProvider, String datasetArg)
             throws AlgebricksException {
-        String[] datasetNameComponents = datasetArg.split("\\.");
-        String dataverseName;
-        String datasetName;
-        if (datasetNameComponents.length == 1) {
-            Dataverse defaultDataverse = metadataProvider.getDefaultDataverse();
-            if (defaultDataverse == null) {
-                throw new AlgebricksException("Unresolved dataset " + datasetArg + " Dataverse not specified.");
-            }
-            dataverseName = defaultDataverse.getDataverseName();
-            datasetName = datasetNameComponents[0];
-        } else {
-            dataverseName = datasetNameComponents[0];
-            datasetName = datasetNameComponents[1];
+        Pair<String, String> path = MetadataBuiltinFunctions.getDatasetInfo(metadataProvider, datasetArg);
+        if (path.first == null) {
+            throw new AlgebricksException("Unresolved dataset " + datasetArg + " Dataverse not specified.");
         }
-        return new Pair<>(dataverseName, datasetName);
+        return path;
     }
 }

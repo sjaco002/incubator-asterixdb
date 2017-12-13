@@ -40,6 +40,7 @@ import org.apache.asterix.lang.common.base.IQueryRewriter;
 import org.apache.asterix.lang.common.base.IReturningStatement;
 import org.apache.asterix.lang.common.clause.GroupbyClause;
 import org.apache.asterix.lang.common.clause.LetClause;
+import org.apache.asterix.lang.common.expression.CallExpr;
 import org.apache.asterix.lang.common.expression.GbyVariableExpressionPair;
 import org.apache.asterix.lang.common.expression.VariableExpr;
 import org.apache.asterix.lang.common.rewrites.LangRewritingContext;
@@ -130,7 +131,8 @@ class AqlQueryRewriter implements IQueryRewriter {
         declaredFunctions.removeAll(storedFunctionDecls);
     }
 
-    private Set<FunctionSignature> getFunctionCalls(Expression expression) throws CompilationException {
+    @Override
+    public Set<CallExpr> getFunctionCalls(Expression expression) throws CompilationException {
         GatherFunctionCalls gfc = new GatherFunctionCalls();
         expression.accept(gfc, null);
         return gfc.getCalls();

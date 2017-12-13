@@ -169,7 +169,7 @@ public class MetadataBuiltinFunctions {
         }, true);
     }
 
-    private static Pair<String, String> getDatasetInfo(MetadataProvider metadata, String datasetArg) {
+    public static Pair<String, String> getDatasetInfo(MetadataProvider metadata, String datasetArg) {
         String[] nameComponents = datasetArg.split("\\.");
         String first;
         String second;
