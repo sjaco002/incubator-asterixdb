@@ -329,7 +329,7 @@ public abstract class AbstractInlineUdfsVisitor extends AbstractQueryExpressionV
         wrappedQuery.setExternalVars(paramList);
 
         IQueryRewriter queryRewriter = rewriterFactory.createQueryRewriter();
-        queryRewriter.rewrite(declaredFunctions, wrappedQuery, metadataProvider, context);
+        queryRewriter.rewrite(declaredFunctions, wrappedQuery, metadataProvider, context, true);
         return wrappedQuery.getBody();
     }
 

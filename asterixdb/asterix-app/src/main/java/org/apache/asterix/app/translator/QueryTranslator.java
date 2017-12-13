@@ -26,6 +26,7 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.rmi.RemoteException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Date;
@@ -86,6 +87,7 @@ import org.apache.asterix.lang.common.base.IReturningStatement;
 import org.apache.asterix.lang.common.base.IRewriterFactory;
 import org.apache.asterix.lang.common.base.IStatementRewriter;
 import org.apache.asterix.lang.common.base.Statement;
+import org.apache.asterix.lang.common.expression.CallExpr;
 import org.apache.asterix.lang.common.expression.FieldBinding;
 import org.apache.asterix.lang.common.expression.IndexedTypeExpression;
 import org.apache.asterix.lang.common.expression.LiteralExpr;
@@ -127,6 +129,7 @@ import org.apache.asterix.lang.common.statement.TypeDropStatement;
 import org.apache.asterix.lang.common.statement.WriteStatement;
 import org.apache.asterix.lang.common.struct.Identifier;
 import org.apache.asterix.lang.common.struct.VarIdentifier;
+import org.apache.asterix.lang.common.util.CommonFunctionMapUtil;
 import org.apache.asterix.lang.common.util.MergePolicyUtils;
 import org.apache.asterix.lang.sqlpp.rewrites.SqlppRewriterFactory;
 import org.apache.asterix.metadata.IDatasetDetails;
@@ -150,6 +153,7 @@ import org.apache.asterix.metadata.entities.Index;
 import org.apache.asterix.metadata.entities.InternalDatasetDetails;
 import org.apache.asterix.metadata.entities.NodeGroup;
 import org.apache.asterix.metadata.feeds.FeedMetadataUtil;
+import org.apache.asterix.metadata.functions.MetadataBuiltinFunctions;
 import org.apache.asterix.metadata.lock.ExternalDatasetsRegistry;
 import org.apache.asterix.metadata.utils.DatasetUtil;
 import org.apache.asterix.metadata.utils.ExternalIndexingOperations;
@@ -158,6 +162,7 @@ import org.apache.asterix.metadata.utils.KeyFieldTypeUtil;
 import org.apache.asterix.metadata.utils.MetadataConstants;
 import org.apache.asterix.metadata.utils.MetadataLockUtil;
 import org.apache.asterix.metadata.utils.MetadataUtil;
+import org.apache.asterix.om.functions.BuiltinFunctions;
 import org.apache.asterix.om.types.ARecordType;
 import org.apache.asterix.om.types.ATypeTag;
 import org.apache.asterix.om.types.IAType;
@@ -188,6 +193,7 @@ import org.apache.commons.lang3.tuple.Triple;
 import org.apache.hyracks.algebricks.common.exceptions.AlgebricksException;
 import org.apache.hyracks.algebricks.common.utils.Pair;
 import org.apache.hyracks.algebricks.core.algebra.expressions.AbstractFunctionCallExpression.FunctionKind;
+import org.apache.hyracks.algebricks.core.algebra.functions.FunctionIdentifier;
 import org.apache.hyracks.algebricks.data.IAWriterFactory;
 import org.apache.hyracks.algebricks.data.IResultSerializerFactoryProvider;
 import org.apache.hyracks.algebricks.runtime.serializer.ResultSerializerFactoryProvider;
@@ -1701,13 +1707,41 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
                 varIds.add(new VarIdentifier(v));
             }
             wrappedQuery.setExternalVars(varIds);
-            apiFramework.reWriteQuery(declaredFunctions, metadataProvider, wrappedQuery, sessionOutput);
+            apiFramework.reWriteQuery(declaredFunctions, metadataProvider, wrappedQuery, sessionOutput, false);
+
+            Set<CallExpr> functionCalls =
+                    rewriterFactory.createQueryRewriter().getFunctionCalls(cfs.getFunctionBodyExpression());
+
+            //Get the List of used functions and used datasets
+            List<List<List<String>>> dependencies = new ArrayList<>();
+            //dataset dependencies
+            dependencies.add(new ArrayList<>());
+            //functional dependencies
+            dependencies.add(new ArrayList<>());
+            for (CallExpr functionCall : functionCalls) {
+                FunctionSignature signature = functionCall.getFunctionSignature();
+                FunctionIdentifier fid =
+                        new FunctionIdentifier(signature.getNamespace(), signature.getName(), signature.getArity());
+                if (fid.equals(BuiltinFunctions.DATASET)) {
+                    Pair<String, String> path = MetadataBuiltinFunctions.getDatasetInfo(metadataProvider,
+                            ((LiteralExpr) functionCall.getExprList().get(0)).getValue().getStringValue());
+                    dependencies.get(0).add(new ArrayList<>(Arrays.asList(path.first, path.second)));
+                }
+
+                else if (BuiltinFunctions.isBuiltinCompilerFunction(
+                        CommonFunctionMapUtil.normalizeBuiltinFunctionSignature(signature), false)) {
+                    continue;
+                } else {
+                    dependencies.get(1)
+                            .add(new ArrayList<>(Arrays.asList(signature.getNamespace(), signature.getName())));
+                }
+            }
             metadataProvider.setDefaultDataverse(activeDataverse);
 
             Function function = new Function(dataverse, functionName, cfs.getFunctionSignature().getArity(),
                     cfs.getParamList(), Function.RETURNTYPE_VOID, cfs.getFunctionBody(),
                     rewriterFactory instanceof SqlppRewriterFactory ? Function.LANGUAGE_SQLPP : Function.LANGUAGE_AQL,
-                    FunctionKind.SCALAR.toString());
+                    FunctionKind.SCALAR.toString(), dependencies);
             MetadataManager.INSTANCE.addFunction(mdTxnCtx, function);
 
             MetadataManager.INSTANCE.commitTransaction(mdTxnCtx);
@@ -1898,7 +1932,7 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
 
         // Query Rewriting (happens under the same ongoing metadata transaction)
         Pair<IReturningStatement, Integer> rewrittenResult =
-                apiFramework.reWriteQuery(declaredFunctions, metadataProvider, query, sessionOutput);
+                apiFramework.reWriteQuery(declaredFunctions, metadataProvider, query, sessionOutput, true);
 
         // Query Compilation (happens under the same ongoing metadata transaction)
         return apiFramework.compileQuery(clusterInfoCollector, metadataProvider, (Query) rewrittenResult.first,
@@ -1912,7 +1946,7 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
         // Insert/upsert statement rewriting (happens under the same ongoing metadata
         // transaction)
         Pair<IReturningStatement, Integer> rewrittenResult =
-                apiFramework.reWriteQuery(declaredFunctions, metadataProvider, insertUpsert, sessionOutput);
+                apiFramework.reWriteQuery(declaredFunctions, metadataProvider, insertUpsert, sessionOutput, true);
 
         InsertStatement rewrittenInsertUpsert = (InsertStatement) rewrittenResult.first;
         String dataverseName = getActiveDataverse(rewrittenInsertUpsert.getDataverseName());
