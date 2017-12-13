@@ -27,6 +27,7 @@ import org.apache.asterix.common.exceptions.CompilationException;
 import org.apache.asterix.common.functions.FunctionConstants;
 import org.apache.asterix.common.functions.FunctionSignature;
 import org.apache.asterix.lang.common.base.Expression;
+import org.apache.asterix.lang.common.expression.CallExpr;
 import org.apache.asterix.lang.common.statement.FunctionDecl;
 import org.apache.asterix.metadata.MetadataManager;
 import org.apache.asterix.metadata.MetadataTransactionContext;
@@ -52,7 +53,7 @@ public class FunctionUtil {
 
     @FunctionalInterface
     public interface IFunctionCollector {
-        Set<FunctionSignature> getFunctionCalls(Expression expression) throws CompilationException;
+        Set<CallExpr> getFunctionCalls(Expression expression) throws CompilationException;
     }
 
     @FunctionalInterface
@@ -95,8 +96,9 @@ public class FunctionUtil {
         }
         String value = metadataProvider.getConfig().get(FunctionUtil.IMPORT_PRIVATE_FUNCTIONS);
         boolean includePrivateFunctions = (value != null) ? Boolean.valueOf(value.toLowerCase()) : false;
-        Set<FunctionSignature> functionCalls = functionCollector.getFunctionCalls(expression);
-        for (FunctionSignature signature : functionCalls) {
+        Set<CallExpr> functionCalls = functionCollector.getFunctionCalls(expression);
+        for (CallExpr functionCall : functionCalls) {
+            FunctionSignature signature = functionCall.getFunctionSignature();
             if (declaredFunctions != null && declaredFunctions.contains(signature)) {
                 continue;
             }
