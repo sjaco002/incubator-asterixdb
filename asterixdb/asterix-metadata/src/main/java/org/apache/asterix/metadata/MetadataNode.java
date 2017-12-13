@@ -27,7 +27,6 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.logging.Logger;
 
 import org.apache.asterix.common.api.IDatasetLifecycleManager;
 import org.apache.asterix.common.api.INcApplicationContext;
@@ -271,7 +270,6 @@ public class MetadataNode implements IMetadataNode {
         }
     }
 
-    @SuppressWarnings("unchecked")
     @Override
     public <T extends IExtensionMetadataEntity> void addEntity(TxnId txnId, T entity)
             throws AlgebricksException, RemoteException {
@@ -283,7 +281,6 @@ public class MetadataNode implements IMetadataNode {
         addEntity(txnId, entity, tupleTranslator, index);
     }
 
-    @SuppressWarnings("unchecked")
     @Override
     public <T extends IExtensionMetadataEntity> void upsertEntity(TxnId txnId, T entity)
             throws AlgebricksException, RemoteException {
@@ -295,7 +292,6 @@ public class MetadataNode implements IMetadataNode {
         upsertEntity(txnId, entity, tupleTranslator, index);
     }
 
-    @SuppressWarnings("unchecked")
     @Override
     public <T extends IExtensionMetadataEntity> void deleteEntity(TxnId txnId, T entity)
             throws AlgebricksException, RemoteException {
@@ -307,7 +303,6 @@ public class MetadataNode implements IMetadataNode {
         deleteEntity(txnId, entity, tupleTranslator, index);
     }
 
-    @SuppressWarnings("unchecked")
     @Override
     public <T extends IExtensionMetadataEntity> List<T> getEntities(TxnId txnId, IExtensionMetadataSearchKey searchKey)
             throws AlgebricksException, RemoteException {
@@ -530,13 +525,22 @@ public class MetadataNode implements IMetadataNode {
 
             confirmDataverseCanBeDeleted(txnId, dataverseName);
 
+            // As a side effect, acquires an S lock on the 'Function' dataset
+            // on behalf of txnId.
+            List<Function> dataverseFunctions = getDataverseFunctions(txnId, dataverseName);
+            // Drop all functions in this dataverse.
+            for (Function function : dataverseFunctions) {
+                dropFunction(txnId, new FunctionSignature(dataverseName, function.getName(), function.getArity()),
+                        true);
+            }
+
             List<Dataset> dataverseDatasets;
             Dataset ds;
             dataverseDatasets = getDataverseDatasets(txnId, dataverseName);
             // Drop all datasets in this dataverse.
             for (int i = 0; i < dataverseDatasets.size(); i++) {
                 ds = dataverseDatasets.get(i);
-                dropDataset(txnId, dataverseName, ds.getDatasetName());
+                dropDataset(txnId, dataverseName, ds.getDatasetName(), true);
             }
 
             // After dropping datasets, drop datatypes
@@ -547,14 +551,6 @@ public class MetadataNode implements IMetadataNode {
             // Drop all types in this dataverse.
             for (int i = 0; i < dataverseDatatypes.size(); i++) {
                 forceDropDatatype(txnId, dataverseName, dataverseDatatypes.get(i).getDatatypeName());
-            }
-
-            // As a side effect, acquires an S lock on the 'Function' dataset
-            // on behalf of txnId.
-            List<Function> dataverseFunctions = getDataverseFunctions(txnId, dataverseName);
-            // Drop all functions in this dataverse.
-            for (Function function : dataverseFunctions) {
-                dropFunction(txnId, new FunctionSignature(dataverseName, function.getName(), function.getArity()));
             }
 
             // As a side effect, acquires an S lock on the 'Adapter' dataset
@@ -612,6 +608,16 @@ public class MetadataNode implements IMetadataNode {
     @Override
     public void dropDataset(TxnId txnId, String dataverseName, String datasetName)
             throws AlgebricksException, RemoteException {
+        dropDataset(txnId, dataverseName, datasetName, false);
+    }
+
+    public void dropDataset(TxnId txnId, String dataverseName, String datasetName, boolean force)
+            throws AlgebricksException, RemoteException {
+
+        if (!force) {
+            confirmDatasetCanBeDeleted(txnId, dataverseName, datasetName);
+        }
+
         Dataset dataset = getDataset(txnId, dataverseName, datasetName);
         if (dataset == null) {
             throw new AlgebricksException("Cannot drop dataset '" + datasetName + "' because it doesn't exist.");
@@ -905,6 +911,19 @@ public class MetadataNode implements IMetadataNode {
         }
     }
 
+    public List<Function> getAllFunctions(TxnId txnId) throws AlgebricksException, RemoteException {
+        try {
+            ITupleReference searchKey = null;
+            FunctionTupleTranslator tupleReaderWriter = tupleTranslatorProvider.getFunctionTupleTranslator(false);
+            IValueExtractor<Function> valueExtractor = new MetadataEntityValueExtractor<>(tupleReaderWriter);
+            List<Function> results = new ArrayList<>();
+            searchIndex(txnId, MetadataPrimaryIndexes.FUNCTION_DATASET, searchKey, valueExtractor, results);
+            return results;
+        } catch (HyracksDataException e) {
+            throw new AlgebricksException(e);
+        }
+    }
+
     public List<Datatype> getAllDatatypes(TxnId txnId) throws AlgebricksException, RemoteException {
         try {
             ITupleReference searchKey = null;
@@ -933,6 +952,62 @@ public class MetadataNode implements IMetadataNode {
                 throw new AlgebricksException(
                         "Cannot drop dataverse. Type " + dataverseName + "." + set.getItemTypeName()
                                 + " used by dataset " + set.getDataverseName() + "." + set.getDatasetName());
+            }
+        }
+
+        // If a function from a DIFFERENT dataverse
+        // uses functions or datatypes from this dataverse
+        // throw an error
+        List<Function> functions = getAllFunctions(txnId);
+        for (Function function : functions) {
+            if (function.getDataverseName().equals(dataverseName)) {
+                continue;
+            }
+            for (List<String> datasetDependency : function.getDependencies().get(0)) {
+                if (datasetDependency.get(0).equals(dataverseName)) {
+                    throw new AlgebricksException("Cannot drop dataverse. Function " + function.getDataverseName() + "."
+                            + function.getName() + "@" + function.getArity() + " depends on dataset "
+                            + datasetDependency.get(0) + "." + datasetDependency.get(1));
+                }
+            }
+            for (List<String> functionDependency : function.getDependencies().get(1)) {
+                if (functionDependency.get(0).equals(dataverseName)) {
+                    throw new AlgebricksException(
+                            "Cannot drop dataverse. Function " + function.getDataverseName() + "." + function.getName()
+                                    + "@" + function.getArity() + " depends on function " + functionDependency.get(0)
+                                    + "." + functionDependency.get(1) + "@" + functionDependency.get(2));
+                }
+            }
+        }
+    }
+
+    private void confirmFunctionCanBeDeleted(TxnId txnId, FunctionSignature signature)
+            throws AlgebricksException, RemoteException {
+        // If any other function uses this function, throw an error
+        List<Function> functions = getAllFunctions(txnId);
+        for (Function function : functions) {
+            for (List<String> functionalDependency : function.getDependencies().get(1)) {
+                if (functionalDependency.get(0).equals(signature.getNamespace())
+                        && functionalDependency.get(1).equals(signature.getName())
+                        && functionalDependency.get(2).equals(Integer.toString(signature.getArity()))) {
+                    throw new AlgebricksException("Cannot drop function " + signature + " being used by function "
+                            + function.getDataverseName() + "." + function.getName() + "@" + function.getArity());
+                }
+            }
+        }
+    }
+
+    private void confirmDatasetCanBeDeleted(TxnId txnId, String dataverseName, String datasetName)
+            throws AlgebricksException, RemoteException {
+        // If any function uses this type, throw an error
+        List<Function> functions = getAllFunctions(txnId);
+        for (Function function : functions) {
+            for (List<String> datasetDependency : function.getDependencies().get(0)) {
+                if (datasetDependency.get(0).equals(dataverseName) && datasetDependency.get(1).equals(datasetName)) {
+                    throw new AlgebricksException("Cannot drop dataset " + dataverseName + "." + datasetName
+                            + " being used by function " + function.getDataverseName() + "." + function.getName() + "@"
+                            + function.getArity());
+                }
             }
         }
     }
@@ -1126,6 +1201,15 @@ public class MetadataNode implements IMetadataNode {
     @Override
     public void dropFunction(TxnId txnId, FunctionSignature functionSignature)
             throws AlgebricksException, RemoteException {
+        dropFunction(txnId, functionSignature, false);
+    }
+
+    private void dropFunction(TxnId txnId, FunctionSignature functionSignature, boolean force)
+            throws AlgebricksException, RemoteException {
+
+        if (!force) {
+            confirmFunctionCanBeDeleted(txnId, functionSignature);
+        }
 
         Function function = getFunction(txnId, functionSignature);
 
@@ -1332,7 +1416,6 @@ public class MetadataNode implements IMetadataNode {
     // TODO: Can use Hyrack's TupleUtils for this, once we switch to a newer
     // Hyracks version.
     public static ITupleReference createTuple(String... fields) {
-        @SuppressWarnings("unchecked")
         ISerializerDeserializer<AString> stringSerde =
                 SerializerDeserializerProvider.INSTANCE.getSerializerDeserializer(BuiltinType.ASTRING);
         AMutableString aString = new AMutableString("");
@@ -1839,7 +1922,6 @@ public class MetadataNode implements IMetadataNode {
 
     // This method is used to create a search tuple for external data file since the
     // search tuple has an int value
-    @SuppressWarnings("unchecked")
     public ITupleReference createExternalFileSearchTuple(String dataverseName, String datasetName, int fileNumber)
             throws HyracksDataException {
         ISerializerDeserializer<AString> stringSerde =
