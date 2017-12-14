@@ -67,6 +67,10 @@ public class Function implements IMetadataEntity<Function> {
         return params;
     }
 
+    public List<List<List<String>>> getDependencies() {
+        return dependencies;
+    }
+
     public String getFunctionBody() {
         return body;
     }
