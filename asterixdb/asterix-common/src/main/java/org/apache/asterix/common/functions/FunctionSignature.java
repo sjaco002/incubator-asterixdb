@@ -57,7 +57,7 @@ public class FunctionSignature implements Serializable {
 
     @Override
     public int hashCode() {
-        return (namespace + "." + name + "@" + arity).hashCode();
+        return (namespace + "." + name).hashCode();
     }
 
     public String getNamespace() {
