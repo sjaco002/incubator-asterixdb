@@ -41,6 +41,7 @@ import org.apache.asterix.common.cluster.IClusterStateManager;
 import org.apache.asterix.common.dataflow.ICcApplicationContext;
 import org.apache.asterix.common.exceptions.ErrorCode;
 import org.apache.asterix.common.exceptions.RuntimeDataException;
+import org.apache.asterix.common.functions.FunctionSignature;
 import org.apache.asterix.common.messaging.api.ICCMessageBroker;
 import org.apache.asterix.common.messaging.api.INcAddressedMessage;
 import org.apache.asterix.common.metadata.IDataset;
@@ -77,6 +78,7 @@ public abstract class ActiveEntityEventsListener implements IActiveEntityControl
     protected final IHyracksClientConnection hcc;
     protected final EntityId entityId;
     private final List<Dataset> datasets;
+    private final List<FunctionSignature> functions;
     protected final ActiveEvent statsUpdatedEvent;
     protected final String runtimeName;
     protected final IRetryPolicyFactory retryPolicyFactory;
@@ -100,7 +102,7 @@ public abstract class ActiveEntityEventsListener implements IActiveEntityControl
     protected Exception recoverFailure;
 
     public ActiveEntityEventsListener(IStatementExecutor statementExecutor, ICcApplicationContext appCtx,
-            IHyracksClientConnection hcc, EntityId entityId, List<Dataset> datasets,
+            IHyracksClientConnection hcc, EntityId entityId, List<Dataset> datasets, List<FunctionSignature> functions,
             AlgebricksAbsolutePartitionConstraint locations, String runtimeName, IRetryPolicyFactory retryPolicyFactory)
             throws HyracksDataException {
         this.statementExecutor = statementExecutor;
@@ -110,6 +112,7 @@ public abstract class ActiveEntityEventsListener implements IActiveEntityControl
         this.hcc = hcc;
         this.entityId = entityId;
         this.datasets = datasets;
+        this.functions = functions;
         this.retryPolicyFactory = retryPolicyFactory;
         this.state = ActivityState.STOPPED;
         this.statsTimestamp = -1;
@@ -178,7 +181,6 @@ public abstract class ActiveEntityEventsListener implements IActiveEntityControl
         }
     }
 
-    @SuppressWarnings("unchecked")
     protected void finish(ActiveEvent event) throws HyracksDataException {
         LOGGER.log(level, "the job " + jobId + " finished");
         if (numRegistered != numDeRegistered) {
@@ -233,6 +235,11 @@ public abstract class ActiveEntityEventsListener implements IActiveEntityControl
     }
 
     @Override
+    public synchronized boolean dependsOnFunction(FunctionSignature function) {
+        return getFunctions().contains(function);
+    }
+
+    @Override
     public synchronized void remove(Dataset dataset) throws HyracksDataException {
         if (isActive()) {
             throw new RuntimeDataException(ErrorCode.CANNOT_REMOVE_DATASET_FROM_ACTIVE_ENTITY, entityId, state);
@@ -272,7 +279,6 @@ public abstract class ActiveEntityEventsListener implements IActiveEntityControl
         return strBuilder.toString();
     }
 
-    @SuppressWarnings("unchecked")
     @Override
     public void refreshStats(long timeout) throws HyracksDataException {
         LOGGER.log(level, "refreshStats called");
@@ -537,6 +543,11 @@ public abstract class ActiveEntityEventsListener implements IActiveEntityControl
     @Override
     public List<Dataset> getDatasets() {
         return datasets;
+    }
+
+    @Override
+    public List<FunctionSignature> getFunctions() {
+        return functions;
     }
 
     @Override

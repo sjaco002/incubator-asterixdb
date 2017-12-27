@@ -30,6 +30,7 @@ import org.apache.asterix.active.IRetryPolicyFactory;
 import org.apache.asterix.app.active.ActiveEntityEventsListener;
 import org.apache.asterix.common.api.IMetadataLockManager;
 import org.apache.asterix.common.dataflow.ICcApplicationContext;
+import org.apache.asterix.common.functions.FunctionSignature;
 import org.apache.asterix.common.metadata.LockList;
 import org.apache.asterix.external.feed.watch.WaitForStateSubscriber;
 import org.apache.asterix.metadata.declared.MetadataProvider;
@@ -63,11 +64,12 @@ public class TestEventsListener extends ActiveEntityEventsListener {
     private Behavior onStop = Behavior.FAIL_COMPILE;
 
     public TestEventsListener(TestClusterControllerActor clusterController, TestNodeControllerActor[] nodeControllers,
-            JobIdFactory jobIdFactory, EntityId entityId, List<Dataset> datasets, IStatementExecutor statementExecutor,
-            ICcApplicationContext appCtx, IHyracksClientConnection hcc, AlgebricksAbsolutePartitionConstraint locations,
-            IRetryPolicyFactory retryPolicyFactory) throws HyracksDataException {
-        super(statementExecutor, appCtx, hcc, entityId, datasets, locations, TestEventsListener.class.getSimpleName(),
-                retryPolicyFactory);
+            JobIdFactory jobIdFactory, EntityId entityId, List<Dataset> datasets, List<FunctionSignature> functions,
+            IStatementExecutor statementExecutor, ICcApplicationContext appCtx, IHyracksClientConnection hcc,
+            AlgebricksAbsolutePartitionConstraint locations, IRetryPolicyFactory retryPolicyFactory)
+            throws HyracksDataException {
+        super(statementExecutor, appCtx, hcc, entityId, datasets, functions, locations,
+                TestEventsListener.class.getSimpleName(), retryPolicyFactory);
         this.clusterController = clusterController;
         this.nodeControllers = nodeControllers;
         this.jobIdFactory = jobIdFactory;
@@ -84,7 +86,6 @@ public class TestEventsListener extends ActiveEntityEventsListener {
         }
     }
 
-    @SuppressWarnings("deprecation")
     private void failCompile(Behavior behavior) throws HyracksDataException {
         if (behavior == Behavior.FAIL_COMPILE || behavior == Behavior.STEP_FAIL_COMPILE) {
             throw new HyracksDataException("Compilation Failure");
@@ -103,7 +104,6 @@ public class TestEventsListener extends ActiveEntityEventsListener {
         }
     }
 
-    @SuppressWarnings("deprecation")
     @Override
     protected void doStart(MetadataProvider metadataProvider) throws HyracksDataException {
         step(onStart);
@@ -142,7 +142,6 @@ public class TestEventsListener extends ActiveEntityEventsListener {
         }
     }
 
-    @SuppressWarnings("deprecation")
     @Override
     protected Void doStop(MetadataProvider metadataProvider) throws HyracksDataException {
         step(onStop);

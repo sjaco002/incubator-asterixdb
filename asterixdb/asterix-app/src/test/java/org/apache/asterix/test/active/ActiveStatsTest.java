@@ -37,6 +37,7 @@ import org.apache.asterix.app.active.ActiveNotificationHandler;
 import org.apache.asterix.app.cc.CCExtensionManager;
 import org.apache.asterix.app.nc.NCAppRuntimeContext;
 import org.apache.asterix.common.exceptions.ErrorCode;
+import org.apache.asterix.common.functions.FunctionSignature;
 import org.apache.asterix.external.feed.watch.WaitForStateSubscriber;
 import org.apache.asterix.external.operators.FeedIntakeOperatorNodePushable;
 import org.apache.asterix.metadata.declared.MetadataProvider;
@@ -74,6 +75,7 @@ public class ActiveStatsTest {
         ActiveRuntimeId activeRuntimeId = new ActiveRuntimeId(entityId,
                 FeedIntakeOperatorNodePushable.class.getSimpleName(), 0);
         List<Dataset> datasetList = new ArrayList<>();
+        List<FunctionSignature> functionList = new ArrayList<>();
         AlgebricksAbsolutePartitionConstraint partitionConstraint = new AlgebricksAbsolutePartitionConstraint(
                 new String[] { "asterix_nc1" });
         String requestedStats;
@@ -101,7 +103,8 @@ public class ActiveStatsTest {
         MetadataProvider mdProvider = new MetadataProvider(appCtx, null);
         // Add event listener
         ActiveEntityEventsListener eventsListener = new DummyFeedEventsListener(statementExecutor, appCtx, null,
-                entityId, datasetList, partitionConstraint, FeedIntakeOperatorNodePushable.class.getSimpleName(),
+                entityId, datasetList, functionList, partitionConstraint,
+                FeedIntakeOperatorNodePushable.class.getSimpleName(),
                 NoRetryPolicyFactory.INSTANCE, null, Collections.emptyList());
         // Register mock runtime
         NCAppRuntimeContext nc1AppCtx = (NCAppRuntimeContext) ExecutionTestUtil.integrationUtil.ncs[0]

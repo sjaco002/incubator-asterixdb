@@ -18,6 +18,7 @@
  */
 package org.apache.asterix.active;
 
+import org.apache.asterix.common.functions.FunctionSignature;
 import org.apache.asterix.common.metadata.IDataset;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
 
@@ -51,6 +52,8 @@ public interface IActiveEntityEventsListener {
      * @return
      */
     boolean isEntityUsingDataset(IDataset dataset);
+
+    boolean dependsOnFunction(FunctionSignature function);
 
     /**
      * subscribe to events. subscription ends when subscriber.done() returns true

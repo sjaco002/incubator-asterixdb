@@ -123,6 +123,7 @@ import org.apache.asterix.lang.common.statement.TypeDecl;
 import org.apache.asterix.lang.common.statement.TypeDropStatement;
 import org.apache.asterix.lang.common.statement.WriteStatement;
 import org.apache.asterix.lang.common.struct.Identifier;
+import org.apache.asterix.lang.common.util.MergePolicyUtils;
 import org.apache.asterix.lang.sqlpp.rewrites.SqlppRewriterFactory;
 import org.apache.asterix.metadata.IDatasetDetails;
 import org.apache.asterix.metadata.MetadataManager;
@@ -157,7 +158,6 @@ import org.apache.asterix.om.types.ARecordType;
 import org.apache.asterix.om.types.ATypeTag;
 import org.apache.asterix.om.types.IAType;
 import org.apache.asterix.om.types.TypeSignature;
-import org.apache.asterix.lang.common.util.MergePolicyUtils;
 import org.apache.asterix.transaction.management.service.transaction.DatasetIdFactory;
 import org.apache.asterix.translator.AbstractLangTranslator;
 import org.apache.asterix.translator.CompiledStatements.CompiledDeleteStatement;
@@ -1221,8 +1221,9 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
             List<Function> functionsInDataverse = MetadataManager.INSTANCE.getDataverseFunctions(mdTxnCtx,
                     dataverseName);
             for (Function function : functionsInDataverse) {
-                if (checkWhetherFunctionIsBeingUsed(mdTxnCtx, function.getDataverseName(), function.getName(),
-                        function.getArity(), dataverseName)) {
+                if (checkWhetherFunctionIsBeingUsed(
+                        new FunctionSignature(function.getDataverseName(), function.getName(), function.getArity()),
+                        false)) {
                     throw new MetadataException(ErrorCode.METADATA_DROP_FUCTION_IN_USE,
                             function.getDataverseName() + "." + function.getName() + "@" + function.getArity());
                 }
@@ -1704,22 +1705,17 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
         }
     }
 
-    protected boolean checkWhetherFunctionIsBeingUsed(MetadataTransactionContext ctx, String dataverseName,
-            String functionName, int arity, String currentDataverse) throws AlgebricksException {
-        List<Dataverse> allDataverses = MetadataManager.INSTANCE.getDataverses(ctx);
-        for (Dataverse dataverse : allDataverses) {
-            if (currentDataverse != null && dataverse.getDataverseName().equals(currentDataverse)) {
+    protected boolean checkWhetherFunctionIsBeingUsed(FunctionSignature function, boolean checkLocalDataverse)
+            throws AlgebricksException {
+        ActiveNotificationHandler activeEventHandler =
+                (ActiveNotificationHandler) appCtx.getActiveNotificationHandler();
+        IActiveEntityEventsListener[] listeners = activeEventHandler.getEventListeners();
+        for (IActiveEntityEventsListener listener : listeners) {
+            if (!checkLocalDataverse && listener.getEntityId().getDataverse().equals(function.getNamespace())) {
                 continue;
             }
-            List<Feed> feeds = MetadataManager.INSTANCE.getFeeds(ctx, dataverse.getDataverseName());
-            for (Feed feed : feeds) {
-                List<FeedConnection> feedConnections = MetadataManager.INSTANCE.getFeedConections(ctx,
-                        dataverse.getDataverseName(), feed.getFeedName());
-                for (FeedConnection conn : feedConnections) {
-                    if (conn.containsFunction(dataverseName, functionName, arity)) {
-                        return true;
-                    }
-                }
+            if (listener.dependsOnFunction(function)) {
+                return true;
             }
         }
         return false;
@@ -1737,8 +1733,7 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
             Function function = MetadataManager.INSTANCE.getFunction(mdTxnCtx, signature);
             if (function == null && !stmtDropFunction.getIfExists()) {
                 throw new AlgebricksException("Unknonw function " + signature);
-            } else if (checkWhetherFunctionIsBeingUsed(mdTxnCtx, signature.getNamespace(), signature.getName(),
-                    signature.getArity(), null)) {
+            } else if (checkWhetherFunctionIsBeingUsed(signature, true)) {
                 throw new MetadataException(ErrorCode.METADATA_DROP_FUCTION_IN_USE, signature);
             } else {
                 MetadataManager.INSTANCE.dropFunction(mdTxnCtx, signature);
@@ -2126,13 +2121,15 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
             if (listener == null) {
                 // Prepare policy
                 List<Dataset> datasets = new ArrayList<>();
+                List<FunctionSignature> functions = new ArrayList<>();
                 for (FeedConnection connection : feedConnections) {
                     Dataset ds = metadataProvider.findDataset(connection.getDataverseName(),
                             connection.getDatasetName());
                     datasets.add(ds);
+                    functions.addAll(connection.getAppliedFunctions());
                 }
                 listener = new FeedEventsListener(this, metadataProvider.getApplicationContext(), hcc, entityId,
-                        datasets, null, FeedIntakeOperatorNodePushable.class.getSimpleName(),
+                        datasets, functions, null, FeedIntakeOperatorNodePushable.class.getSimpleName(),
                         NoRetryPolicyFactory.INSTANCE, feed, feedConnections);
             }
             MetadataManager.INSTANCE.commitTransaction(mdTxnCtx);

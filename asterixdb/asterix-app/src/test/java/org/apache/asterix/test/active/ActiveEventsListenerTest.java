@@ -135,7 +135,7 @@ public class ActiveEventsListenerTest {
         nodeControllers[0] = new TestNodeControllerActor(nodes[0], clusterController);
         nodeControllers[1] = new TestNodeControllerActor(nodes[1], clusterController);
         listener = new TestEventsListener(clusterController, nodeControllers, jobIdFactory, entityId,
-                new ArrayList<>(allDatasets), statementExecutor, appCtx, hcc, locations,
+                new ArrayList<>(allDatasets), new ArrayList<>(), statementExecutor, appCtx, hcc, locations,
                 new InfiniteRetryPolicyFactory());
         users = new TestUserActor[3];
         users[0] = newUser("Till", appCtx);
@@ -346,7 +346,6 @@ public class ActiveEventsListenerTest {
         Assert.assertEquals(ActivityState.RUNNING, listener.getState());
     }
 
-    @SuppressWarnings("deprecation")
     @Test
     public void testRecovery() throws Exception {
         testStartWhenStartSucceed();
@@ -459,12 +458,11 @@ public class ActiveEventsListenerTest {
         Assert.assertEquals(ActivityState.STOPPED, listener.getState());
     }
 
-    @SuppressWarnings("deprecation")
     @Test
     public void testRecoveryFailureAfterOneAttemptCompilationFailure() throws Exception {
         handler.unregisterListener(listener);
         listener = new TestEventsListener(clusterController, nodeControllers, jobIdFactory, entityId,
-                new ArrayList<>(allDatasets), statementExecutor, appCtx, hcc, locations,
+                new ArrayList<>(allDatasets), new ArrayList<>(), statementExecutor, appCtx, hcc, locations,
                 new CountRetryPolicyFactory(1));
         testStartWhenStartSucceed();
         WaitForStateSubscriber tempFailSubscriber =
@@ -503,12 +501,11 @@ public class ActiveEventsListenerTest {
         Assert.assertEquals(ActivityState.STOPPED, listener.getState());
     }
 
-    @SuppressWarnings("deprecation")
     @Test
     public void testRecoveryFailureAfterOneAttemptRuntimeFailure() throws Exception {
         handler.unregisterListener(listener);
         listener = new TestEventsListener(clusterController, nodeControllers, jobIdFactory, entityId,
-                new ArrayList<>(allDatasets), statementExecutor, appCtx, hcc, locations,
+                new ArrayList<>(allDatasets), new ArrayList<>(), statementExecutor, appCtx, hcc, locations,
                 new CountRetryPolicyFactory(1));
         testStartWhenStartSucceed();
         WaitForStateSubscriber tempFailSubscriber =
@@ -523,12 +520,12 @@ public class ActiveEventsListenerTest {
         Assert.assertEquals(ActivityState.PERMANENTLY_FAILED, listener.getState());
     }
 
-    @SuppressWarnings("deprecation")
     @Test
     public void testRecoveryFailure() throws Exception {
         handler.unregisterListener(listener);
         listener = new TestEventsListener(clusterController, nodeControllers, jobIdFactory, entityId,
-                new ArrayList<>(allDatasets), statementExecutor, appCtx, hcc, locations, NoRetryPolicyFactory.INSTANCE);
+                new ArrayList<>(allDatasets), new ArrayList<>(), statementExecutor, appCtx, hcc, locations,
+                NoRetryPolicyFactory.INSTANCE);
         testStartWhenStartSucceed();
         WaitForStateSubscriber tempFailSubscriber =
                 new WaitForStateSubscriber(listener, EnumSet.of(ActivityState.TEMPORARILY_FAILED));
@@ -541,7 +538,6 @@ public class ActiveEventsListenerTest {
         Assert.assertEquals(ActivityState.PERMANENTLY_FAILED, listener.getState());
     }
 
-    @SuppressWarnings("deprecation")
     @Test
     public void testStopDuringRecoveryAttemptThatSucceeds() throws Exception {
         testStartWhenStartSucceed();
@@ -569,7 +565,6 @@ public class ActiveEventsListenerTest {
         Assert.assertEquals(ActivityState.STOPPED, listener.getState());
     }
 
-    @SuppressWarnings("deprecation")
     @Test
     public void testStopDuringRecoveryAttemptThatFailsCompile() throws Exception {
         testStartWhenStartSucceed();
@@ -597,7 +592,6 @@ public class ActiveEventsListenerTest {
         Assert.assertEquals(ActivityState.STOPPED, listener.getState());
     }
 
-    @SuppressWarnings("deprecation")
     @Test
     public void testStopDuringRecoveryAttemptThatFailsRuntime() throws Exception {
         testStartWhenStartSucceed();
@@ -625,7 +619,6 @@ public class ActiveEventsListenerTest {
         Assert.assertEquals(ActivityState.STOPPED, listener.getState());
     }
 
-    @SuppressWarnings("deprecation")
     @Test
     public void testStartDuringRecoveryAttemptThatSucceeds() throws Exception {
         testStartWhenStartSucceed();
@@ -651,7 +644,6 @@ public class ActiveEventsListenerTest {
         Assert.assertEquals(ActivityState.RUNNING, listener.getState());
     }
 
-    @SuppressWarnings("deprecation")
     @Test
     public void testStartDuringRecoveryAttemptThatFailsCompile() throws Exception {
         testStartWhenStartSucceed();
@@ -676,7 +668,6 @@ public class ActiveEventsListenerTest {
         assertFailure(action, ErrorCode.ACTIVE_ENTITY_ALREADY_STARTED);
     }
 
-    @SuppressWarnings("deprecation")
     @Test
     public void testStartDuringRecoveryAttemptThatFailsRuntime() throws Exception {
         testStartWhenStartSucceed();
@@ -700,7 +691,6 @@ public class ActiveEventsListenerTest {
         assertFailure(action, ErrorCode.ACTIVE_ENTITY_ALREADY_STARTED);
     }
 
-    @SuppressWarnings("deprecation")
     @Test
     public void testSuspendDuringRecoveryAttemptThatSucceedsThenResumeSucceeds() throws Exception {
         testStartWhenStartSucceed();
@@ -731,7 +721,6 @@ public class ActiveEventsListenerTest {
         Assert.assertEquals(ActivityState.RUNNING, listener.getState());
     }
 
-    @SuppressWarnings("deprecation")
     @Test
     public void testSuspendDuringRecoveryAttemptThatSucceedsThenResumeFailsCompile() throws Exception {
         testStartWhenStartSucceed();
@@ -774,7 +763,6 @@ public class ActiveEventsListenerTest {
         Assert.assertEquals(ActivityState.RUNNING, listener.getState());
     }
 
-    @SuppressWarnings("deprecation")
     @Test
     public void testSuspendDuringRecoveryAttemptThatSucceedsThenResumeFailsRuntime() throws Exception {
         testStartWhenStartSucceed();
@@ -817,7 +805,6 @@ public class ActiveEventsListenerTest {
         Assert.assertEquals(ActivityState.RUNNING, listener.getState());
     }
 
-    @SuppressWarnings("deprecation")
     @Test
     public void testSuspendDuringRecoveryAttemptThatFailsCompile() throws Exception {
         testStartWhenStartSucceed();
@@ -859,7 +846,6 @@ public class ActiveEventsListenerTest {
         Assert.assertEquals(ActivityState.RUNNING, listener.getState());
     }
 
-    @SuppressWarnings("deprecation")
     @Test
     public void testSuspendDuringRecoveryAttemptThatFailsRuntime() throws Exception {
         testStartWhenStartSucceed();
@@ -901,7 +887,6 @@ public class ActiveEventsListenerTest {
         Assert.assertEquals(ActivityState.RUNNING, listener.getState());
     }
 
-    @SuppressWarnings("deprecation")
     @Test
     public void testCreateNewShadowDuringRecoveryAttemptThatSucceeds() throws Exception {
         testStartWhenStartSucceed();
@@ -929,7 +914,6 @@ public class ActiveEventsListenerTest {
         Assert.assertEquals(clusterController.getAllDatasets().size(), listener.getDatasets().size());
     }
 
-    @SuppressWarnings("deprecation")
     @Test
     public void testCreateNewShadowDuringRecoveryAttemptThatFailsCompile() throws Exception {
         testStartWhenStartSucceed();
@@ -956,7 +940,6 @@ public class ActiveEventsListenerTest {
         Assert.assertEquals(clusterController.getAllDatasets().size(), listener.getDatasets().size());
     }
 
-    @SuppressWarnings("deprecation")
     @Test
     public void testCreateNewShadowDuringRecoveryAttemptThatFailsRuntime() throws Exception {
         testStartWhenStartSucceed();
@@ -1056,7 +1039,6 @@ public class ActiveEventsListenerTest {
         Assert.assertEquals(clusterController.getAllDatasets().size(), listener.getDatasets().size());
     }
 
-    @SuppressWarnings("deprecation")
     @Test
     public void testDeleteShadowDuringRecoveryAttemptThatSucceeds() throws Exception {
         testStartWhenStartSucceed();
@@ -1082,7 +1064,6 @@ public class ActiveEventsListenerTest {
         Assert.assertEquals(clusterController.getAllDatasets().size(), listener.getDatasets().size());
     }
 
-    @SuppressWarnings("deprecation")
     @Test
     public void testDeleteShadowDuringRecoveryAttemptThatFailsCompile() throws Exception {
         testStartWhenStartSucceed();
@@ -1107,7 +1088,6 @@ public class ActiveEventsListenerTest {
         Assert.assertEquals(clusterController.getAllDatasets().size(), listener.getDatasets().size());
     }
 
-    @SuppressWarnings("deprecation")
     @Test
     public void testDeleteShadowDuringRecoveryAttemptThatFailsRuntime() throws Exception {
         testStartWhenStartSucceed();
@@ -1197,7 +1177,6 @@ public class ActiveEventsListenerTest {
         Assert.assertEquals(clusterController.getAllDatasets().size(), listener.getDatasets().size());
     }
 
-    @SuppressWarnings("deprecation")
     @Test
     public void testCreateNewIndexDuringRecoveryAttemptThatSucceeds() throws Exception {
         testStartWhenStartSucceed();
@@ -1221,7 +1200,6 @@ public class ActiveEventsListenerTest {
         assertFailure(add, ErrorCode.CANNOT_ADD_INDEX_TO_DATASET_CONNECTED_TO_ACTIVE_ENTITY);
     }
 
-    @SuppressWarnings("deprecation")
     @Test
     public void testCreateNewIndexDuringRecoveryAttemptThatFailsCompile() throws Exception {
         testStartWhenStartSucceed();
@@ -1244,7 +1222,6 @@ public class ActiveEventsListenerTest {
         assertFailure(add, ErrorCode.CANNOT_ADD_INDEX_TO_DATASET_CONNECTED_TO_ACTIVE_ENTITY);
     }
 
-    @SuppressWarnings("deprecation")
     @Test
     public void testCreateNewIndexDuringRecoveryAttemptThatFailsRuntime() throws Exception {
         testStartWhenStartSucceed();
@@ -1321,7 +1298,6 @@ public class ActiveEventsListenerTest {
         assertFailure(add, ErrorCode.CANNOT_ADD_INDEX_TO_DATASET_CONNECTED_TO_ACTIVE_ENTITY);
     }
 
-    @SuppressWarnings("deprecation")
     @Test
     public void testDeleteIndexDuringRecoveryAttemptThatSucceeds() throws Exception {
         testStartWhenStartSucceed();
@@ -1345,7 +1321,6 @@ public class ActiveEventsListenerTest {
         assertFailure(drop, ErrorCode.CANNOT_REMOVE_INDEX_FROM_DATASET_CONNECTED_TO_ACTIVE_ENTITY);
     }
 
-    @SuppressWarnings("deprecation")
     @Test
     public void testDeleteIndexDuringRecoveryAttemptThatFailsCompile() throws Exception {
         testStartWhenStartSucceed();
@@ -1368,7 +1343,6 @@ public class ActiveEventsListenerTest {
         assertFailure(drop, ErrorCode.CANNOT_REMOVE_INDEX_FROM_DATASET_CONNECTED_TO_ACTIVE_ENTITY);
     }
 
-    @SuppressWarnings("deprecation")
     @Test
     public void testDeleteIndexDuringRecoveryAttemptThatFailsRuntime() throws Exception {
         testStartWhenStartSucceed();
@@ -1470,8 +1444,8 @@ public class ActiveEventsListenerTest {
             Mockito.when(ccAppCtx.getStorageComponentProvider()).thenReturn(componentProvider);
             AlgebricksAbsolutePartitionConstraint locations = new AlgebricksAbsolutePartitionConstraint(nodes);
             additionalListeners[i] = listener = new TestEventsListener(clusterController, nodeControllers, jobIdFactory,
-                    entityId, new ArrayList<>(allDatasets), statementExecutor, ccAppCtx, hcc, locations,
-                    new InfiniteRetryPolicyFactory());
+                    entityId, new ArrayList<>(allDatasets), new ArrayList<>(), statementExecutor, ccAppCtx, hcc,
+                    locations, new InfiniteRetryPolicyFactory());
         }
         Action suspension = users[0].suspendAllActivities(handler);
         suspension.sync();

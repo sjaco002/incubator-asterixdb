@@ -28,6 +28,7 @@ import org.apache.asterix.active.IActiveEntityEventSubscriber;
 import org.apache.asterix.active.IRetryPolicyFactory;
 import org.apache.asterix.app.active.FeedEventsListener;
 import org.apache.asterix.common.dataflow.ICcApplicationContext;
+import org.apache.asterix.common.functions.FunctionSignature;
 import org.apache.asterix.external.feed.watch.WaitForStateSubscriber;
 import org.apache.asterix.metadata.declared.MetadataProvider;
 import org.apache.asterix.metadata.entities.Dataset;
@@ -35,18 +36,17 @@ import org.apache.asterix.metadata.entities.Feed;
 import org.apache.asterix.metadata.entities.FeedConnection;
 import org.apache.asterix.translator.IStatementExecutor;
 import org.apache.hyracks.algebricks.common.constraints.AlgebricksAbsolutePartitionConstraint;
-import org.apache.hyracks.algebricks.common.exceptions.AlgebricksException;
 import org.apache.hyracks.api.client.IHyracksClientConnection;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
 
 public class DummyFeedEventsListener extends FeedEventsListener {
 
     public DummyFeedEventsListener(IStatementExecutor statementExecutor, ICcApplicationContext appCtx,
-            IHyracksClientConnection hcc, EntityId entityId, List<Dataset> datasets,
+            IHyracksClientConnection hcc, EntityId entityId, List<Dataset> datasets, List<FunctionSignature> functions,
             AlgebricksAbsolutePartitionConstraint locations, String runtimeName, IRetryPolicyFactory retryPolicyFactory,
             Feed feed, List<FeedConnection> feedConnections) throws HyracksDataException {
-        super(statementExecutor, appCtx, hcc, entityId, datasets, locations, runtimeName, retryPolicyFactory, feed,
-                feedConnections);
+        super(statementExecutor, appCtx, hcc, entityId, datasets, functions, locations, runtimeName, retryPolicyFactory,
+                feed, feedConnections);
     }
 
     @Override

@@ -25,17 +25,12 @@ import org.apache.asterix.active.ActivityState;
 import org.apache.asterix.active.EntityId;
 import org.apache.asterix.active.IActiveEntityEventSubscriber;
 import org.apache.asterix.active.IRetryPolicyFactory;
-import org.apache.asterix.app.translator.DefaultStatementExecutorFactory;
-import org.apache.asterix.app.translator.QueryTranslator;
-import org.apache.asterix.common.context.IStorageComponentProvider;
 import org.apache.asterix.common.dataflow.ICcApplicationContext;
 import org.apache.asterix.common.exceptions.ErrorCode;
 import org.apache.asterix.common.exceptions.RuntimeDataException;
+import org.apache.asterix.common.functions.FunctionSignature;
 import org.apache.asterix.common.utils.JobUtils;
-import org.apache.asterix.compiler.provider.AqlCompilationProvider;
-import org.apache.asterix.compiler.provider.ILangCompilationProvider;
 import org.apache.asterix.external.feed.watch.WaitForStateSubscriber;
-import org.apache.asterix.file.StorageComponentProvider;
 import org.apache.asterix.lang.common.statement.StartFeedStatement;
 import org.apache.asterix.metadata.declared.MetadataProvider;
 import org.apache.asterix.metadata.entities.Dataset;
@@ -45,7 +40,6 @@ import org.apache.asterix.translator.IStatementExecutor;
 import org.apache.asterix.utils.FeedOperations;
 import org.apache.commons.lang3.tuple.Pair;
 import org.apache.hyracks.algebricks.common.constraints.AlgebricksAbsolutePartitionConstraint;
-import org.apache.hyracks.algebricks.common.exceptions.AlgebricksException;
 import org.apache.hyracks.api.client.IHyracksClientConnection;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.apache.hyracks.api.job.JobSpecification;
@@ -56,10 +50,11 @@ public class FeedEventsListener extends ActiveEntityEventsListener {
     private final List<FeedConnection> feedConnections;
 
     public FeedEventsListener(IStatementExecutor statementExecutor, ICcApplicationContext appCtx,
-            IHyracksClientConnection hcc, EntityId entityId, List<Dataset> datasets,
+            IHyracksClientConnection hcc, EntityId entityId, List<Dataset> datasets, List<FunctionSignature> functions,
             AlgebricksAbsolutePartitionConstraint locations, String runtimeName, IRetryPolicyFactory retryPolicyFactory,
             Feed feed, final List<FeedConnection> feedConnections) throws HyracksDataException {
-        super(statementExecutor, appCtx, hcc, entityId, datasets, locations, runtimeName, retryPolicyFactory);
+        super(statementExecutor, appCtx, hcc, entityId, datasets, functions, locations, runtimeName,
+                retryPolicyFactory);
         this.feed = feed;
         this.feedConnections = feedConnections;
     }

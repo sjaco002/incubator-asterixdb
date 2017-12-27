@@ -21,6 +21,7 @@ package org.apache.asterix.metadata.api;
 import java.util.List;
 
 import org.apache.asterix.active.IActiveEntityEventsListener;
+import org.apache.asterix.common.functions.FunctionSignature;
 import org.apache.asterix.metadata.declared.MetadataProvider;
 import org.apache.asterix.metadata.entities.Dataset;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
@@ -96,6 +97,11 @@ public interface IActiveEntityController extends IActiveEntityEventsListener {
      * @return the list of associated datasets
      */
     List<Dataset> getDatasets();
+
+    /**
+     * @return the list of associated functions
+     */
+    List<FunctionSignature> getFunctions();
 
     /**
      * replace the dataset object with the passed updated object
