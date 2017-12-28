@@ -1221,7 +1221,7 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
             List<Function> functionsInDataverse = MetadataManager.INSTANCE.getDataverseFunctions(mdTxnCtx,
                     dataverseName);
             for (Function function : functionsInDataverse) {
-                if (checkWhetherFunctionIsBeingUsed(
+                if (checkWhetherFunctionIsBeingUsed(mdTxnCtx,
                         new FunctionSignature(function.getDataverseName(), function.getName(), function.getArity()),
                         false)) {
                     throw new MetadataException(ErrorCode.METADATA_DROP_FUCTION_IN_USE,
@@ -1705,7 +1705,8 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
         }
     }
 
-    protected boolean checkWhetherFunctionIsBeingUsed(FunctionSignature function, boolean checkLocalDataverse)
+    protected boolean checkWhetherFunctionIsBeingUsed(MetadataTransactionContext mdTxnCtx, FunctionSignature function,
+            boolean checkLocalDataverse)
             throws AlgebricksException {
         ActiveNotificationHandler activeEventHandler =
                 (ActiveNotificationHandler) appCtx.getActiveNotificationHandler();
@@ -1718,6 +1719,24 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
                 return true;
             }
         }
+
+        List<Dataverse> allDataverses = MetadataManager.INSTANCE.getDataverses(mdTxnCtx);
+        for (Dataverse dataverse : allDataverses) {
+            if (!checkLocalDataverse && dataverse.getDataverseName().equals(function.getNamespace())) {
+                continue;
+            }
+            List<Feed> feeds = MetadataManager.INSTANCE.getFeeds(mdTxnCtx, dataverse.getDataverseName());
+            for (Feed feed : feeds) {
+                List<FeedConnection> feedConnections = MetadataManager.INSTANCE.getFeedConections(mdTxnCtx,
+                        dataverse.getDataverseName(), feed.getFeedName());
+                for (FeedConnection conn : feedConnections) {
+                    if (conn.containsFunction(function.getNamespace(), function.getName(), function.getArity())) {
+                        return true;
+                    }
+                }
+            }
+        }
+
         return false;
     }
 
@@ -1733,7 +1752,7 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
             Function function = MetadataManager.INSTANCE.getFunction(mdTxnCtx, signature);
             if (function == null && !stmtDropFunction.getIfExists()) {
                 throw new AlgebricksException("Unknonw function " + signature);
-            } else if (checkWhetherFunctionIsBeingUsed(signature, true)) {
+            } else if (checkWhetherFunctionIsBeingUsed(mdTxnCtx, signature, true)) {
                 throw new MetadataException(ErrorCode.METADATA_DROP_FUCTION_IN_USE, signature);
             } else {
                 MetadataManager.INSTANCE.dropFunction(mdTxnCtx, signature);
