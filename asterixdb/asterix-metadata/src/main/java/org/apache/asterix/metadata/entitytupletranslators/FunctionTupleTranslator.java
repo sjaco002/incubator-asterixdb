@@ -116,16 +116,16 @@ public class FunctionTupleTranslator extends AbstractTupleTranslator<Function> {
                 .getValueByPos(MetadataRecordTypes.FUNCTION_ARECORD_FUNCTION_DEPENDENCIES_FIELD_INDEX)).getCursor();
         List<List<List<String>>> dependencies = new ArrayList<>();
         AOrderedList dependencyList;
-        AOrderedList quilifiedList;
+        AOrderedList qualifiedList;
         int i = 0;
         while (dependenciesCursor.next()) {
             dependencies.add(new ArrayList<>());
             dependencyList = (AOrderedList) dependenciesCursor.get();
-            IACursor qualifiedDependencyCursor = (dependencyList.getCursor());
+            IACursor qualifiedDependencyCursor = dependencyList.getCursor();
             int j = 0;
             while (qualifiedDependencyCursor.next()) {
-                quilifiedList = (AOrderedList) qualifiedDependencyCursor.get();
-                IACursor qualifiedNameCursor = (quilifiedList.getCursor());
+                qualifiedList = (AOrderedList) qualifiedDependencyCursor.get();
+                IACursor qualifiedNameCursor = qualifiedList.getCursor();
                 dependencies.get(i).add(new ArrayList<>());
                 while (qualifiedNameCursor.next()) {
                     dependencies.get(i).get(j).add(((AString) qualifiedNameCursor.get()).getStringValue());
