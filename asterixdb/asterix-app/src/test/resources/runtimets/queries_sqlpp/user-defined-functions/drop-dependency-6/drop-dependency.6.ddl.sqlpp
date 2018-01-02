@@ -23,9 +23,9 @@
  */
 
 drop dataverse two if exists;
-drop dataverse experiments if exists;
-create dataverse experiments;
-use experiments;
+drop dataverse one if exists;
+create dataverse one;
+use one;
 
 create type TweetMessageType as closed {
   tweetid: uuid,
@@ -46,7 +46,7 @@ create function f1(message, text){
 
 create function f2(place, text){
  (select m.message_text
-  from experiments.TweetMessages m)
+  from one.TweetMessages m)
 };
 
 drop dataset TweetMessages;
