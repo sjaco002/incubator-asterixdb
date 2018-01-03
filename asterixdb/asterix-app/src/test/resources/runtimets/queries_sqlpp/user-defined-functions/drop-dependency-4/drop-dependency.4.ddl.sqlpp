@@ -1,5 +1,5 @@
 /*
- * Licensed to the Apache Software Foundation (ASF) under one
+ * Licensed to the Apache Software Foundation (ASF) under A
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
  * regarding copyright ownership.  The ASF licenses this file
@@ -22,11 +22,11 @@
  * Expected Res : Error
  */
 
-drop dataverse two if exists;
-drop dataverse one if exists;
-create dataverse two;
-create dataverse one;
-use one;
+drop dataverse B if exists;
+drop dataverse A if exists;
+create dataverse B;
+create dataverse A;
+use A;
 
 create type TweetMessageType as closed {
   tweetid: uuid,
@@ -45,12 +45,12 @@ create function f1(message, text){
   contains(message,text)
 };
 
-use two;
+use B;
 
 create function f2(place, text){
  (select m.message_text
-  from one.TweetMessages m)
+  from A.TweetMessages m)
 };
 
-use one;
+use A;
 drop dataset TweetMessages;

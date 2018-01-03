@@ -1,5 +1,5 @@
 /*
- * Licensed to the Apache Software Foundation (ASF) under one
+ * Licensed to the Apache Software Foundation (ASF) under A
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
  * regarding copyright ownership.  The ASF licenses this file
@@ -22,7 +22,7 @@
  * Date         : Dec 15th 2017
  */
 
-use one;
+use A;
 
 
 select f.DataverseName,f.Name,f.Dependencies from Metadata.`Function` f
