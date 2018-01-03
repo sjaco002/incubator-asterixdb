@@ -18,6 +18,7 @@
  */
 package org.apache.asterix.metadata.entities;
 
+import java.util.ArrayList;
 import java.util.List;
 
 import org.apache.asterix.metadata.MetadataCache;
@@ -52,7 +53,13 @@ public class Function implements IMetadataEntity<Function> {
         this.language = language;
         this.kind = functionKind;
         this.arity = arity;
-        this.dependencies = dependencies;
+        if (dependencies == null) {
+            this.dependencies = new ArrayList<>();
+            this.dependencies.add(new ArrayList<>());
+            this.dependencies.add(new ArrayList<>());
+        } else {
+            this.dependencies = dependencies;
+        }
     }
 
     public String getDataverseName() {
