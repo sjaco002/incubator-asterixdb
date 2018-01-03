@@ -7917,7 +7917,7 @@
     <test-case FilePath="user-defined-functions">
       <compilation-unit name="bad-function-ddl-9">
         <output-dir compare="Text">bad-function-ddl-9</output-dir>
-        <expected-error>function experiments.good_function@1 depends upon function experiments.function_that_does_not_exist@0 which is undefined</expected-error>
+        <expected-error>function experiments.function_that_does_not_exist@0 is not defined</expected-error>
       </compilation-unit>
     </test-case>
     <test-case FilePath="user-defined-functions">

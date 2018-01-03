@@ -24,6 +24,7 @@
 
 drop dataverse two if exists;
 drop dataverse one if exists;
+create dataverse two;
 create dataverse one;
 use one;
 
@@ -48,7 +49,6 @@ create function f4(){
 (select * from TweetMessages)
 };
 
-create dataverse two;
 use two;
 
 create dataset TweetMessages2(one.TweetMessageType)
