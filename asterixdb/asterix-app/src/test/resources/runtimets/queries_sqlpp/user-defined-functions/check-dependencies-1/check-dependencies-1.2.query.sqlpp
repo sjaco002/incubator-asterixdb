@@ -22,7 +22,7 @@
  * Date         : Dec 15th 2017
  */
 
-use A;
+use C;
 
 
 select f.DataverseName,f.Name,f.Dependencies from Metadata.`Function` f

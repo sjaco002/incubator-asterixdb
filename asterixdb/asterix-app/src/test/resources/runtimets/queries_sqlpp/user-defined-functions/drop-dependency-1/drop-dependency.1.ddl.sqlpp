@@ -23,10 +23,10 @@
  */
 
 drop dataverse B if exists;
-drop dataverse A if exists;
+drop dataverse C if exists;
 create dataverse B;
-create dataverse A;
-use A;
+create dataverse C;
+use C;
 
 create function f1(message, text){
   contains(message,text)
@@ -35,7 +35,7 @@ create function f1(message, text){
 use B;
 
 create function f0(message, text){
-  A.f1(message,text)
+  C.f1(message,text)
 };
 
-drop dataverse A;
+drop dataverse C;

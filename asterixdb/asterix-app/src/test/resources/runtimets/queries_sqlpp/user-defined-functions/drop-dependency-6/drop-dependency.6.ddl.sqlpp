@@ -23,9 +23,9 @@
  */
 
 drop dataverse B if exists;
-drop dataverse A if exists;
-create dataverse A;
-use A;
+drop dataverse C if exists;
+create dataverse C;
+use C;
 
 create type TweetMessageType as closed {
   tweetid: uuid,
@@ -46,7 +46,7 @@ create function f1(message, text){
 
 create function f2(place, text){
  (select m.message_text
-  from A.TweetMessages m)
+  from C.TweetMessages m)
 };
 
 drop dataset TweetMessages;
