@@ -22,5 +22,13 @@
  * Date         : Dec 15th 2017
  */
 
-select f.DataverseName,f.Name,f.Dependencies from Metadata.`Function` f
-order by f.DataverseName, f.Name;
+drop function B.f5@2;
+drop function C.f3@2;
+drop function C.f2@2;
+
+drop dataset B.TweetMessages2;
+
+drop dataverse C;
+drop dataverse B;
+
+
