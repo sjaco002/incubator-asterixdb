@@ -285,9 +285,11 @@ public class PushFieldAccessRule implements IAlgebraicRewriteRule {
                 DataSourceScanOperator scan = (DataSourceScanOperator) op2;
                 int n = scan.getVariables().size();
                 LogicalVariable scanRecordVar = scan.getVariables().get(n - 1);
+
                 IDataSource<DataSourceId> dataSource = (IDataSource<DataSourceId>) scan.getDataSource();
                 byte dsType = ((DataSource) dataSource).getDatasourceType();
-                if (dsType == DataSource.Type.FEED || dsType == DataSource.Type.LOADABLE) {
+                if (dsType == DataSource.Type.FEED || dsType == DataSource.Type.LOADABLE
+                        || dsType == DataSource.Type.FUNCTION) {
                     return false;
                 }
                 DataSourceId asid = dataSource.getId();
@@ -300,6 +302,7 @@ public class PushFieldAccessRule implements IAlgebraicRewriteRule {
                     setAsFinal(access, context, finalAnnot);
                     return false;
                 }
+
                 String tName = dataset.getItemTypeName();
                 IAType t = mp.findType(dataset.getItemTypeDataverseName(), tName);
                 if (t.getTypeTag() != ATypeTag.OBJECT) {
@@ -389,7 +392,7 @@ public class PushFieldAccessRule implements IAlgebraicRewriteRule {
         fldAccessOpRef.setValue(op2);
         List<Mutable<ILogicalOperator>> faInpList = fieldAccessOp.getInputs();
         faInpList.clear();
-        faInpList.add(new MutableObject<ILogicalOperator>(inputOfOp2.getValue()));
+        faInpList.add(new MutableObject<>(inputOfOp2.getValue()));
         inputOfOp2.setValue(fieldAccessOp);
         // typing
         context.computeAndSetTypeEnvironmentForOperator(fieldAccessOp);
