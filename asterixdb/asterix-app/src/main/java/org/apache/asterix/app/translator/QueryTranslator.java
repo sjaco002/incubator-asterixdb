@@ -1979,9 +1979,9 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
         metadataProvider.setMetadataTxnContext(mdTxnCtx);
         MetadataLockUtil.createFeedBegin(lockManager, metadataProvider.getLocks(), dataverseName,
                 dataverseName + "." + feedName);
-        Feed feed = null;
         try {
-            feed = MetadataManager.INSTANCE.getFeed(metadataProvider.getMetadataTxnContext(), dataverseName, feedName);
+            Feed feed = MetadataManager.INSTANCE.getFeed(metadataProvider.getMetadataTxnContext(), dataverseName,
+                    feedName);
             if (feed != null) {
                 if (cfs.getIfNotExists()) {
                     MetadataManager.INSTANCE.commitTransaction(mdTxnCtx);
@@ -1990,8 +1990,7 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
                     throw new AlgebricksException("A feed with this name " + feedName + " already exists.");
                 }
             }
-            String adaptorName = cfs.getAdaptorName();
-            feed = new Feed(dataverseName, feedName, adaptorName, cfs.getAdaptorConfiguration());
+            feed = new Feed(dataverseName, feedName, cfs.getConfiguration());
             FeedMetadataUtil.validateFeed(feed, mdTxnCtx, appCtx);
             MetadataManager.INSTANCE.addFeed(metadataProvider.getMetadataTxnContext(), feed);
             MetadataManager.INSTANCE.commitTransaction(mdTxnCtx);
@@ -2242,8 +2241,8 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
             if (listener != null && listener.isActive()) {
                 throw new CompilationException(ErrorCode.FEED_CHANGE_FEED_CONNECTIVITY_ON_ALIVE_FEED, feedName);
             }
-            ARecordType outputType = FeedMetadataUtil.getOutputType(feed, feed.getAdapterConfiguration(),
-                    ExternalDataConstants.KEY_TYPE_NAME);
+            ARecordType outputType = FeedMetadataUtil.getOutputType(feed,
+                    feed.getConfiguration().get(ExternalDataConstants.KEY_TYPE_NAME));
             List<FunctionSignature> appliedFunctions = cfs.getAppliedFunctions();
             for (FunctionSignature func : appliedFunctions) {
                 if (MetadataManager.INSTANCE.getFunction(mdTxnCtx, func) == null) {
@@ -3092,6 +3091,7 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
      * @param mdTxnCtx
      */
     public static void abort(Exception rootE, Exception parentE, MetadataTransactionContext mdTxnCtx) {
+        boolean interrupted = Thread.interrupted();
         try {
             if (IS_DEBUG_MODE) {
                 LOGGER.log(Level.ERROR, rootE.getMessage(), rootE);
@@ -3102,6 +3102,10 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
         } catch (Exception e2) {
             parentE.addSuppressed(e2);
             throw new IllegalStateException(rootE);
+        } finally {
+            if (interrupted) {
+                Thread.currentThread().interrupt();
+            }
         }
     }
 
