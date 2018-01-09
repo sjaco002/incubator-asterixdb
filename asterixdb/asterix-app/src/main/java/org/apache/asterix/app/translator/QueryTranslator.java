@@ -126,7 +126,7 @@ import org.apache.asterix.lang.common.statement.TypeDropStatement;
 import org.apache.asterix.lang.common.statement.WriteStatement;
 import org.apache.asterix.lang.common.struct.Identifier;
 import org.apache.asterix.lang.common.struct.VarIdentifier;
-import org.apache.asterix.lang.common.util.CommonFunctionMapUtil;
+import org.apache.asterix.lang.common.util.FunctionUtil;
 import org.apache.asterix.lang.common.util.MergePolicyUtils;
 import org.apache.asterix.lang.sqlpp.rewrites.SqlppRewriterFactory;
 import org.apache.asterix.metadata.IDatasetDetails;
@@ -1708,15 +1708,12 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
             wrappedQuery.setExternalVars(varIds);
             apiFramework.reWriteQuery(declaredFunctions, metadataProvider, wrappedQuery, sessionOutput, false);
 
-            Set<CallExpr> functionCalls =
-                    rewriterFactory.createQueryRewriter().getFunctionCalls(cfs.getFunctionBodyExpression());
+            Set<CallExpr> functionCalls = FunctionUtil.getFunctionCalls(rewriterFactory.createQueryRewriter(),
+                    cfs.getFunctionBodyExpression());
 
             //Get the List of used functions and used datasets
-            List<List<List<String>>> dependencies = new ArrayList<>();
-            //dataset dependencies
-            dependencies.add(new ArrayList<>());
-            //functional dependencies
-            dependencies.add(new ArrayList<>());
+            List<List<String>> datasourceDependencies = new ArrayList<>();
+            List<List<String>> functionDependencies = new ArrayList<>();
             for (CallExpr functionCall : functionCalls) {
                 FunctionSignature signature = functionCall.getFunctionSignature();
                 FunctionIdentifier fid =
@@ -1724,17 +1721,19 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
                 if (fid.equals(BuiltinFunctions.DATASET)) {
                     Pair<String, String> path = DatasetUtil.getDatasetInfo(metadataProvider,
                             ((LiteralExpr) functionCall.getExprList().get(0)).getValue().getStringValue());
-                    dependencies.get(0).add(new ArrayList<>(Arrays.asList(path.first, path.second)));
+                    datasourceDependencies.add(Arrays.asList(path.first, path.second));
                 }
 
-                else if (BuiltinFunctions.isBuiltinCompilerFunction(
-                        CommonFunctionMapUtil.normalizeBuiltinFunctionSignature(signature), false)) {
+                else if (BuiltinFunctions.isBuiltinCompilerFunction(signature, false)) {
                     continue;
                 } else {
-                    dependencies.get(1).add(new ArrayList<>(Arrays.asList(signature.getNamespace(), signature.getName(),
-                            Integer.toString(signature.getArity()))));
+                    functionDependencies.add(Arrays.asList(signature.getNamespace(), signature.getName(),
+                            Integer.toString(signature.getArity())));
                 }
             }
+            List<List<List<String>>> dependencies = new ArrayList<>();
+            dependencies.add(datasourceDependencies);
+            dependencies.add(functionDependencies);
 
             Function function = new Function(dataverse, functionName, cfs.getFunctionSignature().getArity(),
                     cfs.getParamList(), Function.RETURNTYPE_VOID, cfs.getFunctionBody(),

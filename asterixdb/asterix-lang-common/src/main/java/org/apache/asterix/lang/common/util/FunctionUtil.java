@@ -27,6 +27,7 @@ import org.apache.asterix.common.exceptions.CompilationException;
 import org.apache.asterix.common.functions.FunctionConstants;
 import org.apache.asterix.common.functions.FunctionSignature;
 import org.apache.asterix.lang.common.base.Expression;
+import org.apache.asterix.lang.common.base.IQueryRewriter;
 import org.apache.asterix.lang.common.expression.CallExpr;
 import org.apache.asterix.lang.common.statement.FunctionDecl;
 import org.apache.asterix.metadata.MetadataManager;
@@ -155,6 +156,11 @@ public class FunctionUtil {
             }
         }
         return functionDecls;
+    }
+
+    public static Set<CallExpr> getFunctionCalls(IQueryRewriter rewriter, Expression expression)
+            throws CompilationException {
+        return rewriter.getFunctionCalls(expression);
     }
 
     private static Function lookupUserDefinedFunctionDecl(MetadataTransactionContext mdTxnCtx,
