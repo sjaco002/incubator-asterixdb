@@ -288,8 +288,7 @@ public class PushFieldAccessRule implements IAlgebraicRewriteRule {
 
                 IDataSource<DataSourceId> dataSource = (IDataSource<DataSourceId>) scan.getDataSource();
                 byte dsType = ((DataSource) dataSource).getDatasourceType();
-                if (dsType == DataSource.Type.FEED || dsType == DataSource.Type.LOADABLE
-                        || dsType == DataSource.Type.FUNCTION) {
+                if (dsType != DataSource.Type.INTERNAL_DATASET && dsType != DataSource.Type.EXTERNAL_DATASET) {
                     return false;
                 }
                 DataSourceId asid = dataSource.getId();
