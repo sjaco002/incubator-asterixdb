@@ -20,7 +20,6 @@ package org.apache.asterix.common.transactions;
 
 import java.nio.ByteBuffer;
 
-import org.apache.asterix.common.replication.IReplicationThread;
 import org.apache.hyracks.dataflow.common.data.accessors.ITupleReference;
 
 public interface ILogRecord {
@@ -129,19 +128,13 @@ public interface ILogRecord {
 
     public void setPKValue(ITupleReference PKValue);
 
-    public String getNodeId();
-
     public void readRemoteLog(ByteBuffer buffer);
-
-    public void setReplicationThread(IReplicationThread replicationThread);
 
     public void setLogSource(byte logSource);
 
     public byte getLogSource();
 
     public int getRemoteLogSize();
-
-    public void setNodeId(String nodeId);
 
     public int getResourcePartition();
 
@@ -150,7 +143,7 @@ public interface ILogRecord {
     public void setReplicated(boolean replicated);
 
     /**
-     * @return a flag indicating whether the log record should be sent to remote replicas
+     * @return a flag indicating whether the log was replicated
      */
     public boolean isReplicated();
 
@@ -169,4 +162,18 @@ public interface ILogRecord {
     public void logAppended(long lsn);
 
     public long getPreviousMarkerLSN();
+
+    /**
+     * Sets flag indicating if this log should be replicated or not
+     *
+     * @param replicate
+     */
+    void setReplicate(boolean replicate);
+
+    /**
+     * Gets a flag indicating if this log should be replicated or not
+     *
+     * @return the flag
+     */
+    boolean isReplicate();
 }

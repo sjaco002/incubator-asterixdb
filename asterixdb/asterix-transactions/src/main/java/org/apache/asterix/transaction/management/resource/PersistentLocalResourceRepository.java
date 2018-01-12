@@ -18,35 +18,43 @@
  */
 package org.apache.asterix.transaction.management.resource;
 
+import static org.apache.asterix.common.utils.StorageConstants.INDEX_CHECKPOINT_FILE_PREFIX;
 import static org.apache.hyracks.api.exceptions.ErrorCode.CANNOT_CREATE_FILE;
+import static org.apache.hyracks.storage.am.lsm.common.impls.AbstractLSMIndexFileManager.COMPONENT_FILES_FILTER;
+import static org.apache.hyracks.storage.am.lsm.common.impls.AbstractLSMIndexFileManager.COMPONENT_TIMESTAMP_FORMAT;
 
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
+import java.io.FilenameFilter;
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.text.Format;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Predicate;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
-import org.apache.asterix.common.cluster.ClusterPartition;
-import org.apache.asterix.common.config.MetadataProperties;
 import org.apache.asterix.common.dataflow.DatasetLocalResource;
 import org.apache.asterix.common.exceptions.AsterixException;
 import org.apache.asterix.common.replication.IReplicationManager;
 import org.apache.asterix.common.replication.ReplicationJob;
 import org.apache.asterix.common.storage.DatasetResourceReference;
+import org.apache.asterix.common.storage.IIndexCheckpointManager;
 import org.apache.asterix.common.storage.IIndexCheckpointManagerProvider;
 import org.apache.asterix.common.storage.ResourceReference;
 import org.apache.asterix.common.utils.StorageConstants;
@@ -62,8 +70,11 @@ import org.apache.hyracks.api.replication.IReplicationJob.ReplicationJobType;
 import org.apache.hyracks.api.replication.IReplicationJob.ReplicationOperation;
 import org.apache.hyracks.api.util.IoUtil;
 import org.apache.hyracks.storage.am.common.api.ITreeIndexFrame;
+import org.apache.hyracks.storage.am.lsm.common.impls.AbstractLSMIndexFileManager;
 import org.apache.hyracks.storage.common.ILocalResourceRepository;
 import org.apache.hyracks.storage.common.LocalResource;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
@@ -71,7 +82,11 @@ import com.google.common.cache.CacheBuilder;
 public class PersistentLocalResourceRepository implements ILocalResourceRepository {
 
     public static final Predicate<Path> INDEX_COMPONENTS = path -> !path.endsWith(StorageConstants.METADATA_FILE_NAME);
-    // Private constants
+    private static final Logger LOGGER = LogManager.getLogger();
+    private static final FilenameFilter LSM_INDEX_FILES_FILTER =
+            (dir, name) -> !name.startsWith(INDEX_CHECKPOINT_FILE_PREFIX);
+    private static final FilenameFilter MASK_FILES_FILTER =
+            (dir, name) -> name.startsWith(StorageConstants.MASK_FILE_PREFIX);
     private static final int MAX_CACHED_RESOURCES = 1000;
     private static final IOFileFilter METADATA_FILES_FILTER = new IOFileFilter() {
         @Override
@@ -97,20 +112,20 @@ public class PersistentLocalResourceRepository implements ILocalResourceReposito
         }
     };
 
+    private static final ThreadLocal<SimpleDateFormat> THREAD_LOCAL_FORMATTER =
+            ThreadLocal.withInitial(() -> new SimpleDateFormat(COMPONENT_TIMESTAMP_FORMAT));
+
     // Finals
     private final IIOManager ioManager;
     private final Cache<String, LocalResource> resourceCache;
-    private final Set<Integer> nodeOriginalPartitions;
-    private final Set<Integer> nodeActivePartitions;
     // Mutables
     private boolean isReplicationEnabled = false;
     private Set<String> filesToBeReplicated;
     private IReplicationManager replicationManager;
-    private Set<Integer> nodeInactivePartitions;
     private final Path[] storageRoots;
     private final IIndexCheckpointManagerProvider indexCheckpointManagerProvider;
 
-    public PersistentLocalResourceRepository(IIOManager ioManager, String nodeId, MetadataProperties metadataProperties,
+    public PersistentLocalResourceRepository(IIOManager ioManager,
             IIndexCheckpointManagerProvider indexCheckpointManagerProvider) {
         this.ioManager = ioManager;
         this.indexCheckpointManagerProvider = indexCheckpointManagerProvider;
@@ -122,15 +137,6 @@ public class PersistentLocalResourceRepository implements ILocalResourceReposito
         }
         createStorageRoots();
         resourceCache = CacheBuilder.newBuilder().maximumSize(MAX_CACHED_RESOURCES).build();
-        ClusterPartition[] nodePartitions = metadataProperties.getNodePartitions().get(nodeId);
-        //initially the node active partitions are the same as the original partitions
-        nodeOriginalPartitions = new HashSet<>(nodePartitions.length);
-        nodeActivePartitions = new HashSet<>(nodePartitions.length);
-        nodeInactivePartitions = new HashSet<>(nodePartitions.length);
-        for (ClusterPartition partition : nodePartitions) {
-            nodeOriginalPartitions.add(partition.getPartitionId());
-            nodeActivePartitions.add(partition.getPartitionId());
-        }
     }
 
     @Override
@@ -267,7 +273,6 @@ public class PersistentLocalResourceRepository implements ILocalResourceReposito
 
         if (isReplicationEnabled) {
             filesToBeReplicated = new HashSet<>();
-            nodeInactivePartitions = ConcurrentHashMap.newKeySet();
         }
     }
 
@@ -299,26 +304,13 @@ public class PersistentLocalResourceRepository implements ILocalResourceReposito
         createStorageRoots();
     }
 
-    public Set<Integer> getActivePartitions() {
-        return Collections.unmodifiableSet(nodeActivePartitions);
-    }
-
-    public Set<Integer> getInactivePartitions() {
-        return Collections.unmodifiableSet(nodeInactivePartitions);
-    }
-
-    public synchronized void addActivePartition(int partitonId) {
-        nodeActivePartitions.add(partitonId);
-        nodeInactivePartitions.remove(partitonId);
-    }
-
-    public synchronized void addInactivePartition(int partitonId) {
-        nodeInactivePartitions.add(partitonId);
-        nodeActivePartitions.remove(partitonId);
+    public Set<Integer> getAllPartitions() throws HyracksDataException {
+        return loadAndGetAllResources().values().stream().map(LocalResource::getResource)
+                .map(DatasetLocalResource.class::cast).map(DatasetLocalResource::getPartition)
+                .collect(Collectors.toSet());
     }
 
     public DatasetResourceReference getLocalResourceReference(String absoluteFilePath) throws HyracksDataException {
-        //TODO pass relative path
         final String localResourcePath = StoragePathUtil.getIndexFileRelativePath(absoluteFilePath);
         final LocalResource lr = get(localResourcePath);
         return DatasetResourceReference.of(lr);
@@ -351,17 +343,18 @@ public class PersistentLocalResourceRepository implements ILocalResourceReposito
         });
     }
 
-    /**
-     * Given any index file, an absolute {@link FileReference} is returned which points to where the index of
-     * {@code indexFile} is located.
-     *
-     * @param indexFile
-     * @return
-     * @throws HyracksDataException
-     */
-    public FileReference getIndexPath(Path indexFile) throws HyracksDataException {
-        final ResourceReference ref = ResourceReference.of(indexFile.toString());
-        return ioManager.resolve(ref.getRelativePath().toString());
+    public List<String> getPartitionIndexesFiles(int partition) throws HyracksDataException {
+        List<String> partitionFiles = new ArrayList<>();
+        Set<File> partitionIndexes = getPartitionIndexes(partition);
+        for (File indexDir : partitionIndexes) {
+            if (indexDir.isDirectory()) {
+                File[] indexFiles = indexDir.listFiles(LSM_INDEX_FILES_FILTER);
+                if (indexFiles != null) {
+                    Stream.of(indexFiles).map(File::getAbsolutePath).forEach(partitionFiles::add);
+                }
+            }
+        }
+        return partitionFiles;
     }
 
     private void createStorageRoots() {
@@ -372,5 +365,104 @@ public class PersistentLocalResourceRepository implements ILocalResourceReposito
                 throw new IllegalStateException("Failed to create storage root directory at " + root, e);
             }
         }
+    }
+
+    public void cleanup(int partition) throws HyracksDataException {
+        final Set<File> partitionIndexes = getPartitionIndexes(partition);
+        try {
+            for (File index : partitionIndexes) {
+                deleteIndexMaskedFiles(index);
+                if (isValidIndex(index)) {
+                    deleteIndexInvalidComponents(index);
+                }
+            }
+        } catch (IOException | ParseException e) {
+            throw HyracksDataException.create(e);
+        }
+    }
+
+    private void deleteIndexMaskedFiles(File index) throws IOException {
+        File[] masks = index.listFiles(MASK_FILES_FILTER);
+        if (masks != null) {
+            for (File mask : masks) {
+                deleteIndexMaskedFiles(index, mask);
+                // delete the mask itself
+                Files.delete(mask.toPath());
+            }
+        }
+    }
+
+    private boolean isValidIndex(File index) throws IOException {
+        // any index without any checkpoint files is invalid
+        // this can happen if a crash happens when the index metadata file is created
+        // but before the initial checkpoint is persisted. The index metadata file will
+        // be deleted and recreated when the index is created again
+        return getIndexCheckpointManager(index).getCheckpointCount() != 0;
+    }
+
+    private void deleteIndexInvalidComponents(File index) throws IOException, ParseException {
+        final Optional<String> validComponentTimestamp = getIndexCheckpointManager(index).getValidComponentTimestamp();
+        if (!validComponentTimestamp.isPresent()) {
+            // index doesn't have any components
+            return;
+        }
+        final Format formatter = THREAD_LOCAL_FORMATTER.get();
+        final Date validTimestamp = (Date) formatter.parseObject(validComponentTimestamp.get());
+        final File[] indexComponentFiles = index.listFiles(COMPONENT_FILES_FILTER);
+        if (indexComponentFiles != null) {
+            for (File componentFile : indexComponentFiles) {
+                // delete any file with startTime > validTimestamp
+                final String fileStartTimeStr =
+                        AbstractLSMIndexFileManager.getComponentStartTime(componentFile.getName());
+                final Date fileStartTime = (Date) formatter.parseObject(fileStartTimeStr);
+                if (fileStartTime.after(validTimestamp)) {
+                    LOGGER.info(() -> "Deleting invalid component file: " + componentFile.getAbsolutePath());
+                    Files.delete(componentFile.toPath());
+                }
+            }
+        }
+    }
+
+    private IIndexCheckpointManager getIndexCheckpointManager(File index) throws HyracksDataException {
+        final String indexFile = Paths.get(index.getAbsolutePath(), StorageConstants.METADATA_FILE_NAME).toString();
+        final ResourceReference indexRef = ResourceReference.of(indexFile);
+        return indexCheckpointManagerProvider.get(indexRef);
+    }
+
+    private void deleteIndexMaskedFiles(File index, File mask) throws IOException {
+        if (!mask.getName().startsWith(StorageConstants.MASK_FILE_PREFIX)) {
+            throw new IllegalArgumentException("Unrecognized mask file: " + mask);
+        }
+        File[] maskedFiles;
+        if (isComponentMask(mask)) {
+            final String componentId = mask.getName().substring(StorageConstants.COMPONENT_MASK_FILE_PREFIX.length());
+            maskedFiles = index.listFiles((dir, name) -> name.startsWith(componentId));
+        } else {
+            final String maskedFileName = mask.getName().substring(StorageConstants.MASK_FILE_PREFIX.length());
+            maskedFiles = index.listFiles((dir, name) -> name.equals(maskedFileName));
+        }
+        if (maskedFiles != null) {
+            for (File maskedFile : maskedFiles) {
+                LOGGER.info(() -> "deleting masked file: " + maskedFile.getAbsolutePath());
+                Files.delete(maskedFile.toPath());
+            }
+        }
+    }
+
+    /**
+     * Gets a component id based on its unique timestamp.
+     * e.g. a component file 2018-01-08-01-08-50-439_2018-01-08-01-08-50-439_b
+     * will return a component id 2018-01-08-01-08-50-439_2018-01-08-01-08-50-439
+     *
+     * @param componentFile any component file
+     * @return The component id
+     */
+    public static String getComponentId(String componentFile) {
+        final ResourceReference ref = ResourceReference.of(componentFile);
+        return ref.getName().substring(0, ref.getName().lastIndexOf(AbstractLSMIndexFileManager.DELIMITER));
+    }
+
+    private static boolean isComponentMask(File mask) {
+        return mask.getName().startsWith(StorageConstants.COMPONENT_MASK_FILE_PREFIX);
     }
 }

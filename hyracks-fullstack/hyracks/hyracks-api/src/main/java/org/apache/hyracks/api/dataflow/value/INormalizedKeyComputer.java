@@ -19,10 +19,7 @@
 package org.apache.hyracks.api.dataflow.value;
 
 public interface INormalizedKeyComputer {
-    public int normalize(byte[] bytes, int start, int length);
+    void normalize(byte[] bytes, int start, int length, int[] normalizedKeys, int keyStart);
 
-    default void normalize(byte[] bytes, int start, int length, int[] normalizedKeys, int keyStart) {
-        int key = normalize(bytes, start, length);
-        normalizedKeys[keyStart] = key;
-    }
+    INormalizedKeyProperties getNormalizedKeyProperties();
 }
