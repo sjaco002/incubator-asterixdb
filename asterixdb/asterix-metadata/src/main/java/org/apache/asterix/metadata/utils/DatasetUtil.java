@@ -177,16 +177,8 @@ public class DatasetUtil {
         List<List<String>> partitioningKeys = dataset.getPrimaryKeys();
         for (int i = 0; i < partitioningKeys.size(); i++) {
             List<String> partitioningKey = partitioningKeys.get(i);
-            if (partitioningKey.size() != fieldExpr.size()) {
-                continue;
-            }
-            for (int j = 0; j < partitioningKey.size(); j++) {
-                if (!partitioningKey.get(j).equals(fieldExpr.get(j))) {
-                    break;
-                }
-                if (j == partitioningKey.size() - 1) {
-                    return i;
-                }
+            if (partitioningKey.equals(fieldExpr)) {
+                return i;
             }
         }
         return -1;
