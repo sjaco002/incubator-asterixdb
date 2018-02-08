@@ -12,8 +12,8 @@ RecordConstructor [
           Field=valplus
         ]
         ]
-        FROM [          FunctionCall Metadata.dataset@1[
-            LiteralExpr [STRING] [Test]
+        FROM [          FunctionCall asterix.dataset@1[
+            LiteralExpr [STRING] [test.Test]
           ]
           AS Variable [ Name=$t ]
         ]
@@ -31,8 +31,8 @@ RecordConstructor [
           Field=valplus
         ]
         ]
-        FROM [          FunctionCall Metadata.dataset@1[
-            LiteralExpr [STRING] [Test]
+        FROM [          FunctionCall asterix.dataset@1[
+            LiteralExpr [STRING] [test.Test]
           ]
           AS Variable [ Name=$t ]
         ]
@@ -50,8 +50,8 @@ RecordConstructor [
           Field=valplus
         ]
         ]
-        FROM [          FunctionCall Metadata.dataset@1[
-            LiteralExpr [STRING] [Test]
+        FROM [          FunctionCall asterix.dataset@1[
+            LiteralExpr [STRING] [test.Test]
           ]
           AS Variable [ Name=$t ]
         ]
@@ -69,8 +69,8 @@ RecordConstructor [
           Field=valplus
         ]
         ]
-        FROM [          FunctionCall Metadata.dataset@1[
-            LiteralExpr [STRING] [Test]
+        FROM [          FunctionCall asterix.dataset@1[
+            LiteralExpr [STRING] [test.Test]
           ]
           AS Variable [ Name=$t ]
         ]
@@ -88,8 +88,8 @@ RecordConstructor [
           Field=valplus
         ]
         ]
-        FROM [          FunctionCall Metadata.dataset@1[
-            LiteralExpr [STRING] [Test]
+        FROM [          FunctionCall asterix.dataset@1[
+            LiteralExpr [STRING] [test.Test]
           ]
           AS Variable [ Name=$t ]
         ]

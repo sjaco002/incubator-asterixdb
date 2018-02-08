@@ -98,13 +98,13 @@ public interface IRecoveryManager {
     /**
      * Creates a temporary file to be used during recovery
      *
-     * @param jobId
+     * @param txnId
      * @param fileName
      * @return A file to the created temporary file
      * @throws IOException
-     *             if the file for the specified {@code jobId} with the {@code fileName} already exists
+     *             if the file for the specified {@code txnId} with the {@code fileName} already exists
      */
-    File createJobRecoveryFile(int jobId, String fileName) throws IOException;
+    File createJobRecoveryFile(long txnId, String fileName) throws IOException;
 
     /**
      * Deletes all temporary recovery files
@@ -119,4 +119,15 @@ public interface IRecoveryManager {
      * @throws ACIDException
      */
     void startLocalRecovery(Set<Integer> partitions) throws IOException, ACIDException;
+
+    /**
+     * Replay the commited transactions' logs belonging to {@code partitions}. if {@code flush} is true,
+     * all datasets are flushed after the logs are replayed.
+     *
+     * @param partitions
+     * @param flush
+     * @throws HyracksDataException
+     */
+    void replayReplicaPartitionLogs(Set<Integer> partitions, boolean flush) throws HyracksDataException;
+
 }

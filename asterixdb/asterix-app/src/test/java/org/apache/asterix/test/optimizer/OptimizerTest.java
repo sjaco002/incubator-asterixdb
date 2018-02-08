@@ -26,7 +26,6 @@ import java.io.PrintWriter;
 import java.io.Reader;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.logging.Logger;
 
 import org.apache.asterix.api.common.AsterixHyracksIntegrationUtil;
 import org.apache.asterix.api.java.AsterixJavaClient;
@@ -34,7 +33,6 @@ import org.apache.asterix.app.translator.DefaultStatementExecutorFactory;
 import org.apache.asterix.common.config.GlobalConfig;
 import org.apache.asterix.common.context.IStorageComponentProvider;
 import org.apache.asterix.common.dataflow.ICcApplicationContext;
-import org.apache.asterix.common.exceptions.AsterixException;
 import org.apache.asterix.compiler.provider.AqlCompilationProvider;
 import org.apache.asterix.compiler.provider.ILangCompilationProvider;
 import org.apache.asterix.compiler.provider.SqlppCompilationProvider;
@@ -45,7 +43,10 @@ import org.apache.asterix.test.base.AsterixTestHelper;
 import org.apache.asterix.test.common.TestHelper;
 import org.apache.asterix.test.runtime.HDFSCluster;
 import org.apache.asterix.translator.IStatementExecutorFactory;
+import org.apache.hyracks.algebricks.common.exceptions.AlgebricksException;
 import org.apache.hyracks.api.client.IHyracksClientConnection;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.junit.AfterClass;
 import org.junit.Assume;
 import org.junit.BeforeClass;
@@ -58,7 +59,7 @@ import org.junit.runners.Parameterized.Parameters;
 @RunWith(Parameterized.class)
 public class OptimizerTest {
 
-    private static final Logger LOGGER = Logger.getLogger(OptimizerTest.class.getName());
+    private static final Logger LOGGER = LogManager.getLogger();
 
     private static final String SEPARATOR = File.separator;
     private static final String EXTENSION_AQL = "aql";
@@ -74,7 +75,7 @@ public class OptimizerTest {
 
     private static final ArrayList<String> ignore = AsterixTestHelper.readTestListFile(FILENAME_IGNORE, PATH_BASE);
     private static final ArrayList<String> only = AsterixTestHelper.readTestListFile(FILENAME_ONLY, PATH_BASE);
-    protected static String TEST_CONFIG_FILE_NAME = "asterix-build-configuration.xml";
+    protected static final String TEST_CONFIG_FILE_NAME = "src/main/resources/cc.conf";
     private static final ILangCompilationProvider aqlCompilationProvider = new AqlCompilationProvider();
     private static final ILangCompilationProvider sqlppCompilationProvider = new SqlppCompilationProvider();
     protected static ILangCompilationProvider extensionLangCompilationProvider = null;
@@ -85,13 +86,12 @@ public class OptimizerTest {
 
     @BeforeClass
     public static void setUp() throws Exception {
-        System.setProperty(GlobalConfig.CONFIG_FILE_PROPERTY, TEST_CONFIG_FILE_NAME);
         final File outdir = new File(PATH_ACTUAL);
         outdir.mkdirs();
 
         HDFSCluster.getInstance().setup();
 
-        integrationUtil.init(true);
+        integrationUtil.init(true, TEST_CONFIG_FILE_NAME);
         // Set the node resolver to be the identity resolver that expects node names
         // to be node controller ids; a valid assumption in test environment.
         System.setProperty(ExternalDataConstants.NODE_RESOLVER_FACTORY_PROPERTY,
@@ -189,7 +189,7 @@ public class OptimizerTest {
                             query, plan, provider, statementExecutorFactory, storageComponentProvider);
             try {
                 asterix.compile(true, false, false, true, true, false, false);
-            } catch (AsterixException e) {
+            } catch (AlgebricksException e) {
                 plan.close();
                 query.close();
                 throw new Exception("Compile ERROR for " + queryFile + ": " + e.getMessage(), e);
@@ -230,7 +230,7 @@ public class OptimizerTest {
             }
         } catch (Exception e) {
             if (!(e instanceof AssumptionViolatedException)) {
-                LOGGER.severe("Test \"" + queryFile.getPath() + "\" FAILED!");
+                LOGGER.error("Test \"" + queryFile.getPath() + "\" FAILED!");
                 throw new Exception("Test \"" + queryFile.getPath() + "\" FAILED!", e);
             } else {
                 throw e;

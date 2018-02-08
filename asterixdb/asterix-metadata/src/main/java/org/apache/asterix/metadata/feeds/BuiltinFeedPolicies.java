@@ -20,19 +20,19 @@ package org.apache.asterix.metadata.feeds;
 
 import java.util.HashMap;
 import java.util.Map;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 
-import org.apache.asterix.common.exceptions.MetadataException;
 import org.apache.asterix.external.feed.policy.FeedPolicyAccessor;
 import org.apache.asterix.metadata.MetadataManager;
 import org.apache.asterix.metadata.MetadataTransactionContext;
 import org.apache.asterix.metadata.entities.FeedPolicyEntity;
 import org.apache.asterix.metadata.utils.MetadataConstants;
+import org.apache.hyracks.algebricks.common.exceptions.AlgebricksException;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 public class BuiltinFeedPolicies {
 
-    private static final Logger LOGGER = Logger.getLogger(BuiltinFeedPolicies.class.getName());
+    private static final Logger LOGGER = LogManager.getLogger();
 
     public static final FeedPolicyEntity BASIC = initializeBasicPolicy();
 
@@ -61,7 +61,7 @@ public class BuiltinFeedPolicies {
         return null;
     }
 
-    //Basic
+    // Basic
     private static FeedPolicyEntity initializeBasicPolicy() {
         Map<String, String> policyParams = new HashMap<>();
         policyParams.put(FeedPolicyAccessor.ELASTIC, Boolean.toString(false));
@@ -106,13 +106,11 @@ public class BuiltinFeedPolicies {
                 policyParams);
     }
 
-    public static void insertInitialFeedPolicies(MetadataTransactionContext mdTxnCtx) throws MetadataException {
+    public static void insertInitialFeedPolicies(MetadataTransactionContext mdTxnCtx) throws AlgebricksException {
         for (FeedPolicyEntity feedPolicy : BuiltinFeedPolicies.POLICIES) {
             MetadataManager.INSTANCE.addFeedPolicy(mdTxnCtx, feedPolicy);
         }
-        if (LOGGER.isLoggable(Level.INFO)) {
-            LOGGER.info("Finished adding built-in feed policies.");
-        }
+        LOGGER.info("Finished adding built-in feed policies.");
     }
 
 }

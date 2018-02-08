@@ -21,6 +21,7 @@ package org.apache.hyracks.control.common.controllers;
 import static org.apache.hyracks.control.common.config.OptionTypes.BOOLEAN;
 import static org.apache.hyracks.control.common.config.OptionTypes.INTEGER;
 import static org.apache.hyracks.control.common.config.OptionTypes.LONG;
+import static org.apache.hyracks.control.common.config.OptionTypes.SHORT;
 import static org.apache.hyracks.control.common.config.OptionTypes.STRING;
 
 import java.io.File;
@@ -33,6 +34,7 @@ import org.apache.hyracks.api.config.IApplicationConfig;
 import org.apache.hyracks.api.config.IOption;
 import org.apache.hyracks.api.config.IOptionType;
 import org.apache.hyracks.api.config.Section;
+import org.apache.hyracks.api.control.CcId;
 import org.apache.hyracks.control.common.config.ConfigManager;
 import org.apache.hyracks.util.file.FileUtil;
 import org.ini4j.Ini;
@@ -58,15 +60,14 @@ public class CCConfig extends ControllerConfig {
         RESULT_TTL(LONG, 86400000L), // TODO(mblow): add time unit
         RESULT_SWEEP_THRESHOLD(LONG, 60000L), // TODO(mblow): add time unit
         @SuppressWarnings("RedundantCast") // not redundant- false positive from IDEA
-        ROOT_DIR(STRING, (Function<IApplicationConfig, String>) appConfig ->
-                FileUtil.joinPath(appConfig.getString(ControllerConfig.Option.DEFAULT_DIR),
-                        "ClusterControllerService"), "<value of " + ControllerConfig.Option.DEFAULT_DIR.cmdline() +
-                ">/ClusterControllerService"),
+        ROOT_DIR(STRING, (Function<IApplicationConfig, String>) appConfig -> FileUtil.joinPath(appConfig.getString(ControllerConfig.Option.DEFAULT_DIR), "ClusterControllerService"), "<value of " + ControllerConfig.Option.DEFAULT_DIR.cmdline() + ">/ClusterControllerService"),
         CLUSTER_TOPOLOGY(STRING),
         JOB_QUEUE_CLASS(STRING, "org.apache.hyracks.control.cc.scheduler.FIFOJobQueue"),
         JOB_QUEUE_CAPACITY(INTEGER, 4096),
         JOB_MANAGER_CLASS(STRING, "org.apache.hyracks.control.cc.job.JobManager"),
-        ENFORCE_FRAME_WRITER_PROTOCOL(BOOLEAN, false);
+        ENFORCE_FRAME_WRITER_PROTOCOL(BOOLEAN, false),
+        CORES_MULTIPLIER(INTEGER, 3),
+        CONTROLLER_ID(SHORT, (short) 0x0000);
 
         private final IOptionType parser;
         private Object defaultValue;
@@ -89,7 +90,7 @@ public class CCConfig extends ControllerConfig {
         }
 
         <T> Option(IOptionType<T> parser, Function<IApplicationConfig, T> defaultValue,
-                   String defaultValueDescription) {
+                String defaultValueDescription) {
             this.parser = parser;
             this.defaultValue = defaultValue;
             this.defaultValueDescription = defaultValueDescription;
@@ -161,6 +162,10 @@ public class CCConfig extends ControllerConfig {
                 case ENFORCE_FRAME_WRITER_PROTOCOL:
                     return "A flag indicating if runtime should enforce frame writer protocol and detect "
                             + "bad behaving operators";
+                case CORES_MULTIPLIER:
+                    return "Specifies the multiplier to use on the cluster available cores";
+                case CONTROLLER_ID:
+                    return "The 16-bit (0-65535) id of this Cluster Controller";
                 default:
                     throw new IllegalStateException("NYI: " + this);
             }
@@ -362,5 +367,17 @@ public class CCConfig extends ControllerConfig {
 
     public void setEnforceFrameWriterProtocol(boolean enforce) {
         configManager.set(Option.ENFORCE_FRAME_WRITER_PROTOCOL, enforce);
+    }
+
+    public void setCoresMultiplier(int coresMultiplier) {
+        configManager.set(Option.CORES_MULTIPLIER, coresMultiplier);
+    }
+
+    public int getCoresMultiplier() {
+        return getAppConfig().getInt(Option.CORES_MULTIPLIER);
+    }
+
+    public CcId getCcId() {
+        return CcId.valueOf(getAppConfig().getShort(Option.CONTROLLER_ID));
     }
 }

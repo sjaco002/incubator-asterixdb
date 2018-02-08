@@ -55,8 +55,11 @@ public interface ILSMMergePolicy {
      * @throws IndexException
      */
     public boolean isMergeLagging(ILSMIndex index) throws HyracksDataException;
+
     public long getNumberOfFlushes();
+
     public long getNumberOfMerges();
+
     public double getMergeCost();
 
 }

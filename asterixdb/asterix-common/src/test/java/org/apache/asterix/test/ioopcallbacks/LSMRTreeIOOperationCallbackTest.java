@@ -19,66 +19,21 @@
 
 package org.apache.asterix.test.ioopcallbacks;
 
+import org.apache.asterix.common.ioopcallbacks.AbstractLSMIOOperationCallback;
 import org.apache.asterix.common.ioopcallbacks.LSMRTreeIOOperationCallback;
-import org.apache.hyracks.storage.am.lsm.common.api.ILSMDiskComponent;
-import org.apache.hyracks.storage.am.lsm.common.api.LSMOperationType;
-import org.junit.Assert;
+import org.apache.hyracks.api.exceptions.HyracksDataException;
+import org.apache.hyracks.storage.am.lsm.common.api.ILSMIndex;
+import org.apache.hyracks.storage.am.lsm.common.impls.LSMComponentIdGenerator;
 import org.mockito.Mockito;
 
-import junit.framework.TestCase;
+public class LSMRTreeIOOperationCallbackTest extends AbstractLSMIOOperationCallbackTest {
 
-public class LSMRTreeIOOperationCallbackTest extends TestCase {
-
-    public void testNormalSequence() {
-        try {
-            LSMRTreeIOOperationCallback callback = new LSMRTreeIOOperationCallback();
-            callback.setNumOfMutableComponents(2);
-
-            //request to flush first component
-            callback.updateLastLSN(1);
-            callback.beforeOperation(LSMOperationType.FLUSH);
-
-            //request to flush second component
-            callback.updateLastLSN(2);
-            callback.beforeOperation(LSMOperationType.FLUSH);
-
-            Assert.assertEquals(1, callback.getComponentLSN(null));
-            callback.afterFinalize(LSMOperationType.FLUSH, Mockito.mock(ILSMDiskComponent.class));
-
-            Assert.assertEquals(2, callback.getComponentLSN(null));
-            callback.afterFinalize(LSMOperationType.FLUSH, Mockito.mock(ILSMDiskComponent.class));
-        } catch (Exception e) {
-            Assert.fail();
-        }
-    }
-
-    public void testOverWrittenLSN() {
-        try {
-            LSMRTreeIOOperationCallback callback = new LSMRTreeIOOperationCallback();
-            callback.setNumOfMutableComponents(2);
-
-            //request to flush first component
-            callback.updateLastLSN(1);
-            callback.beforeOperation(LSMOperationType.FLUSH);
-
-            //request to flush second component
-            callback.updateLastLSN(2);
-            callback.beforeOperation(LSMOperationType.FLUSH);
-
-            //request to flush first component again
-            //this call should fail
-            callback.updateLastLSN(3);
-            //there is no corresponding beforeOperation, since the first component is being flush
-            //the scheduleFlush request would fail this time
-
-            Assert.assertEquals(1, callback.getComponentLSN(null));
-            callback.afterFinalize(LSMOperationType.FLUSH, Mockito.mock(ILSMDiskComponent.class));
-
-            Assert.assertEquals(2, callback.getComponentLSN(null));
-            callback.afterFinalize(LSMOperationType.FLUSH, Mockito.mock(ILSMDiskComponent.class));
-        } catch (Exception e) {
-            Assert.fail();
-        }
+    @Override
+    protected AbstractLSMIOOperationCallback getIoCallback() throws HyracksDataException {
+        ILSMIndex mockIndex = Mockito.mock(ILSMIndex.class);
+        Mockito.when(mockIndex.getNumberOfAllMemoryComponents()).thenReturn(2);
+        return new LSMRTreeIOOperationCallback(mockIndex, new LSMComponentIdGenerator(),
+                mockIndexCheckpointManagerProvider());
     }
 
 }

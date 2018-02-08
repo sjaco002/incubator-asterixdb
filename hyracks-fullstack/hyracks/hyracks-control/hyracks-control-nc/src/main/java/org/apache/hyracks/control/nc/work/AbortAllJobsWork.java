@@ -19,38 +19,45 @@
 package org.apache.hyracks.control.nc.work;
 
 import java.util.Collection;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 
+import org.apache.hyracks.api.control.CcId;
 import org.apache.hyracks.api.dataset.IDatasetPartitionManager;
 import org.apache.hyracks.api.job.JobStatus;
 import org.apache.hyracks.control.common.work.SynchronizableWork;
 import org.apache.hyracks.control.nc.Joblet;
 import org.apache.hyracks.control.nc.NodeControllerService;
 import org.apache.hyracks.control.nc.Task;
+import org.apache.logging.log4j.Level;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 public class AbortAllJobsWork extends SynchronizableWork {
 
-    private static final Logger LOGGER = Logger.getLogger(AbortAllJobsWork.class.getName());
+    private static final Logger LOGGER = LogManager.getLogger();
     private final NodeControllerService ncs;
+    private final CcId ccId;
 
-    public AbortAllJobsWork(NodeControllerService ncs) {
+    public AbortAllJobsWork(NodeControllerService ncs, CcId ccId) {
         this.ncs = ncs;
+        this.ccId = ccId;
     }
 
     @Override
     protected void doRun() throws Exception {
-        if (LOGGER.isLoggable(Level.INFO)) {
-            LOGGER.info("Aborting all tasks");
-        }
+        LOGGER.info("Aborting all tasks for controller {}", ccId);
         IDatasetPartitionManager dpm = ncs.getDatasetPartitionManager();
-        if (dpm != null) {
-            ncs.getDatasetPartitionManager().abortAllReaders();
-        } else {
-            LOGGER.log(Level.WARNING, "DatasetPartitionManager is null on " + ncs.getId());
+        if (dpm == null) {
+            LOGGER.log(Level.WARN, "DatasetPartitionManager is null on " + ncs.getId());
         }
         Collection<Joblet> joblets = ncs.getJobletMap().values();
         for (Joblet ji : joblets) {
+            // TODO(mblow): should we have one jobletmap per cc?
+            if (!ji.getJobId().getCcId().equals(ccId)) {
+                continue;
+            }
+            if (dpm != null) {
+                dpm.abortReader(ji.getJobId());
+            }
             Collection<Task> tasks = ji.getTaskMap().values();
             for (Task task : tasks) {
                 task.abort();

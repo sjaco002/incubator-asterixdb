@@ -33,20 +33,32 @@ import org.apache.hyracks.util.StorageUtil;
 public class CompilerProperties extends AbstractProperties {
 
     public enum Option implements IOption {
-        COMPILER_SORTMEMORY(LONG_BYTE_UNIT, StorageUtil.getLongSizeInBytes(32L, MEGABYTE),
+        COMPILER_SORTMEMORY(
+                LONG_BYTE_UNIT,
+                StorageUtil.getLongSizeInBytes(32L, MEGABYTE),
                 "The memory budget (in bytes) for a sort operator instance in a partition"),
-        COMPILER_JOINMEMORY(LONG_BYTE_UNIT, StorageUtil.getLongSizeInBytes(32L, MEGABYTE),
+        COMPILER_JOINMEMORY(
+                LONG_BYTE_UNIT,
+                StorageUtil.getLongSizeInBytes(32L, MEGABYTE),
                 "The memory budget (in bytes) for a join operator instance in a partition"),
-        COMPILER_GROUPMEMORY(LONG_BYTE_UNIT, StorageUtil.getLongSizeInBytes(32L, MEGABYTE),
+        COMPILER_GROUPMEMORY(
+                LONG_BYTE_UNIT,
+                StorageUtil.getLongSizeInBytes(32L, MEGABYTE),
                 "The memory budget (in bytes) for a group by operator instance in a partition"),
-        COMPILER_FRAMESIZE(INTEGER_BYTE_UNIT, StorageUtil.getIntSizeInBytes(32, KILOBYTE),
+        COMPILER_FRAMESIZE(
+                INTEGER_BYTE_UNIT,
+                StorageUtil.getIntSizeInBytes(32, KILOBYTE),
                 "The page size (in bytes) for computation"),
-        COMPILER_PARALLELISM(INTEGER, COMPILER_PARALLELISM_AS_STORAGE, "The degree of parallelism for query " +
-                "execution. Zero means to use the storage parallelism as the query execution parallelism, while " +
-                "other integer values dictate the number of query execution parallel partitions. The system will " +
-                "fall back to use the number of all available CPU cores in the cluster as the degree of parallelism " +
-                "if the number set by a user is too large or too small"),
-        COMPILER_PREGELIX_HOME(STRING, "~/pregelix", "Pregelix installation root directory");
+        COMPILER_PARALLELISM(
+                INTEGER,
+                COMPILER_PARALLELISM_AS_STORAGE,
+                "The degree of parallelism for query "
+                        + "execution. Zero means to use the storage parallelism as the query execution parallelism, while "
+                        + "other integer values dictate the number of query execution parallel partitions. The system will "
+                        + "fall back to use the number of all available CPU cores in the cluster as the degree of parallelism "
+                        + "if the number set by a user is too large or too small"),
+        COMPILER_PREGELIX_HOME(STRING, "~/pregelix", "Pregelix installation root directory"),
+        COMPILER_STRINGOFFSET(INTEGER, 0, "Position of a first character in a String/Binary (0 or 1)");
 
         private final IOptionType type;
         private final Object defaultValue;
@@ -80,9 +92,10 @@ public class CompilerProperties extends AbstractProperties {
 
         @Override
         public boolean hidden() {
-            return this == COMPILER_PREGELIX_HOME;
+            return this == COMPILER_PREGELIX_HOME || this == COMPILER_STRINGOFFSET;
         }
     }
+
     public static final String COMPILER_SORTMEMORY_KEY = Option.COMPILER_SORTMEMORY.ini();
 
     public static final String COMPILER_GROUPMEMORY_KEY = Option.COMPILER_GROUPMEMORY.ini();
@@ -119,5 +132,10 @@ public class CompilerProperties extends AbstractProperties {
 
     public String getPregelixHome() {
         return accessor.getString(Option.COMPILER_PREGELIX_HOME);
+    }
+
+    public int getStringOffset() {
+        int value = accessor.getInt(Option.COMPILER_STRINGOFFSET);
+        return value > 0 ? 1 : 0;
     }
 }

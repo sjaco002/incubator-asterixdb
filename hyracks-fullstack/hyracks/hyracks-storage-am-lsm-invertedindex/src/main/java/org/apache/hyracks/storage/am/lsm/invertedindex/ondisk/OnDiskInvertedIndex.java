@@ -37,11 +37,12 @@ import org.apache.hyracks.dataflow.common.data.accessors.ITupleReference;
 import org.apache.hyracks.dataflow.common.utils.TupleUtils;
 import org.apache.hyracks.storage.am.btree.frames.BTreeLeafFrameType;
 import org.apache.hyracks.storage.am.btree.impls.BTree;
+import org.apache.hyracks.storage.am.btree.impls.DiskBTree;
 import org.apache.hyracks.storage.am.btree.impls.RangePredicate;
 import org.apache.hyracks.storage.am.btree.util.BTreeUtils;
 import org.apache.hyracks.storage.am.common.api.IIndexOperationContext;
 import org.apache.hyracks.storage.am.common.api.IPageManagerFactory;
-import org.apache.hyracks.storage.am.common.impls.NoOpOperationCallback;
+import org.apache.hyracks.storage.am.common.impls.NoOpIndexAccessParameters;
 import org.apache.hyracks.storage.am.common.tuples.PermutingTupleReference;
 import org.apache.hyracks.storage.am.lsm.invertedindex.api.IInPlaceInvertedIndex;
 import org.apache.hyracks.storage.am.lsm.invertedindex.api.IInvertedIndexAccessor;
@@ -50,11 +51,10 @@ import org.apache.hyracks.storage.am.lsm.invertedindex.api.IInvertedListBuilder;
 import org.apache.hyracks.storage.am.lsm.invertedindex.api.IInvertedListCursor;
 import org.apache.hyracks.storage.am.lsm.invertedindex.search.InvertedIndexSearchPredicate;
 import org.apache.hyracks.storage.am.lsm.invertedindex.search.TOccurrenceSearcher;
+import org.apache.hyracks.storage.common.IIndexAccessParameters;
 import org.apache.hyracks.storage.common.IIndexAccessor;
 import org.apache.hyracks.storage.common.IIndexBulkLoader;
 import org.apache.hyracks.storage.common.IIndexCursor;
-import org.apache.hyracks.storage.common.IModificationOperationCallback;
-import org.apache.hyracks.storage.common.ISearchOperationCallback;
 import org.apache.hyracks.storage.common.ISearchPredicate;
 import org.apache.hyracks.storage.common.MultiComparator;
 import org.apache.hyracks.storage.common.buffercache.IBufferCache;
@@ -91,7 +91,7 @@ public class OnDiskInvertedIndex implements IInPlaceInvertedIndex {
         btreeValueTypeTraits[3] = IntegerPointable.TYPE_TRAITS;
     }
 
-    protected BTree btree;
+    protected DiskBTree btree;
     protected int rootPageId = 0;
     protected IBufferCache bufferCache;
     protected int fileId = -1;
@@ -118,7 +118,7 @@ public class OnDiskInvertedIndex implements IInPlaceInvertedIndex {
         this.invListCmpFactories = invListCmpFactories;
         this.tokenTypeTraits = tokenTypeTraits;
         this.tokenCmpFactories = tokenCmpFactories;
-        this.btree = BTreeUtils.createBTree(bufferCache, getBTreeTypeTraits(tokenTypeTraits), tokenCmpFactories,
+        this.btree = BTreeUtils.createDiskBTree(bufferCache, getBTreeTypeTraits(tokenTypeTraits), tokenCmpFactories,
                 BTreeLeafFrameType.REGULAR_NSM, btreeFile, pageManagerFactory.createPageManager(bufferCache), false);
         this.numTokenFields = btree.getComparatorFactories().length;
         this.numInvListKeys = invListCmpFactories.length;
@@ -206,8 +206,8 @@ public class OnDiskInvertedIndex implements IInPlaceInvertedIndex {
                 listCursor.reset(0, 0, 0, 0);
             }
         } finally {
+            ctx.getBtreeCursor().destroy();
             ctx.getBtreeCursor().close();
-            ctx.getBtreeCursor().reset();
         }
     }
 
@@ -241,7 +241,7 @@ public class OnDiskInvertedIndex implements IInPlaceInvertedIndex {
         private final boolean verifyInput;
         private final MultiComparator allCmp;
 
-        private IFIFOPageQueue queue;
+        private final IFIFOPageQueue queue;
 
         public OnDiskInvertedIndexBulkLoader(float btreeFillFactor, boolean verifyInput, long numElementsHint,
                 boolean checkIfEmptyIndex, int startPageId) throws HyracksDataException {
@@ -490,8 +490,7 @@ public class OnDiskInvertedIndex implements IInPlaceInvertedIndex {
     }
 
     @Override
-    public OnDiskInvertedIndexAccessor createAccessor(IModificationOperationCallback modificationCallback,
-            ISearchOperationCallback searchCallback) throws HyracksDataException {
+    public OnDiskInvertedIndexAccessor createAccessor(IIndexAccessParameters iap) throws HyracksDataException {
         return new OnDiskInvertedIndexAccessor(this);
     }
 
@@ -546,8 +545,7 @@ public class OnDiskInvertedIndex implements IInPlaceInvertedIndex {
     public void validate() throws HyracksDataException {
         btree.validate();
         // Scan the btree and validate the order of elements in each inverted-list.
-        IIndexAccessor btreeAccessor =
-                btree.createAccessor(NoOpOperationCallback.INSTANCE, NoOpOperationCallback.INSTANCE);
+        IIndexAccessor btreeAccessor = btree.createAccessor(NoOpIndexAccessParameters.INSTANCE);
         IIndexCursor btreeCursor = btreeAccessor.createSearchCursor(false);
         MultiComparator btreeCmp = MultiComparator.create(btree.getComparatorFactories());
         RangePredicate rangePred = new RangePredicate(null, null, true, true, btreeCmp, btreeCmp);
@@ -557,8 +555,7 @@ public class OnDiskInvertedIndex implements IInPlaceInvertedIndex {
         }
         PermutingTupleReference tokenTuple = new PermutingTupleReference(fieldPermutation);
 
-        IInvertedIndexAccessor invIndexAccessor =
-                createAccessor(NoOpOperationCallback.INSTANCE, NoOpOperationCallback.INSTANCE);
+        IInvertedIndexAccessor invIndexAccessor = createAccessor(NoOpIndexAccessParameters.INSTANCE);
         IInvertedListCursor invListCursor = invIndexAccessor.createInvertedListCursor();
         MultiComparator invListCmp = MultiComparator.create(invListCmpFactories);
 
@@ -597,7 +594,7 @@ public class OnDiskInvertedIndex implements IInPlaceInvertedIndex {
                 }
             }
         } finally {
-            btreeCursor.close();
+            btreeCursor.destroy();
         }
     }
 
@@ -627,11 +624,6 @@ public class OnDiskInvertedIndex implements IInPlaceInvertedIndex {
     @Override
     public IBinaryComparatorFactory[] getTokenCmpFactories() {
         return tokenCmpFactories;
-    }
-
-    @Override
-    public boolean hasMemoryComponents() {
-        return true;
     }
 
     @Override

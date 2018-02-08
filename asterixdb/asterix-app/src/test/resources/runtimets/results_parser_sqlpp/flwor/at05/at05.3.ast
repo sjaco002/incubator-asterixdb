@@ -33,8 +33,8 @@ FROM [  (
       )
     ]
     ]
-    FROM [      FunctionCall Metadata.dataset@1[
-        LiteralExpr [STRING] [Orders]
+    FROM [      FunctionCall asterix.dataset@1[
+        LiteralExpr [STRING] [test.Orders]
       ]
       AS Variable [ Name=$x ]
     ]
@@ -106,7 +106,7 @@ FROM [  (
 
           )
           AS Variable [ Name=$y ]
- AT 
+ AT
 Variable [ Name=$i ]
         ]
       )

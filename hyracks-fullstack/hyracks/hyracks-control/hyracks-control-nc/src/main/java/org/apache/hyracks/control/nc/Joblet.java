@@ -25,7 +25,6 @@ import java.util.HashMap;
 import java.util.Hashtable;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.logging.Logger;
 
 import org.apache.hyracks.api.application.INCServiceContext;
 import org.apache.hyracks.api.comm.IPartitionCollector;
@@ -60,9 +59,11 @@ import org.apache.hyracks.control.common.job.profiling.om.TaskProfile;
 import org.apache.hyracks.control.nc.io.WorkspaceFileFactory;
 import org.apache.hyracks.control.nc.resources.DefaultDeallocatableRegistry;
 import org.apache.hyracks.control.nc.resources.memory.FrameManager;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 public class Joblet implements IHyracksJobletContext, ICounterContext {
-    private static final Logger LOGGER = Logger.getLogger(Joblet.class.getName());
+    private static final Logger LOGGER = LogManager.getLogger();
 
     private final NodeControllerService nodeController;
 
@@ -100,8 +101,11 @@ public class Joblet implements IHyracksJobletContext, ICounterContext {
 
     private boolean cleanupPending;
 
+    private final IJobletEventListenerFactory jobletEventListenerFactory;
+
     public Joblet(NodeControllerService nodeController, DeploymentId deploymentId, JobId jobId,
-            INCServiceContext serviceCtx, ActivityClusterGraph acg) {
+            INCServiceContext serviceCtx, ActivityClusterGraph acg,
+            IJobletEventListenerFactory jobletEventListenerFactory) {
         this.nodeController = nodeController;
         this.serviceCtx = serviceCtx;
         this.deploymentId = deploymentId;
@@ -117,9 +121,9 @@ public class Joblet implements IHyracksJobletContext, ICounterContext {
         deallocatableRegistry = new DefaultDeallocatableRegistry();
         fileFactory = new WorkspaceFileFactory(this, serviceCtx.getIoManager());
         cleanupPending = false;
-        IJobletEventListenerFactory jelf = acg.getJobletEventListenerFactory();
-        if (jelf != null) {
-            IJobletEventListener listener = jelf.createListener(this);
+        this.jobletEventListenerFactory = jobletEventListenerFactory;
+        if (jobletEventListenerFactory != null) {
+            IJobletEventListener listener = jobletEventListenerFactory.createListener(this);
             this.jobletEventListener = listener;
             listener.jobletStart();
         } else {
@@ -132,6 +136,11 @@ public class Joblet implements IHyracksJobletContext, ICounterContext {
     @Override
     public JobId getJobId() {
         return jobId;
+    }
+
+    @Override
+    public IJobletEventListenerFactory getJobletEventListenerFactory() {
+        return jobletEventListenerFactory;
     }
 
     public ActivityClusterGraph getActivityClusterGraph() {
@@ -186,9 +195,7 @@ public class Joblet implements IHyracksJobletContext, ICounterContext {
 
     public void dumpProfile(JobletProfile jProfile) {
         Map<String, Long> counters = jProfile.getCounters();
-        for (Map.Entry<String, Counter> e : counterMap.entrySet()) {
-            counters.put(e.getKey(), e.getValue().get());
-        }
+        counterMap.forEach((key, value) -> counters.put(key, value.get()));
         for (Task task : taskMap.values()) {
             TaskProfile taskProfile = new TaskProfile(task.getTaskAttemptId(),
                     new Hashtable<>(task.getPartitionSendProfile()), new StatsCollector());
@@ -215,15 +222,10 @@ public class Joblet implements IHyracksJobletContext, ICounterContext {
     public void close() {
         long stillAllocated = memoryAllocation.get();
         if (stillAllocated > 0) {
-            LOGGER.warning("Freeing leaked " + stillAllocated + " bytes");
+            LOGGER.info(() -> "Freeing leaked " + stillAllocated + " bytes");
             serviceCtx.getMemoryManager().deallocate(stillAllocated);
         }
-        nodeController.getExecutor().execute(new Runnable() {
-            @Override
-            public void run() {
-                deallocatableRegistry.close();
-            }
-        });
+        nodeController.getExecutor().execute(() -> deallocatableRegistry.close());
     }
 
     ByteBuffer allocateFrame() throws HyracksDataException {
@@ -291,7 +293,7 @@ public class Joblet implements IHyracksJobletContext, ICounterContext {
         for (PartitionId pid : pids) {
             partitionRequestMap.put(pid, collector);
             PartitionRequest req = new PartitionRequest(pid, nodeController.getId(), taId, minState);
-            nodeController.getClusterController().registerPartitionRequest(req);
+            nodeController.getClusterController(jobId.getCcId()).registerPartitionRequest(req);
         }
     }
 
@@ -319,7 +321,7 @@ public class Joblet implements IHyracksJobletContext, ICounterContext {
         close();
         cleanupPending = false;
         try {
-            nodeController.getClusterController().notifyJobletCleanup(jobId, nodeController.getId());
+            nodeController.getClusterController(jobId.getCcId()).notifyJobletCleanup(jobId, nodeController.getId());
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -334,4 +336,5 @@ public class Joblet implements IHyracksJobletContext, ICounterContext {
     public ClassLoader getClassLoader() throws HyracksException {
         return DeploymentUtils.getClassLoader(deploymentId, serviceCtx);
     }
+
 }

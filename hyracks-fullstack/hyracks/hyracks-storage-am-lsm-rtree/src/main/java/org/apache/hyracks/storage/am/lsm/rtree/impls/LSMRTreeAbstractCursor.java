@@ -28,7 +28,8 @@ import org.apache.hyracks.storage.am.btree.impls.BTree;
 import org.apache.hyracks.storage.am.btree.impls.BTree.BTreeAccessor;
 import org.apache.hyracks.storage.am.btree.impls.BTreeRangeSearchCursor;
 import org.apache.hyracks.storage.am.btree.impls.RangePredicate;
-import org.apache.hyracks.storage.am.common.api.ITreeIndexCursor;
+import org.apache.hyracks.storage.am.common.api.ILSMIndexCursor;
+import org.apache.hyracks.storage.am.common.impls.NoOpIndexAccessParameters;
 import org.apache.hyracks.storage.am.common.impls.NoOpOperationCallback;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMComponent;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMComponent.LSMComponentType;
@@ -41,11 +42,11 @@ import org.apache.hyracks.storage.am.rtree.impls.RTree.RTreeAccessor;
 import org.apache.hyracks.storage.am.rtree.impls.RTreeSearchCursor;
 import org.apache.hyracks.storage.am.rtree.impls.SearchPredicate;
 import org.apache.hyracks.storage.common.ICursorInitialState;
+import org.apache.hyracks.storage.common.IIndexCursor;
 import org.apache.hyracks.storage.common.ISearchPredicate;
 import org.apache.hyracks.storage.common.MultiComparator;
-import org.apache.hyracks.storage.common.buffercache.IBufferCache;
 
-public abstract class LSMRTreeAbstractCursor implements ITreeIndexCursor {
+public abstract class LSMRTreeAbstractCursor implements ILSMIndexCursor {
 
     protected boolean open;
     protected RTreeSearchCursor[] rtreeCursors;
@@ -110,7 +111,7 @@ public abstract class LSMRTreeAbstractCursor implements ITreeIndexCursor {
                             (IBTreeLeafFrame) lsmInitialState.getBTreeLeafFrameFactory().createFrame(), false);
                 } else {
                     //re-use
-                    btreeCursors[i].reset();
+                    btreeCursors[i].close();
                 }
                 rtree = ((LSMRTreeMemoryComponent) component).getIndex();
                 btree = ((LSMRTreeMemoryComponent) component).getBuddyIndex();
@@ -121,8 +122,8 @@ public abstract class LSMRTreeAbstractCursor implements ITreeIndexCursor {
                     btreeCursors[i] = new BTreeRangeSearchCursor(
                             (IBTreeLeafFrame) lsmInitialState.getBTreeLeafFrameFactory().createFrame(), false);
                 } else {
-                    // reset
-                    btreeCursors[i].reset();
+                    // close
+                    btreeCursors[i].close();
                 }
                 rtree = ((LSMRTreeDiskComponent) component).getIndex();
                 btree = ((LSMRTreeDiskComponent) component).getBuddyIndex();
@@ -133,13 +134,11 @@ public abstract class LSMRTreeAbstractCursor implements ITreeIndexCursor {
                         (IRTreeInteriorFrame) lsmInitialState.getRTreeInteriorFrameFactory().createFrame(),
                         (IRTreeLeafFrame) lsmInitialState.getRTreeLeafFrameFactory().createFrame());
             } else {
-                rtreeCursors[i].reset();
+                rtreeCursors[i].close();
             }
             if (rtreeAccessors[i] == null) {
-                rtreeAccessors[i] =
-                        rtree.createAccessor(NoOpOperationCallback.INSTANCE, NoOpOperationCallback.INSTANCE);
-                btreeAccessors[i] =
-                        btree.createAccessor(NoOpOperationCallback.INSTANCE, NoOpOperationCallback.INSTANCE);
+                rtreeAccessors[i] = rtree.createAccessor(NoOpIndexAccessParameters.INSTANCE);
+                btreeAccessors[i] = btree.createAccessor(NoOpIndexAccessParameters.INSTANCE);
             } else {
                 rtreeAccessors[i].reset(rtree, NoOpOperationCallback.INSTANCE);
                 btreeAccessors[i].reset(btree, NoOpOperationCallback.INSTANCE, NoOpOperationCallback.INSTANCE);
@@ -154,7 +153,7 @@ public abstract class LSMRTreeAbstractCursor implements ITreeIndexCursor {
     }
 
     @Override
-    public void close() throws HyracksDataException {
+    public void destroy() throws HyracksDataException {
         if (!open) {
             return;
         }
@@ -162,8 +161,8 @@ public abstract class LSMRTreeAbstractCursor implements ITreeIndexCursor {
         try {
             if (rtreeCursors != null && btreeCursors != null) {
                 for (int i = 0; i < numberOfTrees; i++) {
-                    rtreeCursors[i].close();
-                    btreeCursors[i].close();
+                    rtreeCursors[i].destroy();
+                    btreeCursors[i].destroy();
                 }
             }
             rtreeCursors = null;
@@ -177,23 +176,8 @@ public abstract class LSMRTreeAbstractCursor implements ITreeIndexCursor {
     }
 
     @Override
-    public void setBufferCache(IBufferCache bufferCache) {
-        // do nothing
-    }
-
-    @Override
-    public void setFileId(int fileId) {
-        // do nothing
-    }
-
-    @Override
     public ITupleReference getTuple() {
         return frameTuple;
-    }
-
-    @Override
-    public boolean isExclusiveLatchNodes() {
-        return false;
     }
 
 }

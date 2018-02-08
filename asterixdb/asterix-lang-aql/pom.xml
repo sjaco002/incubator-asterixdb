@@ -35,7 +35,7 @@
 
   <artifactId>asterix-lang-aql</artifactId>
   <properties>
-    <appendedResourcesDirectory>${basedir}/../src/main/appended-resources</appendedResourcesDirectory>
+    <root.dir>${basedir}/..</root.dir>
   </properties>
   <build>
     <plugins>
@@ -54,19 +54,11 @@
               <javaUnicodeEscape>true</javaUnicodeEscape>
             </configuration>
           </execution>
-          <execution>
-            <id>javacc-jjdoc</id>
-            <goals>
-              <goal>jjdoc</goal>
-            </goals>
-            <phase>process-sources</phase>
-          </execution>
         </executions>
       </plugin>
       <plugin>
         <groupId>org.codehaus.mojo</groupId>
         <artifactId>build-helper-maven-plugin</artifactId>
-        <version>1.9</version>
         <executions>
           <execution>
             <id>add-source</id>
@@ -121,6 +113,35 @@
       </plugins>
     </pluginManagement>
   </build>
+
+  <profiles>
+    <profile>
+      <id>jjdoc</id>
+      <activation>
+        <property>
+          <name>jjdoc.skip</name>
+          <value>!true</value>
+        </property>
+      </activation>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.codehaus.mojo</groupId>
+            <artifactId>javacc-maven-plugin</artifactId>
+            <executions>
+              <execution>
+                <id>javacc-jjdoc</id>
+                <goals>
+                  <goal>jjdoc</goal>
+                </goals>
+                <phase>generate-test-sources</phase>
+              </execution>
+            </executions>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+  </profiles>
 
   <dependencies>
     <dependency>

@@ -28,7 +28,7 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import org.apache.hyracks.api.exceptions.HyracksDataException;
-import org.apache.hyracks.storage.am.common.impls.NoOpOperationCallback;
+import org.apache.hyracks.storage.am.common.impls.NoOpIndexAccessParameters;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMComponent;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMComponent.ComponentState;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMDiskComponent;
@@ -60,8 +60,7 @@ public class KSlotUniformMergePolicy implements ILSMMergePolicy {
         }
         if (fullMergeIsRequested) {
             updateMergeCosts(0, 0);
-            ILSMIndexAccessor accessor = (ILSMIndexAccessor) index.createAccessor(NoOpOperationCallback.INSTANCE,
-                    NoOpOperationCallback.INSTANCE);
+            ILSMIndexAccessor accessor = (ILSMIndexAccessor) index.createAccessor(NoOpIndexAccessParameters.INSTANCE);
             accessor.scheduleFullMerge(index.getIOOperationCallback());
             updateDiskComponentSizes(0);
             logDiskComponentSizes();
@@ -115,8 +114,7 @@ public class KSlotUniformMergePolicy implements ILSMMergePolicy {
                 mergableComponents.add(immutableComponents.get(j));
             }
             Collections.reverse(mergableComponents);
-            ILSMIndexAccessor accessor = (ILSMIndexAccessor) index.createAccessor(NoOpOperationCallback.INSTANCE,
-                    NoOpOperationCallback.INSTANCE);
+            ILSMIndexAccessor accessor = (ILSMIndexAccessor) index.createAccessor(NoOpIndexAccessParameters.INSTANCE);
             accessor.scheduleMerge(index.getIOOperationCallback(), mergableComponents);
             updateDiskComponentSizes(mergedIndex);
             logDiskComponentSizes();
@@ -216,8 +214,7 @@ public class KSlotUniformMergePolicy implements ILSMMergePolicy {
             String snapshotStr = "";
             for (int j = 0; j < immutableComponents.size(); j++) {
 
-                snapshotStr =
- snapshotStr + "," + immutableComponents.get(j).getComponentSize();
+                snapshotStr = snapshotStr + "," + immutableComponents.get(j).getComponentSize();
             }
             if (snapshotStr.length() > 1) {
                 snapshotStr = snapshotStr.substring(1);
@@ -235,8 +232,7 @@ public class KSlotUniformMergePolicy implements ILSMMergePolicy {
         } else if (mergeCosts[0] == 0 && immutableComponents.size() > 1) {
             LOGGER.severe("KSlot Uniform Server Crash Merge Triggered! ");
             updateMergeCosts(0, 0);
-            ILSMIndexAccessor accessor = (ILSMIndexAccessor) index.createAccessor(NoOpOperationCallback.INSTANCE,
-                    NoOpOperationCallback.INSTANCE);
+            ILSMIndexAccessor accessor = (ILSMIndexAccessor) index.createAccessor(NoOpIndexAccessParameters.INSTANCE);
             accessor.scheduleFullMerge(index.getIOOperationCallback());
             updateDiskComponentSizes(0);
             logDiskComponentSizes();

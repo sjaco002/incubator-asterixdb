@@ -19,8 +19,6 @@
 package org.apache.asterix.app.active;
 
 import java.util.concurrent.Callable;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 
 import org.apache.asterix.active.ActivityState;
 import org.apache.asterix.active.IRetryPolicy;
@@ -36,10 +34,13 @@ import org.apache.asterix.metadata.utils.DatasetUtil;
 import org.apache.asterix.metadata.utils.MetadataLockUtil;
 import org.apache.hyracks.algebricks.common.exceptions.AlgebricksException;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
+import org.apache.logging.log4j.Level;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 public class RecoveryTask {
 
-    private static final Logger LOGGER = Logger.getLogger(RecoveryTask.class.getName());
+    private static final Logger LOGGER = LogManager.getLogger();
     private static final Level level = Level.INFO;
     private final ActiveEntityEventsListener listener;
     private volatile boolean cancelRecovery = false;
@@ -79,15 +80,14 @@ public class RecoveryTask {
         cancelRecovery = true;
     }
 
-    protected Void resumeOrRecover(MetadataProvider metadataProvider)
-            throws HyracksDataException, AlgebricksException, InterruptedException {
+    protected void resumeOrRecover(MetadataProvider metadataProvider) throws HyracksDataException {
         try {
             synchronized (listener) {
                 listener.doResume(metadataProvider);
                 listener.setState(ActivityState.RUNNING);
             }
         } catch (Exception e) {
-            LOGGER.log(Level.WARNING, "First attempt to resume " + listener.getEntityId() + " Failed", e);
+            LOGGER.log(Level.WARN, "Attempt to resume " + listener.getEntityId() + " Failed", e);
             synchronized (listener) {
                 if (listener.getState() == ActivityState.RESUMING) {
                     // This will be the case if compilation failure
@@ -103,11 +103,12 @@ public class RecoveryTask {
                     }
                 }
             } else {
-                IRetryPolicy policy = retryPolicyFactory.create(listener);
-                doRecover(policy);
+                LOGGER.log(Level.WARN, "Submitting recovery task for " + listener.getEntityId());
+                metadataProvider.getApplicationContext().getServiceContext().getControllerService().getExecutor()
+                        .submit(() -> doRecover(retryPolicyFactory.create(listener)));
             }
+            throw e;
         }
-        return null;
     }
 
     protected Void doRecover(IRetryPolicy policy)
@@ -134,8 +135,9 @@ public class RecoveryTask {
             lockManager.acquireActiveEntityWriteLock(metadataProvider.getLocks(),
                     listener.getEntityId().getDataverse() + '.' + listener.getEntityId().getEntityName());
             for (Dataset dataset : listener.getDatasets()) {
-                MetadataLockUtil.modifyDatasetBegin(lockManager, metadataProvider.getLocks(),
-                        dataset.getDataverseName(), DatasetUtil.getFullyQualifiedName(dataset));
+                lockManager.acquireDataverseReadLock(metadataProvider.getLocks(), dataset.getDataverseName());
+                lockManager.acquireDatasetExclusiveModificationLock(metadataProvider.getLocks(),
+                        DatasetUtil.getFullyQualifiedName(dataset));
             }
             synchronized (listener) {
                 try {

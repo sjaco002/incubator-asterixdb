@@ -37,8 +37,8 @@ RecordConstructor [
         )
       ]
       ]
-      FROM [        FunctionCall Metadata.dataset@1[
-          LiteralExpr [STRING] [logs]
+      FROM [        FunctionCall asterix.dataset@1[
+          LiteralExpr [STRING] [multitask.logs]
         ]
         AS Variable [ Name=$i ]
       ]
@@ -102,8 +102,8 @@ FROM [  FunctionCall multitask.overlap-bins@3[
             Field=time
           ]
           ]
-          FROM [            FunctionCall Metadata.dataset@1[
-              LiteralExpr [STRING] [logs]
+          FROM [            FunctionCall asterix.dataset@1[
+              LiteralExpr [STRING] [multitask.logs]
             ]
             AS Variable [ Name=$i ]
           ]
@@ -130,8 +130,8 @@ FROM [  FunctionCall multitask.overlap-bins@3[
             ]
           ]
           ]
-          FROM [            FunctionCall Metadata.dataset@1[
-              LiteralExpr [STRING] [logs]
+          FROM [            FunctionCall asterix.dataset@1[
+              LiteralExpr [STRING] [multitask.logs]
             ]
             AS Variable [ Name=$i ]
           ]

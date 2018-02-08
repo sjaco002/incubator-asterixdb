@@ -22,26 +22,25 @@ package org.apache.asterix.test.context;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 import org.apache.asterix.common.api.IDatasetLifecycleManager;
 import org.apache.asterix.common.context.CorrelatedPrefixMergePolicy;
 import org.apache.asterix.common.context.DatasetInfo;
 import org.apache.asterix.common.context.IndexInfo;
+import org.apache.asterix.common.context.PrimaryIndexOperationTracker;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMComponent.ComponentState;
+import org.apache.hyracks.storage.am.lsm.common.api.ILSMComponentId;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMDiskComponent;
-import org.apache.hyracks.storage.am.lsm.common.api.ILSMDiskComponentId;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMIOOperationCallback;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMIndex;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMIndexAccessor;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMMergePolicy;
-import org.apache.hyracks.storage.am.lsm.common.impls.LSMDiskComponentId;
-import org.apache.hyracks.storage.common.IModificationOperationCallback;
-import org.apache.hyracks.storage.common.ISearchOperationCallback;
+import org.apache.hyracks.storage.am.lsm.common.impls.LSMComponentId;
+import org.apache.hyracks.storage.common.IIndexAccessParameters;
+import org.apache.hyracks.storage.common.LocalResource;
 import org.junit.Assert;
 import org.junit.Test;
 import org.mockito.Mockito;
@@ -60,17 +59,18 @@ public class CorrelatedPrefixMergePolicyTest extends TestCase {
 
     private final int DATASET_ID = 1;
 
+    private long nextResourceId = 0;
+
     @Test
     public void testBasic() {
         try {
-            List<ILSMDiskComponentId> componentIDs =
-                    Arrays.asList(new LSMDiskComponentId(5, 5), new LSMDiskComponentId(4, 4),
-                            new LSMDiskComponentId(3, 3), new LSMDiskComponentId(2, 2), new LSMDiskComponentId(1, 1));
+            List<ILSMComponentId> componentIDs = Arrays.asList(new LSMComponentId(5, 5), new LSMComponentId(4, 4),
+                    new LSMComponentId(3, 3), new LSMComponentId(2, 2), new LSMComponentId(1, 1));
 
-            List<ILSMDiskComponentId> resultPrimaryIDs = new ArrayList<>();
+            List<ILSMComponentId> resultPrimaryIDs = new ArrayList<>();
             IndexInfo primary = mockIndex(true, componentIDs, resultPrimaryIDs, 0);
 
-            List<ILSMDiskComponentId> resultSecondaryIDs = new ArrayList<>();
+            List<ILSMComponentId> resultSecondaryIDs = new ArrayList<>();
             IndexInfo secondary = mockIndex(false, componentIDs, resultSecondaryIDs, 0);
 
             ILSMMergePolicy policy = mockMergePolicy(primary, secondary);
@@ -80,10 +80,10 @@ public class CorrelatedPrefixMergePolicyTest extends TestCase {
 
             policy.diskComponentAdded(primary.getIndex(), false, false);
 
-            Assert.assertEquals(Arrays.asList(new LSMDiskComponentId(4, 4), new LSMDiskComponentId(3, 3),
-                    new LSMDiskComponentId(2, 2), new LSMDiskComponentId(1, 1)), resultPrimaryIDs);
-            Assert.assertEquals(Arrays.asList(new LSMDiskComponentId(4, 4), new LSMDiskComponentId(3, 3),
-                    new LSMDiskComponentId(2, 2), new LSMDiskComponentId(1, 1)), resultSecondaryIDs);
+            Assert.assertEquals(Arrays.asList(new LSMComponentId(4, 4), new LSMComponentId(3, 3),
+                    new LSMComponentId(2, 2), new LSMComponentId(1, 1)), resultPrimaryIDs);
+            Assert.assertEquals(Arrays.asList(new LSMComponentId(4, 4), new LSMComponentId(3, 3),
+                    new LSMComponentId(2, 2), new LSMComponentId(1, 1)), resultSecondaryIDs);
 
         } catch (HyracksDataException e) {
             Assert.fail(e.getMessage());
@@ -94,14 +94,13 @@ public class CorrelatedPrefixMergePolicyTest extends TestCase {
     @Test
     public void testIDIntervals() {
         try {
-            List<ILSMDiskComponentId> componentIDs = Arrays.asList(new LSMDiskComponentId(40, 50),
-                    new LSMDiskComponentId(30, 35), new LSMDiskComponentId(25, 29), new LSMDiskComponentId(20, 24),
-                    new LSMDiskComponentId(10, 19));
+            List<ILSMComponentId> componentIDs = Arrays.asList(new LSMComponentId(40, 50), new LSMComponentId(30, 35),
+                    new LSMComponentId(25, 29), new LSMComponentId(20, 24), new LSMComponentId(10, 19));
 
-            List<ILSMDiskComponentId> resultPrimaryIDs = new ArrayList<>();
+            List<ILSMComponentId> resultPrimaryIDs = new ArrayList<>();
             IndexInfo primary = mockIndex(true, componentIDs, resultPrimaryIDs, 0);
 
-            List<ILSMDiskComponentId> resultSecondaryIDs = new ArrayList<>();
+            List<ILSMComponentId> resultSecondaryIDs = new ArrayList<>();
             IndexInfo secondary = mockIndex(false, componentIDs, resultSecondaryIDs, 0);
 
             ILSMMergePolicy policy = mockMergePolicy(primary, secondary);
@@ -111,10 +110,10 @@ public class CorrelatedPrefixMergePolicyTest extends TestCase {
 
             policy.diskComponentAdded(primary.getIndex(), false, false);
 
-            Assert.assertEquals(Arrays.asList(new LSMDiskComponentId(30, 35), new LSMDiskComponentId(25, 29),
-                    new LSMDiskComponentId(20, 24), new LSMDiskComponentId(10, 19)), resultPrimaryIDs);
-            Assert.assertEquals(Arrays.asList(new LSMDiskComponentId(30, 35), new LSMDiskComponentId(25, 29),
-                    new LSMDiskComponentId(20, 24), new LSMDiskComponentId(10, 19)), resultSecondaryIDs);
+            Assert.assertEquals(Arrays.asList(new LSMComponentId(30, 35), new LSMComponentId(25, 29),
+                    new LSMComponentId(20, 24), new LSMComponentId(10, 19)), resultPrimaryIDs);
+            Assert.assertEquals(Arrays.asList(new LSMComponentId(30, 35), new LSMComponentId(25, 29),
+                    new LSMComponentId(20, 24), new LSMComponentId(10, 19)), resultSecondaryIDs);
 
         } catch (HyracksDataException e) {
             Assert.fail(e.getMessage());
@@ -124,15 +123,15 @@ public class CorrelatedPrefixMergePolicyTest extends TestCase {
     @Test
     public void testSecondaryMissing() {
         try {
-            List<ILSMDiskComponentId> primaryComponentIDs = Arrays.asList(new LSMDiskComponentId(40, 50),
-                    new LSMDiskComponentId(30, 35), new LSMDiskComponentId(25, 29), new LSMDiskComponentId(20, 24),
-                    new LSMDiskComponentId(10, 19));
-            List<ILSMDiskComponentId> resultPrimaryIDs = new ArrayList<>();
+            List<ILSMComponentId> primaryComponentIDs =
+                    Arrays.asList(new LSMComponentId(40, 50), new LSMComponentId(30, 35), new LSMComponentId(25, 29),
+                            new LSMComponentId(20, 24), new LSMComponentId(10, 19));
+            List<ILSMComponentId> resultPrimaryIDs = new ArrayList<>();
             IndexInfo primary = mockIndex(true, primaryComponentIDs, resultPrimaryIDs, 0);
 
-            List<ILSMDiskComponentId> secondaryComponentIDs = Arrays.asList(new LSMDiskComponentId(30, 35),
-                    new LSMDiskComponentId(25, 29), new LSMDiskComponentId(20, 24));
-            List<ILSMDiskComponentId> resultSecondaryIDs = new ArrayList<>();
+            List<ILSMComponentId> secondaryComponentIDs =
+                    Arrays.asList(new LSMComponentId(30, 35), new LSMComponentId(25, 29), new LSMComponentId(20, 24));
+            List<ILSMComponentId> resultSecondaryIDs = new ArrayList<>();
             IndexInfo secondary = mockIndex(false, secondaryComponentIDs, resultSecondaryIDs, 0);
 
             ILSMMergePolicy policy = mockMergePolicy(primary, secondary);
@@ -142,10 +141,11 @@ public class CorrelatedPrefixMergePolicyTest extends TestCase {
             Assert.assertTrue(resultSecondaryIDs.isEmpty());
 
             policy.diskComponentAdded(primary.getIndex(), false, false);
-            Assert.assertEquals(Arrays.asList(new LSMDiskComponentId(30, 35), new LSMDiskComponentId(25, 29),
-                    new LSMDiskComponentId(20, 24), new LSMDiskComponentId(10, 19)), resultPrimaryIDs);
-            Assert.assertEquals(Arrays.asList(new LSMDiskComponentId(30, 35), new LSMDiskComponentId(25, 29),
-                    new LSMDiskComponentId(20, 24)), resultSecondaryIDs);
+            Assert.assertEquals(Arrays.asList(new LSMComponentId(30, 35), new LSMComponentId(25, 29),
+                    new LSMComponentId(20, 24), new LSMComponentId(10, 19)), resultPrimaryIDs);
+            Assert.assertEquals(
+                    Arrays.asList(new LSMComponentId(30, 35), new LSMComponentId(25, 29), new LSMComponentId(20, 24)),
+                    resultSecondaryIDs);
 
         } catch (HyracksDataException e) {
             Assert.fail(e.getMessage());
@@ -155,17 +155,16 @@ public class CorrelatedPrefixMergePolicyTest extends TestCase {
     @Test
     public void testMultiPartition() {
         try {
-            List<ILSMDiskComponentId> componentIDs = Arrays.asList(new LSMDiskComponentId(40, 50),
-                    new LSMDiskComponentId(30, 35), new LSMDiskComponentId(25, 29), new LSMDiskComponentId(20, 24),
-                    new LSMDiskComponentId(10, 19));
+            List<ILSMComponentId> componentIDs = Arrays.asList(new LSMComponentId(40, 50), new LSMComponentId(30, 35),
+                    new LSMComponentId(25, 29), new LSMComponentId(20, 24), new LSMComponentId(10, 19));
 
-            List<ILSMDiskComponentId> resultPrimaryIDs = new ArrayList<>();
+            List<ILSMComponentId> resultPrimaryIDs = new ArrayList<>();
             IndexInfo primary = mockIndex(true, componentIDs, resultPrimaryIDs, 0);
 
-            List<ILSMDiskComponentId> resultSecondaryIDs = new ArrayList<>();
+            List<ILSMComponentId> resultSecondaryIDs = new ArrayList<>();
             IndexInfo secondary = mockIndex(false, componentIDs, resultSecondaryIDs, 0);
 
-            List<ILSMDiskComponentId> resultSecondaryIDs1 = new ArrayList<>();
+            List<ILSMComponentId> resultSecondaryIDs1 = new ArrayList<>();
             IndexInfo secondary1 = mockIndex(false, componentIDs, resultSecondaryIDs, 1);
 
             ILSMMergePolicy policy = mockMergePolicy(primary, secondary, secondary1);
@@ -175,29 +174,25 @@ public class CorrelatedPrefixMergePolicyTest extends TestCase {
 
             policy.diskComponentAdded(primary.getIndex(), false, false);
 
-            Assert.assertEquals(Arrays.asList(new LSMDiskComponentId(30, 35), new LSMDiskComponentId(25, 29),
-                    new LSMDiskComponentId(20, 24), new LSMDiskComponentId(10, 19)), resultPrimaryIDs);
-            Assert.assertEquals(Arrays.asList(new LSMDiskComponentId(30, 35), new LSMDiskComponentId(25, 29),
-                    new LSMDiskComponentId(20, 24), new LSMDiskComponentId(10, 19)), resultSecondaryIDs);
+            Assert.assertEquals(Arrays.asList(new LSMComponentId(30, 35), new LSMComponentId(25, 29),
+                    new LSMComponentId(20, 24), new LSMComponentId(10, 19)), resultPrimaryIDs);
+            Assert.assertEquals(Arrays.asList(new LSMComponentId(30, 35), new LSMComponentId(25, 29),
+                    new LSMComponentId(20, 24), new LSMComponentId(10, 19)), resultSecondaryIDs);
             Assert.assertTrue(resultSecondaryIDs1.isEmpty());
         } catch (HyracksDataException e) {
             Assert.fail(e.getMessage());
         }
     }
 
-    private ILSMMergePolicy mockMergePolicy(IndexInfo... indexes) {
+    private ILSMMergePolicy mockMergePolicy(IndexInfo... indexInfos) {
         Map<String, String> properties = new HashMap<>();
         properties.put("max-tolerance-component-count", String.valueOf(MAX_COMPONENT_COUNT));
         properties.put("max-mergable-component-size", String.valueOf(MAX_COMPONENT_SIZE));
 
-        Set<IndexInfo> indexInfos = new HashSet<>();
-        for (IndexInfo info : indexes) {
-            indexInfos.add(info);
+        DatasetInfo dsInfo = new DatasetInfo(DATASET_ID);
+        for (IndexInfo index : indexInfos) {
+            dsInfo.addIndex(index.getResourceId(), index);
         }
-
-        DatasetInfo dsInfo = Mockito.mock(DatasetInfo.class);
-        Mockito.when(dsInfo.getDatsetIndexInfos()).thenReturn(indexInfos);
-
         IDatasetLifecycleManager manager = Mockito.mock(IDatasetLifecycleManager.class);
         Mockito.when(manager.getDatasetInfo(DATASET_ID)).thenReturn(dsInfo);
 
@@ -206,12 +201,12 @@ public class CorrelatedPrefixMergePolicyTest extends TestCase {
         return policy;
     }
 
-    private IndexInfo mockIndex(boolean isPrimary, List<ILSMDiskComponentId> componentIDs,
-            List<ILSMDiskComponentId> resultComponentIDs, int partition) throws HyracksDataException {
+    private IndexInfo mockIndex(boolean isPrimary, List<ILSMComponentId> componentIDs,
+            List<ILSMComponentId> resultComponentIDs, int partition) throws HyracksDataException {
         List<ILSMDiskComponent> components = new ArrayList<>();
-        for (ILSMDiskComponentId id : componentIDs) {
+        for (ILSMComponentId id : componentIDs) {
             ILSMDiskComponent component = Mockito.mock(ILSMDiskComponent.class);
-            Mockito.when(component.getComponentId()).thenReturn(id);
+            Mockito.when(component.getId()).thenReturn(id);
             Mockito.when(component.getComponentSize()).thenReturn(DEFAULT_COMPONENT_SIZE);
             Mockito.when(component.getState()).thenReturn(ComponentState.READABLE_UNWRITABLE);
             components.add(component);
@@ -228,7 +223,7 @@ public class CorrelatedPrefixMergePolicyTest extends TestCase {
                 List<ILSMDiskComponent> mergedComponents = invocation.getArgumentAt(1, List.class);
                 mergedComponents.forEach(component -> {
                     try {
-                        resultComponentIDs.add(component.getComponentId());
+                        resultComponentIDs.add(component.getId());
                     } catch (HyracksDataException e) {
                         e.printStackTrace();
                     }
@@ -238,11 +233,18 @@ public class CorrelatedPrefixMergePolicyTest extends TestCase {
         }).when(accessor).scheduleMerge(Mockito.any(ILSMIOOperationCallback.class),
                 Mockito.anyListOf(ILSMDiskComponent.class));
 
-        Mockito.when(index.createAccessor(Mockito.any(IModificationOperationCallback.class),
-                Mockito.any(ISearchOperationCallback.class))).thenReturn(accessor);
+        Mockito.when(index.createAccessor(Mockito.any(IIndexAccessParameters.class))).thenReturn(accessor);
         Mockito.when(index.isPrimaryIndex()).thenReturn(isPrimary);
-
-        return new IndexInfo(index, DATASET_ID, 0, partition);
+        if (isPrimary) {
+            PrimaryIndexOperationTracker opTracker = Mockito.mock(PrimaryIndexOperationTracker.class);
+            Mockito.when(opTracker.getPartition()).thenReturn(partition);
+            Mockito.when(index.getOperationTracker()).thenReturn(opTracker);
+        }
+        final LocalResource localResource = Mockito.mock(LocalResource.class);
+        Mockito.when(localResource.getId()).thenReturn(nextResourceId++);
+        IndexInfo indexInfo = new IndexInfo(index, DATASET_ID, localResource, partition);
+        indexInfo.setOpen(true);
+        return indexInfo;
     }
 
 }

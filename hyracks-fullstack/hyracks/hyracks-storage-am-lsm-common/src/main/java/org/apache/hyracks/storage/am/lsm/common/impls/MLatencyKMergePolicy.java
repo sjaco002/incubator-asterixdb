@@ -28,7 +28,7 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import org.apache.hyracks.api.exceptions.HyracksDataException;
-import org.apache.hyracks.storage.am.common.impls.NoOpOperationCallback;
+import org.apache.hyracks.storage.am.common.impls.NoOpIndexAccessParameters;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMComponent;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMComponent.ComponentState;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMDiskComponent;
@@ -58,8 +58,7 @@ public class MLatencyKMergePolicy implements ILSMMergePolicy {
         }
         if (fullMergeIsRequested) {
             LOGGER.severe("Full Merge Requested");
-            ILSMIndexAccessor accessor = (ILSMIndexAccessor) index.createAccessor(NoOpOperationCallback.INSTANCE,
-                    NoOpOperationCallback.INSTANCE);
+            ILSMIndexAccessor accessor = (ILSMIndexAccessor) index.createAccessor(NoOpIndexAccessParameters.INSTANCE);
             long mergeSize = getMergeSize(immutableComponents);
             logMergeInfo(mergeSize, true, immutableComponents.size(), immutableComponents.size(), immutableComponents);
             accessor.scheduleFullMerge(index.getIOOperationCallback());
@@ -78,8 +77,7 @@ public class MLatencyKMergePolicy implements ILSMMergePolicy {
         while ((tree(depth) < numFlushes)) {
             depth++;
         }
-        int mergedIndex =
- binomial_index(depth, numComponents - 1, (int) (numFlushes - tree(depth - 1) - 1));
+        int mergedIndex = binomial_index(depth, numComponents - 1, (int) (numFlushes - tree(depth - 1) - 1));
         LOGGER.severe("MLatencyK Index: " + numFlushes + "," + (mergedIndex + 1) + "," + size);
         if (mergedIndex == size - 1) {
             return false;
@@ -92,8 +90,7 @@ public class MLatencyKMergePolicy implements ILSMMergePolicy {
             mergableComponents.add(immutableComponents.get(i));
         }
         Collections.reverse(mergableComponents);
-        ILSMIndexAccessor accessor = (ILSMIndexAccessor) index.createAccessor(NoOpOperationCallback.INSTANCE,
-                NoOpOperationCallback.INSTANCE);
+        ILSMIndexAccessor accessor = (ILSMIndexAccessor) index.createAccessor(NoOpIndexAccessParameters.INSTANCE);
         logMergeInfo(mergeSize, false, mergableComponents.size(), immutableComponents.size(), immutableComponents);
         accessor.scheduleMerge(index.getIOOperationCallback(), mergableComponents);
         numMerges++;
@@ -181,9 +178,8 @@ public class MLatencyKMergePolicy implements ILSMMergePolicy {
                 snapshotStr = snapshotStr.substring(1);
             }
             if (isFullMerge) {
-                LOGGER.severe(
-                        "Full Merged: " + size + ", " + mergedComponents + ", " + totalComponents + ", " + new Date()
-                                + ", " + snapshotStr);
+                LOGGER.severe("Full Merged: " + size + ", " + mergedComponents + ", " + totalComponents + ", "
+                        + new Date() + ", " + snapshotStr);
             } else {
                 LOGGER.severe("Merged: " + size + ", " + mergedComponents + ", " + totalComponents + ", " + new Date()
                         + ", " + snapshotStr);
@@ -198,7 +194,6 @@ public class MLatencyKMergePolicy implements ILSMMergePolicy {
         }
         return mergeSize;
     }
-
 
     @Override
     public boolean isMergeLagging(ILSMIndex index) throws HyracksDataException {

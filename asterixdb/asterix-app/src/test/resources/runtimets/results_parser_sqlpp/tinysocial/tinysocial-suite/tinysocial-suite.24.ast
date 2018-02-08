@@ -16,17 +16,17 @@ FunctionCall TinySocial.substring@2[
     Variable [ Name=$message ]
     Field=message
   ]
-  LiteralExpr [LONG] [30]
+  LiteralExpr [LONG] [29]
 ]
 msg
 ]
-FROM [  FunctionCall Metadata.dataset@1[
-    LiteralExpr [STRING] [FacebookMessages]
+FROM [  FunctionCall asterix.dataset@1[
+    LiteralExpr [STRING] [TinySocial.FacebookMessages]
   ]
   AS Variable [ Name=$message ]
 ,
-  FunctionCall Metadata.dataset@1[
-    LiteralExpr [STRING] [FacebookUsers]
+  FunctionCall asterix.dataset@1[
+    LiteralExpr [STRING] [TinySocial.FacebookUsers]
   ]
   AS Variable [ Name=$user ]
 ]
@@ -78,7 +78,7 @@ Orderby
       Variable [ Name=$message ]
       Field=message
     ]
-    LiteralExpr [LONG] [30]
+    LiteralExpr [LONG] [29]
   ]
   ASC
 

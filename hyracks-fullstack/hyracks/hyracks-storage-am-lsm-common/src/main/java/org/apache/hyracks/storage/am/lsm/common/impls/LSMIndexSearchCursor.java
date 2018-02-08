@@ -24,8 +24,9 @@ import java.util.List;
 import java.util.PriorityQueue;
 
 import org.apache.hyracks.api.exceptions.HyracksDataException;
+import org.apache.hyracks.dataflow.common.comm.io.ArrayTupleBuilder;
 import org.apache.hyracks.dataflow.common.data.accessors.ITupleReference;
-import org.apache.hyracks.storage.am.common.api.ITreeIndexCursor;
+import org.apache.hyracks.storage.am.common.api.ILSMIndexCursor;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMComponent;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMComponentFilter;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMHarness;
@@ -33,12 +34,15 @@ import org.apache.hyracks.storage.am.lsm.common.api.ILSMIndexOperationContext;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMTreeTupleReference;
 import org.apache.hyracks.storage.common.IIndexCursor;
 import org.apache.hyracks.storage.common.MultiComparator;
-import org.apache.hyracks.storage.common.buffercache.IBufferCache;
 
-public abstract class LSMIndexSearchCursor implements ITreeIndexCursor {
+public abstract class LSMIndexSearchCursor implements ILSMIndexCursor {
+    protected static final int SWITCH_COMPONENT_CYCLE = 100;
     protected final ILSMIndexOperationContext opCtx;
     protected final boolean returnDeletedTuples;
     protected PriorityQueueElement outputElement;
+    protected final ArrayTupleBuilder[] switchComponentTupleBuilders;
+    protected final boolean[] switchRequest;
+    protected final PriorityQueueElement[] switchedElements;
     protected IIndexCursor[] rangeCursors;
     protected PriorityQueueElement[] pqes;
     protected PriorityQueue<PriorityQueueElement> outputPriorityQueue;
@@ -47,6 +51,8 @@ public abstract class LSMIndexSearchCursor implements ITreeIndexCursor {
     protected boolean needPushElementIntoQueue;
     protected boolean includeMutableComponent;
     protected ILSMHarness lsmHarness;
+    protected boolean switchPossible = true;
+    protected int hasNextCallCount = 0;
 
     protected List<ILSMComponent> operationalComponents;
 
@@ -55,6 +61,9 @@ public abstract class LSMIndexSearchCursor implements ITreeIndexCursor {
         this.returnDeletedTuples = returnDeletedTuples;
         outputElement = null;
         needPushElementIntoQueue = false;
+        switchComponentTupleBuilders = new ArrayTupleBuilder[opCtx.getIndex().getNumberOfAllMemoryComponents()];
+        switchRequest = new boolean[switchComponentTupleBuilders.length];
+        switchedElements = new PriorityQueueElement[switchComponentTupleBuilders.length];
     }
 
     public ILSMIndexOperationContext getOpCtx() {
@@ -97,10 +106,14 @@ public abstract class LSMIndexSearchCursor implements ITreeIndexCursor {
     }
 
     @Override
-    public void reset() throws HyracksDataException {
+    public void close() throws HyracksDataException {
+        hasNextCallCount = 0;
+        switchPossible = true;
         outputElement = null;
         needPushElementIntoQueue = false;
-
+        for (int i = 0; i < switchRequest.length; i++) {
+            switchRequest[i] = false;
+        }
         try {
             if (outputPriorityQueue != null) {
                 outputPriorityQueue.clear();
@@ -108,7 +121,7 @@ public abstract class LSMIndexSearchCursor implements ITreeIndexCursor {
 
             if (rangeCursors != null) {
                 for (int i = 0; i < rangeCursors.length; i++) {
-                    rangeCursors[i].reset();
+                    rangeCursors[i].close();
                 }
             }
             rangeCursors = null;
@@ -121,6 +134,7 @@ public abstract class LSMIndexSearchCursor implements ITreeIndexCursor {
 
     @Override
     public boolean hasNext() throws HyracksDataException {
+        hasNextCallCount++;
         checkPriorityQueue();
         return !outputPriorityQueue.isEmpty();
     }
@@ -132,7 +146,7 @@ public abstract class LSMIndexSearchCursor implements ITreeIndexCursor {
     }
 
     @Override
-    public void close() throws HyracksDataException {
+    public void destroy() throws HyracksDataException {
         try {
             if (outputPriorityQueue != null) {
                 outputPriorityQueue.clear();
@@ -140,7 +154,7 @@ public abstract class LSMIndexSearchCursor implements ITreeIndexCursor {
             if (rangeCursors != null) {
                 for (int i = 0; i < rangeCursors.length; i++) {
                     if (rangeCursors[i] != null) {
-                        rangeCursors[i].close();
+                        rangeCursors[i].destroy();
                     }
                 }
                 rangeCursors = null;
@@ -150,16 +164,6 @@ public abstract class LSMIndexSearchCursor implements ITreeIndexCursor {
                 lsmHarness.endSearch(opCtx);
             }
         }
-    }
-
-    @Override
-    public void setBufferCache(IBufferCache bufferCache) {
-        // do nothing
-    }
-
-    @Override
-    public void setFileId(int fileId) {
-        // do nothing
     }
 
     @Override
@@ -179,16 +183,18 @@ public abstract class LSMIndexSearchCursor implements ITreeIndexCursor {
         return filter == null ? null : filter.getMaxTuple();
     }
 
-    protected boolean pushIntoQueueFromCursorAndReplaceThisElement(PriorityQueueElement e) throws HyracksDataException {
+    protected void pushIntoQueueFromCursorAndReplaceThisElement(PriorityQueueElement e) throws HyracksDataException {
         int cursorIndex = e.getCursorIndex();
         if (rangeCursors[cursorIndex].hasNext()) {
             rangeCursors[cursorIndex].next();
             e.reset(rangeCursors[cursorIndex].getTuple());
             outputPriorityQueue.offer(e);
-            return true;
+            return;
         }
-        rangeCursors[cursorIndex].close();
-        return false;
+        rangeCursors[cursorIndex].destroy();
+        if (cursorIndex == 0) {
+            includeMutableComponent = false;
+        }
     }
 
     protected boolean isDeleted(PriorityQueueElement checkElement) throws HyracksDataException {
@@ -196,7 +202,7 @@ public abstract class LSMIndexSearchCursor implements ITreeIndexCursor {
     }
 
     protected void checkPriorityQueue() throws HyracksDataException {
-        while (!outputPriorityQueue.isEmpty() || (needPushElementIntoQueue == true)) {
+        while (!outputPriorityQueue.isEmpty() || needPushElementIntoQueue) {
             if (!outputPriorityQueue.isEmpty()) {
                 PriorityQueueElement checkElement = outputPriorityQueue.peek();
                 // If there is no previous tuple or the previous tuple can be ignored
@@ -238,11 +244,6 @@ public abstract class LSMIndexSearchCursor implements ITreeIndexCursor {
                 outputElement = null;
             }
         }
-    }
-
-    @Override
-    public boolean isExclusiveLatchNodes() {
-        return false;
     }
 
     public class PriorityQueueElement {
@@ -309,5 +310,4 @@ public abstract class LSMIndexSearchCursor implements ITreeIndexCursor {
             throws HyracksDataException {
         return cmp.compare(tupleA, tupleB);
     }
-
 }

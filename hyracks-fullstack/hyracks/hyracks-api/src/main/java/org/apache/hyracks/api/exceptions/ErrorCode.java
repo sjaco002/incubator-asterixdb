@@ -54,9 +54,9 @@ public class ErrorCode {
     public static final int INCONSISTENT_RESULT_METADATA = 18;
     public static final int CANNOT_DELETE_FILE = 19;
     public static final int NOT_A_JOBID = 20;
-    public static final int ERROR_FINDING_DISTRIBUTED_JOB = 21;
-    public static final int DUPLICATE_DISTRIBUTED_JOB = 22;
-    public static final int DISTRIBUTED_JOB_FAILURE = 23;
+    public static final int ERROR_FINDING_DEPLOYED_JOB = 21;
+    public static final int DUPLICATE_DEPLOYED_JOB = 22;
+    public static final int DEPLOYED_JOB_FAILURE = 23;
     public static final int NO_RESULT_SET = 24;
     public static final int JOB_CANCELED = 25;
     public static final int NODE_FAILED = 26;
@@ -126,13 +126,20 @@ public class ErrorCode {
     public static final int ILLEGAL_MEMORY_BUDGET = 90;
     public static final int TIMEOUT = 91;
     public static final int JOB_HAS_BEEN_CLEARED_FROM_HISTORY = 92;
-    public static final int JOB_HAS_NOT_BEEN_CREATED_YET = 93;
+    public static final int FAILED_TO_READ_RESULT = 93;
     public static final int CANNOT_READ_CLOSED_FILE = 94;
     public static final int TUPLE_CANNOT_FIT_INTO_EMPTY_FRAME = 95;
     public static final int ILLEGAL_ATTEMPT_TO_ENTER_EMPTY_COMPONENT = 96;
     public static final int ILLEGAL_ATTEMPT_TO_EXIT_EMPTY_COMPONENT = 97;
     public static final int A_FLUSH_OPERATION_HAS_FAILED = 98;
     public static final int A_MERGE_OPERATION_HAS_FAILED = 99;
+    public static final int FAILED_TO_SHUTDOWN_EVENT_PROCESSOR = 100;
+    public static final int PAGE_DOES_NOT_EXIST_IN_FILE = 101;
+    public static final int VBC_ALREADY_OPEN = 102;
+    public static final int VBC_ALREADY_CLOSED = 103;
+    public static final int INDEX_DOES_NOT_EXIST = 104;
+    public static final int CANNOT_DROP_IN_USE_INDEX = 105;
+    public static final int CANNOT_DEACTIVATE_PINNED_BLOOM_FILTER = 106;
 
     // Compilation error codes.
     public static final int RULECOLLECTION_NOT_INSTANCE_OF_LIST = 10000;

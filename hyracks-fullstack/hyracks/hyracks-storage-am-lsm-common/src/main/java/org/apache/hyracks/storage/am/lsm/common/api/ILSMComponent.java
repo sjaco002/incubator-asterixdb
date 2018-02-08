@@ -127,4 +127,16 @@ public interface ILSMComponent {
      * @return index data structure that is the stored in the component
      */
     IIndex getIndex();
+
+    /**
+     * @return the {@link ILSMIndex} this component belong to
+     */
+    ILSMIndex getLsmIndex();
+
+    /**
+     *
+     * @return id of the component
+     * @throws HyracksDataException
+     */
+    ILSMComponentId getId() throws HyracksDataException;
 }

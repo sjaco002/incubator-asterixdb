@@ -13,10 +13,9 @@ RecordConstructor [
     FunctionCall asterix.count@1[
       (
         SELECT ELEMENT [
-        FunctionCall Metadata.resolve@-1[
-          LiteralExpr [STRING] [c]
+        FunctionCall asterix.field-access-by-name@2[
           Variable [ Name=$g ]
-          Variable [ Name=$age ]
+          LiteralExpr [STRING] [c]
         ]
         ]
         FROM [          Variable [ Name=$g ]
@@ -27,8 +26,8 @@ RecordConstructor [
   )
 ]
 ]
-FROM [  FunctionCall Metadata.dataset@1[
-    LiteralExpr [STRING] [Customers]
+FROM [  FunctionCall asterix.dataset@1[
+    LiteralExpr [STRING] [test.Customers]
   ]
   AS Variable [ Name=$c ]
 ]

@@ -54,19 +54,12 @@ FROM [  (
       (
         LiteralExpr [STRING] [partkey]
         :
-        FieldAccessor [
-          FunctionCall Metadata.resolve@-1[
-            LiteralExpr [STRING] [i]
-            Variable [ Name=$g ]
-            Variable [ Name=$l_partkey ]
-          ]
-          Field=l_partkey
-        ]
+        Variable [ Name=$l_partkey ]
       )
     ]
     ]
-    FROM [      FunctionCall Metadata.dataset@1[
-        LiteralExpr [STRING] [LineItem]
+    FROM [      FunctionCall asterix.dataset@1[
+        LiteralExpr [STRING] [test.LineItem]
       ]
       AS Variable [ Name=$i ]
     ]
@@ -109,7 +102,7 @@ FROM [  (
 
   )
   AS Variable [ Name=$j ]
- AT 
+ AT
 Variable [ Name=$p ]
 ]
 Where

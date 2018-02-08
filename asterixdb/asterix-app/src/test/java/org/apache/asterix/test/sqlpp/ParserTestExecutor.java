@@ -149,10 +149,9 @@ public class ParserTestExecutor extends TestExecutor {
             }
             writer.close();
             // Compares the actual result and the expected result.
-            runScriptAndCompareWithResult(queryFile, new PrintWriter(System.err), expectedFile, actualResultFile,
-                    ComparisonEnum.TEXT);
+            runScriptAndCompareWithResult(queryFile, expectedFile, actualResultFile, ComparisonEnum.TEXT);
         } catch (Exception e) {
-            GlobalConfig.ASTERIX_LOGGER.warning("Failed while testing file " + queryFile);
+            GlobalConfig.ASTERIX_LOGGER.warn("Failed while testing file " + queryFile);
             throw e;
         } finally {
             writer.close();
@@ -192,9 +191,13 @@ public class ParserTestExecutor extends TestExecutor {
                         + "org.apache.asterix.lang.common.rewrites.LangRewritingContext)",
                 declaredFunctions, topExpr, metadataProvider, context);
         PA.invokeMethod(rewriter, "inlineColumnAlias()");
-        PA.invokeMethod(rewriter, "rewriteGlobalAggregations()");
+        PA.invokeMethod(rewriter, "generateColumnNames()");
+        PA.invokeMethod(rewriter, "substituteGroupbyKeyExpression()");
         PA.invokeMethod(rewriter, "rewriteGroupBys()");
-        PA.invokeMethod(rewriter, "variableCheckAndRewrite(boolean)", Boolean.TRUE);
+        PA.invokeMethod(rewriter, "rewriteSetOperations()");
+        PA.invokeMethod(rewriter, "variableCheckAndRewrite()");
+        PA.invokeMethod(rewriter, "rewriteGroupByAggregationSugar()");
+
     }
 
 }

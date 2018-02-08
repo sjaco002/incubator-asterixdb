@@ -96,7 +96,6 @@ public class FixedSizeElementInvertedListCursor implements IInvertedListCursor {
         int pix = 0;
         for (int i = startPageId; i <= endPageId; i++) {
             pages[pix] = bufferCache.pin(BufferedFileHandle.getDiskPageId(fileId, i), false);
-            pages[pix].acquireReadLatch();
             pix++;
         }
         pinned = true;
@@ -106,7 +105,6 @@ public class FixedSizeElementInvertedListCursor implements IInvertedListCursor {
     public void unpinPages() throws HyracksDataException {
         int numPages = endPageId - startPageId + 1;
         for (int i = 0; i < numPages; i++) {
-            pages[i].releaseReadLatch();
             bufferCache.unpin(pages[i]);
         }
         pinned = false;
@@ -117,8 +115,8 @@ public class FixedSizeElementInvertedListCursor implements IInvertedListCursor {
 
         currentPageIx = binarySearch(elementIndexes, 0, numPages, elementIx);
         if (currentPageIx < 0) {
-            throw new IndexOutOfBoundsException("Requested index: " + elementIx + " from array with numElements: "
-                    + numElements);
+            throw new IndexOutOfBoundsException(
+                    "Requested index: " + elementIx + " from array with numElements: " + numElements);
         }
 
         if (currentPageIx == 0) {
@@ -223,8 +221,8 @@ public class FixedSizeElementInvertedListCursor implements IInvertedListCursor {
     public String printCurrentElement(ISerializerDeserializer[] serdes) throws HyracksDataException {
         StringBuilder strBuilder = new StringBuilder();
         for (int i = 0; i < tuple.getFieldCount(); i++) {
-            ByteArrayInputStream inStream = new ByteArrayInputStream(tuple.getFieldData(i), tuple.getFieldStart(i),
-                    tuple.getFieldLength(i));
+            ByteArrayInputStream inStream =
+                    new ByteArrayInputStream(tuple.getFieldData(i), tuple.getFieldStart(i), tuple.getFieldLength(i));
             DataInput dataIn = new DataInputStream(inStream);
             Object o = serdes[i].deserialize(dataIn);
             strBuilder.append(o.toString());

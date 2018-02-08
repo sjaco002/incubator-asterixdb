@@ -18,8 +18,10 @@
  */
 package org.apache.hyracks.storage.am.lsm.btree.impl;
 
-import java.util.concurrent.Semaphore;
+import org.apache.hyracks.api.exceptions.HyracksDataException;
 
-public interface ITestOpCallback {
-    void callback(Semaphore smeaphore);
+public interface ITestOpCallback<T> {
+    void before(T t) throws HyracksDataException;
+
+    void after() throws HyracksDataException;
 }

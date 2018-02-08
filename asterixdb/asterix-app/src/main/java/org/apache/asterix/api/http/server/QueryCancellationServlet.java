@@ -20,8 +20,6 @@ package org.apache.asterix.api.http.server;
 
 import java.io.IOException;
 import java.util.concurrent.ConcurrentMap;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 
 import org.apache.asterix.translator.IStatementExecutorContext;
 import org.apache.hyracks.api.client.IHyracksClientConnection;
@@ -29,6 +27,9 @@ import org.apache.hyracks.api.job.JobId;
 import org.apache.hyracks.http.api.IServletRequest;
 import org.apache.hyracks.http.api.IServletResponse;
 import org.apache.hyracks.http.server.AbstractServlet;
+import org.apache.logging.log4j.Level;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import io.netty.handler.codec.http.HttpResponseStatus;
 
@@ -36,8 +37,8 @@ import io.netty.handler.codec.http.HttpResponseStatus;
  * The servlet provides a REST API for cancelling an on-going query.
  */
 public class QueryCancellationServlet extends AbstractServlet {
-    private static final Logger LOGGER = Logger.getLogger(QueryCancellationServlet.class.getName());
-    private static final String CLIENT_CONTEXT_ID = "client_context_id";
+    private static final Logger LOGGER = LogManager.getLogger();
+    protected static final String CLIENT_CONTEXT_ID = "client_context_id";
 
     public QueryCancellationServlet(ConcurrentMap<String, Object> ctx, String... paths) {
         super(ctx, paths);
@@ -53,8 +54,8 @@ public class QueryCancellationServlet extends AbstractServlet {
         }
 
         // Retrieves the corresponding Hyracks job id.
-        IStatementExecutorContext runningQueries = (IStatementExecutorContext) ctx
-                .get(ServletConstants.RUNNING_QUERIES_ATTR);
+        IStatementExecutorContext runningQueries =
+                (IStatementExecutorContext) ctx.get(ServletConstants.RUNNING_QUERIES_ATTR);
         IHyracksClientConnection hcc = (IHyracksClientConnection) ctx.get(ServletConstants.HYRACKS_CONNECTION_ATTR);
         JobId jobId = runningQueries.getJobIdFromClientContextId(clientContextId);
 
@@ -71,7 +72,7 @@ public class QueryCancellationServlet extends AbstractServlet {
             // response: OK
             response.setStatus(HttpResponseStatus.OK);
         } catch (Exception e) {
-            LOGGER.log(Level.WARNING, "unexpected exception thrown from cancel", e);
+            LOGGER.log(Level.WARN, "unexpected exception thrown from cancel", e);
             // response: INTERNAL SERVER ERROR
             response.setStatus(HttpResponseStatus.INTERNAL_SERVER_ERROR);
         }

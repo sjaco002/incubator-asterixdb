@@ -36,10 +36,9 @@ FROM [  (
             ]
             FROM [              (
                 SELECT ELEMENT [
-                FunctionCall Metadata.resolve@-1[
-                  LiteralExpr [STRING] [co]
+                FunctionCall asterix.field-access-by-name@2[
                   Variable [ Name=$g2 ]
-                  Variable [ Name=$c_custkey ]
+                  LiteralExpr [STRING] [co]
                 ]
                 ]
                 FROM [                  Variable [ Name=$g2 ]
@@ -75,8 +74,8 @@ FROM [  (
                   Field=o_orderkey
                 ]
                 ]
-                FROM [                  FunctionCall Metadata.dataset@1[
-                    LiteralExpr [STRING] [Orders]
+                FROM [                  FunctionCall asterix.dataset@1[
+                    LiteralExpr [STRING] [tpch.Orders]
                   ]
                   AS Variable [ Name=$o ]
                 ]
@@ -108,8 +107,8 @@ FROM [  (
           )
         ]
         ]
-        FROM [          FunctionCall Metadata.dataset@1[
-            LiteralExpr [STRING] [Customer]
+        FROM [          FunctionCall asterix.dataset@1[
+            LiteralExpr [STRING] [tpch.Customer]
           ]
           AS Variable [ Name=$c ]
         ]
@@ -148,17 +147,10 @@ Let Variable [ Name=$custdist ]
   FunctionCall asterix.sql-count@1[
     (
       SELECT ELEMENT [
-      (
-        SELECT ELEMENT [
-        FieldAccessor [
-          Variable [ Name=#1 ]
-          Field=gco
-        ]
-        ]
-        FROM [          Variable [ Name=$g ]
-          AS Variable [ Name=$g ]
-        ]
-      )
+      FieldAccessor [
+        Variable [ Name=#1 ]
+        Field=gco
+      ]
       ]
       FROM [        Variable [ Name=$g ]
         AS Variable [ Name=#1 ]

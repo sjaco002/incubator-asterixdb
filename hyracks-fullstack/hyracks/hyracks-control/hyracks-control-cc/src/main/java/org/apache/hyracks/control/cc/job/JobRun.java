@@ -37,6 +37,7 @@ import org.apache.hyracks.api.exceptions.HyracksException;
 import org.apache.hyracks.api.job.ActivityCluster;
 import org.apache.hyracks.api.job.ActivityClusterGraph;
 import org.apache.hyracks.api.job.ActivityClusterId;
+import org.apache.hyracks.api.job.DeployedJobSpecId;
 import org.apache.hyracks.api.job.IActivityClusterGraphGenerator;
 import org.apache.hyracks.api.job.IActivityClusterGraphGeneratorFactory;
 import org.apache.hyracks.api.job.JobFlag;
@@ -45,7 +46,7 @@ import org.apache.hyracks.api.job.JobSpecification;
 import org.apache.hyracks.api.job.JobStatus;
 import org.apache.hyracks.api.partitions.PartitionId;
 import org.apache.hyracks.control.cc.ClusterControllerService;
-import org.apache.hyracks.control.cc.PreDistributedJobStore.PreDistributedJobDescriptor;
+import org.apache.hyracks.control.cc.DeployedJobSpecStore.DeployedJobSpecDescriptor;
 import org.apache.hyracks.control.cc.executor.ActivityPartitionDetails;
 import org.apache.hyracks.control.cc.executor.JobExecutor;
 import org.apache.hyracks.control.cc.partitions.PartitionMatchMaker;
@@ -97,8 +98,8 @@ public class JobRun implements IJobStatusConditionVariable {
 
     private Map<OperatorDescriptorId, Map<Integer, String>> operatorLocations;
 
-    private JobRun(DeploymentId deploymentId, JobId jobId, Set<JobFlag> jobFlags,
-            JobSpecification spec, ActivityClusterGraph acg) {
+    private JobRun(DeploymentId deploymentId, JobId jobId, Set<JobFlag> jobFlags, JobSpecification spec,
+            ActivityClusterGraph acg) {
         this.deploymentId = deploymentId;
         this.jobId = jobId;
         this.jobFlags = jobFlags;
@@ -114,21 +115,22 @@ public class JobRun implements IJobStatusConditionVariable {
         createTime = System.currentTimeMillis();
     }
 
-    //Run a Pre-distributed job by passing the JobId
+    //Run a deployed job spec
     public JobRun(ClusterControllerService ccs, DeploymentId deploymentId, JobId jobId, Set<JobFlag> jobFlags,
-            PreDistributedJobDescriptor distributedJobDescriptor)
-            throws HyracksException {
-        this(deploymentId, jobId, jobFlags,
-                distributedJobDescriptor.getJobSpecification(), distributedJobDescriptor.getActivityClusterGraph());
-        Set<Constraint> constaints = distributedJobDescriptor.getActivityClusterGraphConstraints();
-        this.scheduler = new JobExecutor(ccs, this, constaints, true);
+            DeployedJobSpecDescriptor deployedJobSpecDescriptor, Map<byte[], byte[]> jobParameters,
+            DeployedJobSpecId deployedJobSpecId) throws HyracksException {
+        this(deploymentId, jobId, jobFlags, deployedJobSpecDescriptor.getJobSpecification(),
+                deployedJobSpecDescriptor.getActivityClusterGraph());
+        ccs.createOrGetJobParameterByteStore(jobId).setParameters(jobParameters);
+        Set<Constraint> constaints = deployedJobSpecDescriptor.getActivityClusterGraphConstraints();
+        this.scheduler = new JobExecutor(ccs, this, constaints, deployedJobSpecId);
     }
 
     //Run a new job by creating an ActivityClusterGraph
     public JobRun(ClusterControllerService ccs, DeploymentId deploymentId, JobId jobId,
             IActivityClusterGraphGeneratorFactory acggf, IActivityClusterGraphGenerator acgg, Set<JobFlag> jobFlags) {
         this(deploymentId, jobId, jobFlags, acggf.getJobSpecification(), acgg.initialize());
-        this.scheduler = new JobExecutor(ccs, this, acgg.getConstraints(), false);
+        this.scheduler = new JobExecutor(ccs, this, acgg.getConstraints(), null);
     }
 
     public DeploymentId getDeploymentId() {
@@ -249,7 +251,7 @@ public class JobRun implements IJobStatusConditionVariable {
         return connectorPolicyMap;
     }
 
-    public ObjectNode toJSON()  {
+    public ObjectNode toJSON() {
         ObjectMapper om = new ObjectMapper();
         ObjectNode result = om.createObjectNode();
 
@@ -284,10 +286,9 @@ public class JobRun implements IJobStatusConditionVariable {
                 ObjectNode planJSON = om.createObjectNode();
 
                 ArrayNode acTasks = om.createArrayNode();
-                for (Map.Entry<ActivityId, ActivityPlan> e : acp.getActivityPlanMap().entrySet()) {
-                    ActivityPlan acPlan = e.getValue();
+                acp.getActivityPlanMap().forEach((key, acPlan) -> {
                     ObjectNode entry = om.createObjectNode();
-                    entry.put("activity-id", e.getKey().toString());
+                    entry.put("activity-id", key.toString());
 
                     ActivityPartitionDetails apd = acPlan.getActivityPartitionDetails();
                     entry.put("partition-count", apd.getPartitionCount());
@@ -319,21 +320,21 @@ public class JobRun implements IJobStatusConditionVariable {
                         ArrayNode dependentTasksJSON = om.createArrayNode();
                         for (TaskId dependent : t.getDependents()) {
                             dependentTasksJSON.add(dependent.toString());
-                        task.set("dependents", dependentTasksJSON);
+                            task.set("dependents", dependentTasksJSON);
 
-                        ArrayNode dependencyTasksJSON = om.createArrayNode();
-                        for (TaskId dependency : t.getDependencies()) {
-                            dependencyTasksJSON.add(dependency.toString());
+                            ArrayNode dependencyTasksJSON = om.createArrayNode();
+                            for (TaskId dependency : t.getDependencies()) {
+                                dependencyTasksJSON.add(dependency.toString());
+                            }
+                            task.set("dependencies", dependencyTasksJSON);
+
+                            tasks.add(task);
                         }
-                        task.set("dependencies", dependencyTasksJSON);
+                        entry.set("tasks", tasks);
 
-                        tasks.add(task);
+                        acTasks.add(entry);
                     }
-                    entry.set("tasks", tasks);
-
-                    acTasks.add(entry);
-                    }
-                }
+                });
                 planJSON.set("activities", acTasks);
 
                 ArrayNode tClusters = om.createArrayNode();

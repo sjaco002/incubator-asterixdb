@@ -24,17 +24,17 @@ import java.util.SortedMap;
 import java.util.TreeMap;
 import java.util.concurrent.ConcurrentHashMap;
 
-import org.apache.asterix.app.replication.NoFaultToleranceStrategy;
+import org.apache.asterix.app.replication.NcLifecycleCoordinator;
 import org.apache.asterix.app.replication.message.NCLifecycleTaskReportMessage;
 import org.apache.asterix.common.api.IClusterManagementWork.ClusterState;
 import org.apache.asterix.common.cluster.ClusterPartition;
 import org.apache.asterix.common.cluster.IGlobalRecoveryManager;
 import org.apache.asterix.common.config.MetadataProperties;
-import org.apache.asterix.common.exceptions.AsterixException;
 import org.apache.asterix.common.metadata.IMetadataBootstrap;
 import org.apache.asterix.runtime.transaction.ResourceIdManager;
 import org.apache.asterix.runtime.utils.CcApplicationContext;
 import org.apache.asterix.runtime.utils.ClusterStateManager;
+import org.apache.hyracks.algebricks.common.exceptions.AlgebricksException;
 import org.apache.hyracks.api.application.ICCServiceContext;
 import org.apache.hyracks.api.config.IApplicationConfig;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
@@ -185,7 +185,7 @@ public class ClusterStateManagerTest {
     }
 
     private void notifyNodeJoined(ClusterStateManager csm, String nodeId, int partitionId, boolean registerPartitions)
-            throws HyracksException, AsterixException {
+            throws HyracksException, AlgebricksException {
         csm.notifyNodeJoin(nodeId, Collections.emptyMap());
         if (registerPartitions) {
             csm.registerNodePartitions(nodeId, new ClusterPartition[] { new ClusterPartition(partitionId, nodeId, 0) });
@@ -196,7 +196,7 @@ public class ClusterStateManagerTest {
             throws HyracksDataException {
         NCLifecycleTaskReportMessage msg = new NCLifecycleTaskReportMessage(nodeId, true);
         applicationContext.getResourceIdManager().report(nodeId, 0);
-        applicationContext.getFaultToleranceStrategy().process(msg);
+        applicationContext.getNcLifecycleCoordinator().process(msg);
     }
 
     private CcApplicationContext ccAppContext(ClusterStateManager csm) throws HyracksDataException {
@@ -207,9 +207,10 @@ public class ClusterStateManagerTest {
         Mockito.when(iccServiceContext.getAppConfig()).thenReturn(applicationConfig);
         Mockito.when(ccApplicationContext.getServiceContext()).thenReturn(iccServiceContext);
 
-        NoFaultToleranceStrategy fts = new NoFaultToleranceStrategy();
-        fts.bindTo(csm);
-        Mockito.when(ccApplicationContext.getFaultToleranceStrategy()).thenReturn(fts);
+        NcLifecycleCoordinator coordinator =
+                new NcLifecycleCoordinator(ccApplicationContext.getServiceContext(), false);
+        coordinator.bindTo(csm);
+        Mockito.when(ccApplicationContext.getNcLifecycleCoordinator()).thenReturn(coordinator);
 
         MetadataProperties metadataProperties = mockMetadataProperties();
         Mockito.when(ccApplicationContext.getMetadataProperties()).thenReturn(metadataProperties);
@@ -230,6 +231,7 @@ public class ClusterStateManagerTest {
     private MetadataProperties mockMetadataProperties() {
         SortedMap<Integer, ClusterPartition> clusterPartitions = Collections.synchronizedSortedMap(new TreeMap<>());
         Map<String, ClusterPartition[]> nodePartitionsMap = new ConcurrentHashMap<>();
+        nodePartitionsMap.put(METADATA_NODE, new ClusterPartition[] { new ClusterPartition(0, METADATA_NODE, 0) });
         MetadataProperties metadataProperties = Mockito.mock(MetadataProperties.class);
         Mockito.when(metadataProperties.getMetadataNodeName()).thenReturn(METADATA_NODE);
         Mockito.when(metadataProperties.getClusterPartitions()).thenReturn(clusterPartitions);

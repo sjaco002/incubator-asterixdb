@@ -54,7 +54,6 @@ import org.apache.asterix.lang.sqlpp.clause.SelectRegular;
 import org.apache.asterix.lang.sqlpp.clause.SelectSetOperation;
 import org.apache.asterix.lang.sqlpp.clause.UnnestClause;
 import org.apache.asterix.lang.sqlpp.expression.CaseExpression;
-import org.apache.asterix.lang.sqlpp.expression.IndependentSubquery;
 import org.apache.asterix.lang.sqlpp.expression.SelectExpression;
 import org.apache.asterix.lang.sqlpp.optype.JoinType;
 import org.apache.asterix.lang.sqlpp.optype.SetOpType;
@@ -166,17 +165,6 @@ class SqlppExpressionToPlanTranslator extends LangExpressionToPlanTranslator imp
             context.exitSubplan();
         }
         return result;
-    }
-
-    @Override
-    public Pair<ILogicalOperator, LogicalVariable> visit(IndependentSubquery independentSubquery,
-            Mutable<ILogicalOperator> tupleSource) throws CompilationException {
-        Pair<ILogicalExpression, Mutable<ILogicalOperator>> eo =
-                langExprToAlgExpression(independentSubquery.getExpr(), tupleSource);
-        LogicalVariable var = context.newVar();
-        AssignOperator assignOp = new AssignOperator(var, new MutableObject<ILogicalExpression>(eo.first));
-        assignOp.getInputs().add(eo.second);
-        return new Pair<>(assignOp, var);
     }
 
     @Override
@@ -357,8 +345,8 @@ class SqlppExpressionToPlanTranslator extends LangExpressionToPlanTranslator imp
             }
 
             // Adds an aggregate operator to listfy unnest variables.
-            AggregateFunctionCallExpression fListify = BuiltinFunctions
-                    .makeAggregateFunctionExpression(BuiltinFunctions.LISTIFY, mkSingletonArrayList(
+            AggregateFunctionCallExpression fListify =
+                    BuiltinFunctions.makeAggregateFunctionExpression(BuiltinFunctions.LISTIFY, mkSingletonArrayList(
                             new MutableObject<ILogicalExpression>(new VariableReferenceExpression(varToListify))));
 
             LogicalVariable aggVar = context.newSubplanOutputVar();
@@ -522,8 +510,8 @@ class SqlppExpressionToPlanTranslator extends LangExpressionToPlanTranslator imp
 
                 // A "THEN" branch can be entered only when the tuple has not enter any other preceding
                 // branches and the current "WHEN" condition is TRUE.
-                branchEntraceConditionExprRef = new MutableObject<>(new ScalarFunctionCallExpression(
-                        FunctionUtil.getFunctionInfo(BuiltinFunctions.AND), andArgs));
+                branchEntraceConditionExprRef = new MutableObject<>(
+                        new ScalarFunctionCallExpression(FunctionUtil.getFunctionInfo(BuiltinFunctions.AND), andArgs));
             }
 
             // Translates the corresponding "THEN" expression.
@@ -551,8 +539,8 @@ class SqlppExpressionToPlanTranslator extends LangExpressionToPlanTranslator imp
             arguments.add(new MutableObject<>(argVar));
         }
         arguments.add(new MutableObject<>(new VariableReferenceExpression(opAndVarForElse.second)));
-        AbstractFunctionCallExpression swithCaseExpr = new ScalarFunctionCallExpression(
-                FunctionUtil.getFunctionInfo(BuiltinFunctions.SWITCH_CASE), arguments);
+        AbstractFunctionCallExpression swithCaseExpr =
+                new ScalarFunctionCallExpression(FunctionUtil.getFunctionInfo(BuiltinFunctions.SWITCH_CASE), arguments);
         AssignOperator assignOp = new AssignOperator(selectVar, new MutableObject<>(swithCaseExpr));
         assignOp.getInputs().add(new MutableObject<>(opAndVarForElse.first));
 
@@ -674,9 +662,11 @@ class SqlppExpressionToPlanTranslator extends LangExpressionToPlanTranslator imp
         for (GbyVariableExpressionPair pair : groupbyClause.getGbyPairList()) {
             fieldBindings.add(getFieldBinding(pair.getVar()));
         }
-        if (groupbyClause.hasWithMap() && groupbyClause.hasGroupVar()) {
-            // Makes sure that we add the re-mapped group variable which refers to a collection.
-            fieldBindings.add(getFieldBinding(groupbyClause.getWithVarMap().get(groupbyClause.getGroupVar())));
+        if (groupbyClause.hasGroupVar()) {
+            fieldBindings.add(getFieldBinding(groupbyClause.getGroupVar()));
+        }
+        if (groupbyClause.hasWithMap()) {
+            throw new IllegalStateException(groupbyClause.getWithVarMap().values().toString()); // no WITH in SQLPP
         }
         return fieldBindings;
     }

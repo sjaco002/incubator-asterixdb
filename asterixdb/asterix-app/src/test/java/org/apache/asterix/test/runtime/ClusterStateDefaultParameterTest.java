@@ -40,7 +40,7 @@ import org.junit.runners.Parameterized.Parameters;
  */
 @RunWith(Parameterized.class)
 public class ClusterStateDefaultParameterTest {
-    protected static final String TEST_CONFIG_FILE_NAME = "asterix-build-configuration4.xml";
+    protected static final String TEST_CONFIG_FILE_NAME = "src/main/resources/cc4.conf";
 
     @BeforeClass
     public static void setUp() throws Exception {
@@ -87,8 +87,8 @@ public class ClusterStateDefaultParameterTest {
                 Assert.assertTrue(getValue(row) == maxHeap / 4);
                 matchCount++;
             }
-            if (row.contains("storage.memorycomponent.numpages")) {
-                Assert.assertTrue(getValue(row) == maxHeap / (131072 * 64));
+            if (row.contains("storage.max.active.writable.datasets")) {
+                Assert.assertTrue(getValue(row) == 8);
                 matchCount++;
             }
         }

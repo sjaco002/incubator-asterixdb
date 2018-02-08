@@ -18,20 +18,23 @@
  */
 package org.apache.asterix.metadata.utils;
 
+import static org.apache.hyracks.storage.am.common.dataflow.IndexDropOperatorDescriptor.DropOption;
+
+import java.util.EnumSet;
 import java.util.List;
+import java.util.Set;
 
 import org.apache.asterix.common.config.DatasetConfig;
 import org.apache.asterix.common.config.OptimizationConfUtil;
 import org.apache.asterix.common.exceptions.CompilationException;
 import org.apache.asterix.common.exceptions.ErrorCode;
-import org.apache.asterix.common.transactions.JobId;
+import org.apache.asterix.common.transactions.TxnId;
 import org.apache.asterix.external.indexing.ExternalFile;
 import org.apache.asterix.metadata.declared.MetadataProvider;
 import org.apache.asterix.metadata.entities.Dataset;
 import org.apache.asterix.metadata.entities.Index;
 import org.apache.asterix.metadata.entities.InternalDatasetDetails;
 import org.apache.asterix.runtime.job.listener.JobEventListenerFactory;
-import org.apache.asterix.transaction.management.service.transaction.JobIdFactory;
 import org.apache.hyracks.algebricks.common.exceptions.AlgebricksException;
 import org.apache.hyracks.algebricks.core.rewriter.base.PhysicalOptimizationConfig;
 import org.apache.hyracks.api.dataflow.value.ITypeTraits;
@@ -103,14 +106,14 @@ public class IndexUtil {
             Dataset dataset) throws AlgebricksException {
         SecondaryIndexOperationsHelper secondaryIndexHelper = SecondaryIndexOperationsHelper
                 .createIndexOperationsHelper(dataset, index, metadataProvider, physicalOptimizationConfig);
-        return secondaryIndexHelper.buildDropJobSpec(false);
+        return secondaryIndexHelper.buildDropJobSpec(EnumSet.noneOf(DropOption.class));
     }
 
     public static JobSpecification buildDropIndexJobSpec(Index index, MetadataProvider metadataProvider,
-            Dataset dataset, boolean failSilently) throws AlgebricksException {
+            Dataset dataset, Set<DropOption> options) throws AlgebricksException {
         SecondaryIndexOperationsHelper secondaryIndexHelper = SecondaryIndexOperationsHelper
                 .createIndexOperationsHelper(dataset, index, metadataProvider, physicalOptimizationConfig);
-        return secondaryIndexHelper.buildDropJobSpec(failSilently);
+        return secondaryIndexHelper.buildDropJobSpec(options);
     }
 
     public static JobSpecification buildSecondaryIndexCreationJobSpec(Dataset dataset, Index index,
@@ -157,13 +160,13 @@ public class IndexUtil {
      *            the metadata provider.
      * @return the AsterixDB job id for transaction management.
      */
-    public static JobId bindJobEventListener(JobSpecification spec, MetadataProvider metadataProvider) {
-        JobId jobId = JobIdFactory.generateJobId();
-        metadataProvider.setJobId(jobId);
+    public static void bindJobEventListener(JobSpecification spec, MetadataProvider metadataProvider)
+            throws AlgebricksException {
+        TxnId txnId = metadataProvider.getTxnIdFactory().create();
+        metadataProvider.setTxnId(txnId);
         boolean isWriteTransaction = metadataProvider.isWriteTransaction();
-        IJobletEventListenerFactory jobEventListenerFactory = new JobEventListenerFactory(jobId, isWriteTransaction);
+        IJobletEventListenerFactory jobEventListenerFactory = new JobEventListenerFactory(txnId, isWriteTransaction);
         spec.setJobletEventListenerFactory(jobEventListenerFactory);
-        return jobId;
     }
 
 }

@@ -336,10 +336,10 @@ public class FramewriterTest {
         int j = 0;
         for (int i = 0; i < indexAccessors.length; i++) {
             indexes[j] = Mockito.mock(ITreeIndex.class);
-            Mockito.when(indexes[j].createAccessor(Mockito.any(), Mockito.any())).thenReturn(indexAccessors[i]);
+            Mockito.when(indexes[j].createAccessor(Mockito.any())).thenReturn(indexAccessors[i]);
             j++;
             indexes[j] = Mockito.mock(ITreeIndex.class);
-            Mockito.when(indexes[j].createAccessor(Mockito.any(), Mockito.any()))
+            Mockito.when(indexes[j].createAccessor(Mockito.any()))
                     .thenThrow(new HyracksDataException("failed to create accessor"));
             j++;
         }
@@ -390,7 +390,7 @@ public class FramewriterTest {
             cursor = Mockito.mock(IIndexCursor.class);
             Mockito.when(cursor.hasNext()).thenReturn(true, true, false);
             Mockito.when(cursor.getTuple()).thenReturn(tuples[i]);
-            Mockito.doThrow(new HyracksDataException("Failed to close cursor")).when(cursor).close();
+            Mockito.doThrow(new HyracksDataException("Failed to close cursor")).when(cursor).destroy();
             cursors[j] = cursor;
             j++;
         }

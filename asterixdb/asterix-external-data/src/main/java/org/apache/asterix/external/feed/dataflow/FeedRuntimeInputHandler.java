@@ -21,8 +21,6 @@ package org.apache.asterix.external.feed.dataflow;
 import java.nio.ByteBuffer;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 
 import org.apache.asterix.active.ActiveRuntimeId;
 import org.apache.asterix.common.memory.ConcurrentFramePool;
@@ -35,6 +33,9 @@ import org.apache.hyracks.api.context.IHyracksTaskContext;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.apache.hyracks.dataflow.common.comm.io.FrameTupleAccessor;
 import org.apache.hyracks.dataflow.std.base.AbstractUnaryInputUnaryOutputOperatorNodePushable;
+import org.apache.logging.log4j.Level;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 /**
  * TODO: Add Failure cases unit tests for this class
@@ -49,7 +50,7 @@ import org.apache.hyracks.dataflow.std.base.AbstractUnaryInputUnaryOutputOperato
  **/
 public class FeedRuntimeInputHandler extends AbstractUnaryInputUnaryOutputOperatorNodePushable {
 
-    private static final Logger LOGGER = Logger.getLogger(FeedRuntimeInputHandler.class.getName());
+    private static final Logger LOGGER = LogManager.getLogger();
     private static final double MAX_SPILL_USED_BEFORE_RESUME = 0.8;
     private static final boolean DEBUG = false;
     private static final ByteBuffer POISON_PILL = ByteBuffer.allocate(0);
@@ -76,11 +77,9 @@ public class FeedRuntimeInputHandler extends AbstractUnaryInputUnaryOutputOperat
             IFrameWriter writer, FeedPolicyAccessor fpa, FrameTupleAccessor fta, ConcurrentFramePool framePool)
             throws HyracksDataException {
         this.writer = writer;
-        this.spiller = fpa.spillToDiskOnCongestion() ?
-                new FrameSpiller(ctx,
-                        connectionId.getFeedId() + "_" + connectionId.getDatasetName() + "_" + runtimeId.getPartition(),
-                        fpa.getMaxSpillOnDisk()) :
-                null;
+        this.spiller = fpa.spillToDiskOnCongestion() ? new FrameSpiller(ctx,
+                connectionId.getFeedId() + "_" + connectionId.getDatasetName() + "_" + runtimeId.getPartition(),
+                fpa.getMaxSpillOnDisk()) : null;
         this.exceptionHandler = new FeedExceptionHandler(ctx, fta);
         this.fpa = fpa;
         this.framePool = framePool;
@@ -109,7 +108,7 @@ public class FeedRuntimeInputHandler extends AbstractUnaryInputUnaryOutputOperat
         try {
             inbox.put(FAIL);
         } catch (InterruptedException e) {
-            LOGGER.log(Level.WARNING, "interrupted", e);
+            LOGGER.log(Level.WARN, "interrupted", e);
             Thread.currentThread().interrupt();
         }
     }
@@ -124,7 +123,7 @@ public class FeedRuntimeInputHandler extends AbstractUnaryInputUnaryOutputOperat
             inbox.put(POISON_PILL);
             consumerThread.join();
         } catch (InterruptedException e) {
-            LOGGER.log(Level.WARNING, "interrupted", e);
+            LOGGER.log(Level.WARN, "interrupted", e);
             Thread.currentThread().interrupt();
         }
         try {
@@ -132,7 +131,7 @@ public class FeedRuntimeInputHandler extends AbstractUnaryInputUnaryOutputOperat
                 spiller.close();
             }
         } catch (Throwable th) {
-            LOGGER.log(Level.WARNING, "exception closing spiller", th);
+            LOGGER.log(Level.WARN, "exception closing spiller", th);
         } finally {
             writer.close();
         }
@@ -159,8 +158,8 @@ public class FeedRuntimeInputHandler extends AbstractUnaryInputUnaryOutputOperat
                     discard(frame);
                     break;
                 default:
-                    if (LOGGER.isLoggable(Level.WARNING)) {
-                        LOGGER.warning("Ignoring incoming tuples in " + mode + " mode");
+                    if (LOGGER.isWarnEnabled()) {
+                        LOGGER.warn("Ignoring incoming tuples in " + mode + " mode");
                     }
                     break;
             }
@@ -288,8 +287,8 @@ public class FeedRuntimeInputHandler extends AbstractUnaryInputUnaryOutputOperat
             while (spiller.usedBudget() > MAX_SPILL_USED_BEFORE_RESUME) {
                 if (DEBUG) {
                     LOGGER.info("in stall(frame). Spilling has been consumed. We will wait for it to be less than "
-                            + MAX_SPILL_USED_BEFORE_RESUME + " consumed. Current consumption = " + spiller
-                            .usedBudget());
+                            + MAX_SPILL_USED_BEFORE_RESUME + " consumed. Current consumption = "
+                            + spiller.usedBudget());
                 }
                 spiller.wait();
             }

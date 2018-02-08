@@ -24,13 +24,11 @@ import java.io.IOException;
 import java.io.PrintWriter;
 import java.util.concurrent.ConcurrentMap;
 import java.util.function.Predicate;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 
 import org.apache.asterix.common.dataflow.ICcApplicationContext;
-import org.apache.asterix.runtime.utils.CcApplicationContext;
 import org.apache.hyracks.api.config.IOption;
 import org.apache.hyracks.api.config.Section;
+import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.apache.hyracks.control.common.config.ConfigUtils;
 import org.apache.hyracks.control.common.controllers.ControllerConfig;
 import org.apache.hyracks.http.api.IServletRequest;
@@ -38,6 +36,9 @@ import org.apache.hyracks.http.api.IServletResponse;
 import org.apache.hyracks.http.server.AbstractServlet;
 import org.apache.hyracks.http.server.utils.HttpUtil;
 import org.apache.hyracks.util.JSONUtil;
+import org.apache.logging.log4j.Level;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -47,7 +48,7 @@ import io.netty.handler.codec.http.HttpResponseStatus;
 
 public class ClusterApiServlet extends AbstractServlet {
 
-    private static final Logger LOGGER = Logger.getLogger(ClusterApiServlet.class.getName());
+    private static final Logger LOGGER = LogManager.getLogger();
     protected static final String NODE_ID_KEY = "node_id";
     protected static final String CONFIG_URI_KEY = "configUri";
     protected static final String STATS_URI_KEY = "statsUri";
@@ -91,13 +92,28 @@ public class ClusterApiServlet extends AbstractServlet {
         responseWriter.flush();
     }
 
+    @Override
+    protected void post(IServletRequest request, IServletResponse response) throws Exception {
+        switch (localPath(request)) {
+            case "/partition/master":
+                processPartitionMaster(request, response);
+                break;
+            case "/metadataNode":
+                processMetadataNode(request, response);
+                break;
+            default:
+                sendError(response, HttpResponseStatus.NOT_FOUND);
+                break;
+        }
+    }
+
     protected ObjectNode getClusterStateSummaryJSON() {
         return appCtx.getClusterStateManager().getClusterStateSummary();
     }
 
     protected ObjectNode getClusterStateJSON(IServletRequest request, String pathToNode) {
         ObjectNode json = appCtx.getClusterStateManager().getClusterStateDescription();
-        CcApplicationContext appConfig = (CcApplicationContext) ctx.get(ASTERIX_APP_CONTEXT_INFO_ATTR);
+        ICcApplicationContext appConfig = (ICcApplicationContext) ctx.get(ASTERIX_APP_CONTEXT_INFO_ATTR);
         json.putPOJO("config", ConfigUtils.getSectionOptionsForJSON(appConfig.getServiceContext().getAppConfig(),
                 Section.COMMON, getConfigSelector()));
 
@@ -144,4 +160,16 @@ public class ClusterApiServlet extends AbstractServlet {
                 && option != ControllerConfig.Option.CONFIG_FILE_URL;
     }
 
+    private void processPartitionMaster(IServletRequest request, IServletResponse response) {
+        final String partition = request.getParameter("partition");
+        final String node = request.getParameter("node");
+        appCtx.getClusterStateManager().updateClusterPartition(Integer.valueOf(partition), node, true);
+        response.setStatus(HttpResponseStatus.OK);
+    }
+
+    private void processMetadataNode(IServletRequest request, IServletResponse response) throws HyracksDataException {
+        final String node = request.getParameter("node");
+        appCtx.getNcLifecycleCoordinator().notifyMetadataNodeChange(node);
+        response.setStatus(HttpResponseStatus.OK);
+    }
 }

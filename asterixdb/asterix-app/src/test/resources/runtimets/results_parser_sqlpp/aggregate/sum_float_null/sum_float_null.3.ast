@@ -9,8 +9,8 @@ FunctionCall asterix.sum@1[
       Field=floatField
     ]
     ]
-    FROM [      FunctionCall Metadata.dataset@1[
-        LiteralExpr [STRING] [Numeric]
+    FROM [      FunctionCall asterix.dataset@1[
+        LiteralExpr [STRING] [test.Numeric]
       ]
       AS Variable [ Name=$x ]
     ]

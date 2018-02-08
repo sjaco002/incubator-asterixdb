@@ -18,8 +18,9 @@
  */
 package org.apache.hyracks.http.server;
 
-import java.util.logging.Level;
-import java.util.logging.Logger;
+import org.apache.logging.log4j.Level;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandlerContext;
@@ -40,7 +41,7 @@ import io.netty.util.internal.PromiseNotificationUtil;
  */
 public class HttpRequestCapacityController extends ChannelInboundHandlerAdapter {
 
-    private static final Logger LOGGER = Logger.getLogger(HttpRequestCapacityController.class.getName());
+    private static final Logger LOGGER = LogManager.getLogger();
     private final HttpServer server;
     private boolean overloaded = false;
 
@@ -67,14 +68,14 @@ public class HttpRequestCapacityController extends ChannelInboundHandlerAdapter 
         HttpResponseEncoder encoder = new HttpResponseEncoder();
         ChannelPromise promise = ctx.newPromise();
         promise.addListener(ChannelFutureListener.CLOSE);
-        DefaultFullHttpResponse response = new DefaultFullHttpResponse(HttpVersion.HTTP_1_1,
-                HttpResponseStatus.SERVICE_UNAVAILABLE);
+        DefaultFullHttpResponse response =
+                new DefaultFullHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.SERVICE_UNAVAILABLE);
         try {
             encoder.write(ctx, response, ctx.voidPromise());
             ctx.writeAndFlush(ctx.alloc().buffer(0), promise);
         } catch (Throwable th) {//NOSONAR
             try {
-                LOGGER.log(Level.SEVERE, "Failure during request rejection", th);
+                LOGGER.log(Level.ERROR, "Failure during request rejection", th);
             } catch (Throwable loggingFailure) {//NOSONAR
             }
             PromiseNotificationUtil.tryFailure(promise, th, null);

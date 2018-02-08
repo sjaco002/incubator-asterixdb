@@ -22,9 +22,16 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 
 public interface ITCPConnectionListener {
-    public void acceptedConnection(TCPConnection connection);
+    void acceptedConnection(TCPConnection connection);
 
-    public void connectionEstablished(TCPConnection connection);
+    void connectionEstablished(TCPConnection connection);
 
-    public void connectionFailure(InetSocketAddress remoteAddress, IOException error);
+    void connectionFailure(InetSocketAddress remoteAddress, IOException error);
+
+    /**
+     * Notifies the listener that {@code connection} has been closed.
+     *
+     * @param connection
+     */
+    void connectionClosed(TCPConnection connection);
 }

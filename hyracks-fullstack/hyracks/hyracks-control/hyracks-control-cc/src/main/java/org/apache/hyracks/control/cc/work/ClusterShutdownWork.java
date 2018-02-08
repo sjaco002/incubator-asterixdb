@@ -20,8 +20,6 @@
 package org.apache.hyracks.control.cc.work;
 
 import java.util.Collection;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 
 import org.apache.hyracks.control.cc.ClusterControllerService;
 import org.apache.hyracks.control.cc.NodeControllerState;
@@ -31,16 +29,19 @@ import org.apache.hyracks.control.common.work.IResultCallback;
 import org.apache.hyracks.control.common.work.SynchronizableWork;
 import org.apache.hyracks.ipc.exceptions.IPCException;
 import org.apache.hyracks.util.ExitUtil;
+import org.apache.logging.log4j.Level;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 public class ClusterShutdownWork extends SynchronizableWork {
-    private static final Logger LOGGER = Logger.getLogger(ClusterShutdownWork.class.getName());
+    private static final Logger LOGGER = LogManager.getLogger();
 
     private final ClusterControllerService ccs;
     private final boolean terminateNCService;
     private final IResultCallback<Boolean> callback;
 
     public ClusterShutdownWork(ClusterControllerService ncs, boolean terminateNCService,
-                               IResultCallback<Boolean> callback) {
+            IResultCallback<Boolean> callback) {
         this.ccs = ncs;
         this.terminateNCService = terminateNCService;
         this.callback = callback;
@@ -76,8 +77,8 @@ public class ClusterShutdownWork extends SynchronizableWork {
                         /*
                          * best effort - just exit, user will have to kill misbehaving NCs
                          */
-                        LOGGER.severe("Clean shutdown of NCs timed out- giving up; unresponsive nodes: " +
-                                shutdownStatus.getRemainingNodes());
+                        LOGGER.error("Clean shutdown of NCs timed out- giving up; unresponsive nodes: "
+                                + shutdownStatus.getRemainingNodes());
                     }
                     callback.setValue(cleanShutdown);
                     ccs.stop(terminateNCService);
@@ -96,8 +97,8 @@ public class ClusterShutdownWork extends SynchronizableWork {
             LOGGER.info("Notifying NC " + nodeId + " to shutdown...");
             ncState.getNodeController().shutdown(terminateNCService);
         } catch (Exception e) {
-            LOGGER.log(Level.INFO,
-                    "Exception shutting down NC " + nodeId + " (possibly dead?), continuing shutdown...", e);
+            LOGGER.log(Level.INFO, "Exception shutting down NC " + nodeId + " (possibly dead?), continuing shutdown...",
+                    e);
         }
     }
 }

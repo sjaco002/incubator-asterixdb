@@ -24,18 +24,18 @@ RecordConstructor [
   )
 ]
 ]
-FROM [  FunctionCall Metadata.dataset@1[
-    LiteralExpr [STRING] [Customer]
+FROM [  FunctionCall asterix.dataset@1[
+    LiteralExpr [STRING] [tpch.Customer]
   ]
   AS Variable [ Name=$c ]
 ,
-  FunctionCall Metadata.dataset@1[
-    LiteralExpr [STRING] [Orders]
+  FunctionCall asterix.dataset@1[
+    LiteralExpr [STRING] [tpch.Orders]
   ]
   AS Variable [ Name=$o ]
 ,
-  FunctionCall Metadata.dataset@1[
-    LiteralExpr [STRING] [LineItem]
+  FunctionCall asterix.dataset@1[
+    LiteralExpr [STRING] [tpch.LineItem]
   ]
   AS Variable [ Name=$l ]
 ]
@@ -145,12 +145,9 @@ Let Variable [ Name=$revenue ]
       ]
       FROM [        (
           SELECT ELEMENT [
-          FunctionCall Metadata.resolve@-1[
-            LiteralExpr [STRING] [l]
-            Variable [ Name=$o_shippriority ]
+          FunctionCall asterix.field-access-by-name@2[
             Variable [ Name=$g ]
-            Variable [ Name=$o_orderdate ]
-            Variable [ Name=$l_orderkey ]
+            LiteralExpr [STRING] [l]
           ]
           ]
           FROM [            Variable [ Name=$g ]

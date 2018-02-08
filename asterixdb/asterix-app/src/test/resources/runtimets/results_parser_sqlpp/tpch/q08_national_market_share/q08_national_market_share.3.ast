@@ -38,10 +38,9 @@ RecordConstructor [
           ]
           FROM [            (
               SELECT ELEMENT [
-              FunctionCall Metadata.resolve@-1[
-                LiteralExpr [STRING] [t]
+              FunctionCall asterix.field-access-by-name@2[
                 Variable [ Name=$g ]
-                Variable [ Name=$year ]
+                LiteralExpr [STRING] [t]
               ]
               ]
               FROM [                Variable [ Name=$g ]
@@ -63,10 +62,9 @@ RecordConstructor [
           ]
           FROM [            (
               SELECT ELEMENT [
-              FunctionCall Metadata.resolve@-1[
-                LiteralExpr [STRING] [t]
+              FunctionCall asterix.field-access-by-name@2[
                 Variable [ Name=$g ]
-                Variable [ Name=$year ]
+                LiteralExpr [STRING] [t]
               ]
               ]
               FROM [                Variable [ Name=$g ]
@@ -163,8 +161,8 @@ FROM [  (
           )
         ]
         ]
-        FROM [          FunctionCall Metadata.dataset@1[
-            LiteralExpr [STRING] [Supplier]
+        FROM [          FunctionCall asterix.dataset@1[
+            LiteralExpr [STRING] [tpch.Supplier]
           ]
           AS Variable [ Name=$s ]
 ,
@@ -250,8 +248,8 @@ FROM [  (
                   )
                 ]
                 ]
-                FROM [                  FunctionCall Metadata.dataset@1[
-                    LiteralExpr [STRING] [LineItem]
+                FROM [                  FunctionCall asterix.dataset@1[
+                    LiteralExpr [STRING] [tpch.LineItem]
                   ]
                   AS Variable [ Name=$l ]
 ,
@@ -276,8 +274,8 @@ FROM [  (
                       )
                     ]
                     ]
-                    FROM [                      FunctionCall Metadata.dataset@1[
-                        LiteralExpr [STRING] [Orders]
+                    FROM [                      FunctionCall asterix.dataset@1[
+                        LiteralExpr [STRING] [tpch.Orders]
                       ]
                       AS Variable [ Name=$o ]
 ,
@@ -294,8 +292,8 @@ FROM [  (
                           )
                         ]
                         ]
-                        FROM [                          FunctionCall Metadata.dataset@1[
-                            LiteralExpr [STRING] [Customer]
+                        FROM [                          FunctionCall asterix.dataset@1[
+                            LiteralExpr [STRING] [tpch.Customer]
                           ]
                           AS Variable [ Name=$c ]
 ,
@@ -312,13 +310,13 @@ FROM [  (
                               )
                             ]
                             ]
-                            FROM [                              FunctionCall Metadata.dataset@1[
-                                LiteralExpr [STRING] [Nation]
+                            FROM [                              FunctionCall asterix.dataset@1[
+                                LiteralExpr [STRING] [tpch.Nation]
                               ]
                               AS Variable [ Name=$n1 ]
 ,
-                              FunctionCall Metadata.dataset@1[
-                                LiteralExpr [STRING] [Region]
+                              FunctionCall asterix.dataset@1[
+                                LiteralExpr [STRING] [tpch.Region]
                               ]
                               AS Variable [ Name=$r1 ]
                             ]
@@ -413,8 +411,8 @@ FROM [  (
               )
               AS Variable [ Name=$lnrco ]
 ,
-              FunctionCall Metadata.dataset@1[
-                LiteralExpr [STRING] [Part]
+              FunctionCall asterix.dataset@1[
+                LiteralExpr [STRING] [tpch.Part]
               ]
               AS Variable [ Name=$p ]
             ]
@@ -459,8 +457,8 @@ FROM [  (
       )
       AS Variable [ Name=$slnrcop ]
 ,
-      FunctionCall Metadata.dataset@1[
-        LiteralExpr [STRING] [Nation]
+      FunctionCall asterix.dataset@1[
+        LiteralExpr [STRING] [tpch.Nation]
       ]
       AS Variable [ Name=$n2 ]
     ]

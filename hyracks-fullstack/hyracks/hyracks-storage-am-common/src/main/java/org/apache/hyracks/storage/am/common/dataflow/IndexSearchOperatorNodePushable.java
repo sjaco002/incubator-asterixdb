@@ -22,8 +22,6 @@ import java.io.DataOutput;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Date;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 
 import org.apache.hyracks.api.comm.VSizeFrame;
 import org.apache.hyracks.api.context.IHyracksTaskContext;
@@ -41,18 +39,24 @@ import org.apache.hyracks.dataflow.common.data.accessors.FrameTupleReference;
 import org.apache.hyracks.dataflow.common.data.accessors.ITupleReference;
 import org.apache.hyracks.dataflow.std.base.AbstractUnaryInputUnaryOutputOperatorNodePushable;
 import org.apache.hyracks.storage.am.common.api.IIndexDataflowHelper;
+import org.apache.hyracks.storage.am.common.api.ILSMIndexCursor;
 import org.apache.hyracks.storage.am.common.api.ISearchOperationCallbackFactory;
+import org.apache.hyracks.storage.am.common.impls.IndexAccessParameters;
 import org.apache.hyracks.storage.am.common.impls.NoOpOperationCallback;
 import org.apache.hyracks.storage.am.common.tuples.PermutingFrameTupleReference;
 import org.apache.hyracks.storage.common.IIndex;
+import org.apache.hyracks.storage.common.IIndexAccessParameters;
 import org.apache.hyracks.storage.common.IIndexAccessor;
 import org.apache.hyracks.storage.common.IIndexCursor;
 import org.apache.hyracks.storage.common.ISearchOperationCallback;
 import org.apache.hyracks.storage.common.ISearchPredicate;
+import org.apache.logging.log4j.Level;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 public abstract class IndexSearchOperatorNodePushable extends AbstractUnaryInputUnaryOutputOperatorNodePushable {
 
-    static final Logger LOGGER = Logger.getLogger(IndexSearchOperatorNodePushable.class.getName());
+    static final Logger LOGGER = LogManager.getLogger();
     protected final IHyracksTaskContext ctx;
     protected final IIndexDataflowHelper indexHelper;
     protected FrameTupleAccessor accessor;
@@ -151,7 +155,8 @@ public abstract class IndexSearchOperatorNodePushable extends AbstractUnaryInput
             appender = new FrameTupleAppender(new VSizeFrame(ctx), true);
             ISearchOperationCallback searchCallback =
                     searchCallbackFactory.createSearchOperationCallback(indexHelper.getResource().getId(), ctx, null);
-            indexAccessor = index.createAccessor(NoOpOperationCallback.INSTANCE, searchCallback);
+            IIndexAccessParameters iap = new IndexAccessParameters(NoOpOperationCallback.INSTANCE, searchCallback);
+            indexAccessor = index.createAccessor(iap);
             cursor = createCursor();
             if (retainInput) {
                 frameTuple = new FrameTupleReference();
@@ -177,8 +182,8 @@ public abstract class IndexSearchOperatorNodePushable extends AbstractUnaryInput
             ITupleReference tuple = cursor.getTuple();
             writeTupleToOutput(tuple);
             if (appendIndexFilter) {
-                writeFilterTupleToOutput(cursor.getFilterMinTuple());
-                writeFilterTupleToOutput(cursor.getFilterMaxTuple());
+                writeFilterTupleToOutput(((ILSMIndexCursor) cursor).getFilterMinTuple());
+                writeFilterTupleToOutput(((ILSMIndexCursor) cursor).getFilterMaxTuple());
             }
             FrameUtils.appendToWriter(writer, appender, tb.getFieldEndOffsets(), tb.getByteArray(), 0, tb.getSize());
         }
@@ -202,7 +207,7 @@ public abstract class IndexSearchOperatorNodePushable extends AbstractUnaryInput
 
                 long start = System.nanoTime();
                 int startSize = indexAccessor.getComponentCount();
-                cursor.reset();
+                cursor.close();
                 //this does the actual work of the search (for range or key queries)
                 indexAccessor.search(cursor, searchPred);
 
@@ -215,8 +220,8 @@ public abstract class IndexSearchOperatorNodePushable extends AbstractUnaryInput
                 long longerMicroseconds = (end - start);
                 int endSize = indexAccessor.getComponentCount();
 
-                if (LOGGER.isLoggable(Level.SEVERE)) {
-                    LOGGER.severe("Merge Policy Experiment Read Search micro: " + matchingTupleCount + " " + startSize
+                if (LOGGER.isFatalEnabled()) {
+                    LOGGER.fatal("Merge Policy Experiment Read Search micro: " + matchingTupleCount + " " + startSize
                             + " " + endSize + " " + longerMicroseconds + " " + microseconds + " " + new Date());
                 }
 
@@ -248,7 +253,7 @@ public abstract class IndexSearchOperatorNodePushable extends AbstractUnaryInput
             }
 
             try {
-                cursor.close();
+                cursor.destroy();
             } catch (Throwable th) {
                 if (closeException == null) {
                     closeException = HyracksDataException.create(th);
@@ -316,7 +321,7 @@ public abstract class IndexSearchOperatorNodePushable extends AbstractUnaryInput
             try {
                 nonMatchWriter.writeMissing(out);
             } catch (Exception e) {
-                LOGGER.log(Level.WARNING, e.getMessage(), e);
+                LOGGER.log(Level.WARN, e.getMessage(), e);
             }
             nullTuple.addFieldEndOffset();
         }

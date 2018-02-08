@@ -53,7 +53,7 @@ public class BloomFilterTest extends AbstractBloomFilterTest {
 
     @Test
     public void singleFieldTest() throws Exception {
-        if (LOGGER.isLoggable(Level.INFO)) {
+        if (LOGGER.isInfoEnabled()) {
             LOGGER.info("TESTING BLOOM FILTER");
         }
 
@@ -97,6 +97,7 @@ public class BloomFilterTest extends AbstractBloomFilterTest {
         }
         builder.end();
 
+        bf.pinAllPages();
         // Check all the inserted tuples can be found.
 
         long[] hashes = BloomFilter.createHashArray();
@@ -104,14 +105,14 @@ public class BloomFilterTest extends AbstractBloomFilterTest {
             TupleUtils.createIntegerTuple(tupleBuilder, tuple, keys.get(i), i);
             Assert.assertTrue(bf.contains(tuple, hashes));
         }
-
+        bf.unpinAllPages();
         bf.deactivate();
         bf.destroy();
     }
 
     @Test
     public void multiFieldTest() throws Exception {
-        if (LOGGER.isLoggable(Level.INFO)) {
+        if (LOGGER.isInfoEnabled()) {
             LOGGER.info("TESTING BLOOM FILTER");
         }
 
@@ -157,12 +158,14 @@ public class BloomFilterTest extends AbstractBloomFilterTest {
         }
         builder.end();
 
+        bf.pinAllPages();
         long[] hashes = BloomFilter.createHashArray();
         for (int i = 0; i < numElements; ++i) {
             TupleUtils.createTuple(tupleBuilder, tuple, fieldSerdes, s1.get(i), s2.get(i), i, s3.get(i), s4.get(i));
             Assert.assertTrue(bf.contains(tuple, hashes));
         }
 
+        bf.unpinAllPages();
         bf.deactivate();
         bf.destroy();
     }

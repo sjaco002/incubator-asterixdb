@@ -22,8 +22,6 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Set;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 
 import org.apache.asterix.common.api.IClusterManagementWork;
 import org.apache.asterix.common.api.IClusterManagementWork.ClusterState;
@@ -50,10 +48,13 @@ import org.apache.hyracks.api.job.JobId;
 import org.apache.hyracks.api.job.JobSpecification;
 import org.apache.hyracks.control.nc.NCShutdownHook;
 import org.apache.hyracks.util.ExitUtil;
+import org.apache.logging.log4j.Level;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 public class GlobalRecoveryManager implements IGlobalRecoveryManager {
 
-    private static final Logger LOGGER = Logger.getLogger(GlobalRecoveryManager.class.getName());
+    private static final Logger LOGGER = LogManager.getLogger();
     protected final IStorageComponentProvider componentProvider;
     protected final ICCServiceContext serviceCtx;
     protected IHyracksClientConnection hcc;
@@ -97,7 +98,7 @@ public class GlobalRecoveryManager implements IGlobalRecoveryManager {
                         try {
                             recover(appCtx);
                         } catch (HyracksDataException e) {
-                            LOGGER.log(Level.SEVERE, "Global recovery failed. Shutting down...", e);
+                            LOGGER.log(Level.ERROR, "Global recovery failed. Shutting down...", e);
                             ExitUtil.exit(NCShutdownHook.FAILED_TO_RECOVER_EXIT_CODE);
                         }
                     });
@@ -143,8 +144,8 @@ public class GlobalRecoveryManager implements IGlobalRecoveryManager {
         if (!dataverse.getDataverseName().equals(MetadataConstants.METADATA_DATAVERSE_NAME)) {
             MetadataProvider metadataProvider = new MetadataProvider(appCtx, dataverse);
             try {
-                List<Dataset> datasets = MetadataManager.INSTANCE.getDataverseDatasets(mdTxnCtx,
-                        dataverse.getDataverseName());
+                List<Dataset> datasets =
+                        MetadataManager.INSTANCE.getDataverseDatasets(mdTxnCtx, dataverse.getDataverseName());
                 for (Dataset dataset : datasets) {
                     if (dataset.getDatasetType() == DatasetType.EXTERNAL) {
                         // External dataset
@@ -156,8 +157,8 @@ public class GlobalRecoveryManager implements IGlobalRecoveryManager {
                         TransactionState datasetState = dsd.getState();
                         if (!indexes.isEmpty()) {
                             if (datasetState == TransactionState.BEGIN) {
-                                List<ExternalFile> files = MetadataManager.INSTANCE.getDatasetExternalFiles(mdTxnCtx,
-                                        dataset);
+                                List<ExternalFile> files =
+                                        MetadataManager.INSTANCE.getDatasetExternalFiles(mdTxnCtx, dataset);
                                 // if persumed abort, roll backward
                                 // 1. delete all pending files
                                 for (ExternalFile file : files) {
@@ -168,8 +169,8 @@ public class GlobalRecoveryManager implements IGlobalRecoveryManager {
                             }
                             // 2. clean artifacts in NCs
                             metadataProvider.setMetadataTxnContext(mdTxnCtx);
-                            JobSpecification jobSpec = ExternalIndexingOperations.buildAbortOp(dataset, indexes,
-                                    metadataProvider);
+                            JobSpecification jobSpec =
+                                    ExternalIndexingOperations.buildAbortOp(dataset, indexes, metadataProvider);
                             executeHyracksJob(jobSpec);
                             // 3. correct the dataset state
                             ((ExternalDatasetDetails) dataset.getDatasetDetails()).setState(TransactionState.COMMIT);
@@ -177,13 +178,13 @@ public class GlobalRecoveryManager implements IGlobalRecoveryManager {
                             MetadataManager.INSTANCE.commitTransaction(mdTxnCtx);
                             mdTxnCtx = MetadataManager.INSTANCE.beginTransaction();
                         } else if (datasetState == TransactionState.READY_TO_COMMIT) {
-                            List<ExternalFile> files = MetadataManager.INSTANCE.getDatasetExternalFiles(mdTxnCtx,
-                                    dataset);
+                            List<ExternalFile> files =
+                                    MetadataManager.INSTANCE.getDatasetExternalFiles(mdTxnCtx, dataset);
                             // if ready to commit, roll forward
                             // 1. commit indexes in NCs
                             metadataProvider.setMetadataTxnContext(mdTxnCtx);
-                            JobSpecification jobSpec = ExternalIndexingOperations.buildRecoverOp(dataset, indexes,
-                                    metadataProvider);
+                            JobSpecification jobSpec =
+                                    ExternalIndexingOperations.buildRecoverOp(dataset, indexes, metadataProvider);
                             executeHyracksJob(jobSpec);
                             // 2. add pending files in metadata
                             for (ExternalFile file : files) {

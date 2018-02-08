@@ -50,7 +50,7 @@ RecordConstructor [
 
         )
         AS Variable [ Name=$f ]
- AT 
+ AT
 Variable [ Name=$ip ]
       ]
     )
@@ -61,8 +61,8 @@ FROM [  (
     SELECT ELEMENT [
     Variable [ Name=$fb ]
     ]
-    FROM [      FunctionCall Metadata.dataset@1[
-        LiteralExpr [STRING] [FacebookUsers]
+    FROM [      FunctionCall asterix.dataset@1[
+        LiteralExpr [STRING] [test.FacebookUsers]
       ]
       AS Variable [ Name=$fb ]
     ]

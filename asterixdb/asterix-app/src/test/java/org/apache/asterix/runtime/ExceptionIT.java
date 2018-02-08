@@ -43,7 +43,8 @@ public class ExceptionIT {
 
     @Test
     public void test() throws Exception {
-        List<IFunctionDescriptorFactory> functions = FunctionCollection.getFunctionDescriptorFactories();
+        List<IFunctionDescriptorFactory> functions =
+                FunctionCollection.createDefaultFunctionCollection().getFunctionDescriptorFactories();
         int testedFunctions = 0;
         for (IFunctionDescriptorFactory func : functions) {
             String className = func.getClass().getName();
@@ -59,8 +60,8 @@ public class ExceptionIT {
     }
 
     private void testFunction(IFunctionDescriptorFactory funcFactory) throws Exception {
-        AbstractScalarFunctionDynamicDescriptor funcDesc = (AbstractScalarFunctionDynamicDescriptor) funcFactory
-                .createFunctionDescriptor();
+        AbstractScalarFunctionDynamicDescriptor funcDesc =
+                (AbstractScalarFunctionDynamicDescriptor) funcFactory.createFunctionDescriptor();
         int inputArity = funcDesc.getIdentifier().getArity();
         Iterator<IScalarEvaluatorFactory[]> argEvalFactoryIterator = getArgCombinations(inputArity);
         while (argEvalFactoryIterator.hasNext()) {

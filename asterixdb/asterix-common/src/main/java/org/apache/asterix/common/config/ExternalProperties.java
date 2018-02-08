@@ -18,11 +18,14 @@
  */
 package org.apache.asterix.common.config;
 
-import static org.apache.hyracks.control.common.config.OptionTypes.*;
+import static org.apache.hyracks.control.common.config.OptionTypes.INTEGER;
+import static org.apache.hyracks.control.common.config.OptionTypes.LEVEL;
+import static org.apache.hyracks.control.common.config.OptionTypes.STRING;
 
 import org.apache.hyracks.api.config.IOption;
 import org.apache.hyracks.api.config.IOptionType;
 import org.apache.hyracks.api.config.Section;
+import org.apache.logging.log4j.Level;
 
 public class ExternalProperties extends AbstractProperties {
 
@@ -31,9 +34,13 @@ public class ExternalProperties extends AbstractProperties {
         WEB_QUERYINTERFACE_PORT(INTEGER, 19006, "The listen port of the query web interface"),
         API_PORT(INTEGER, 19002, "The listen port of the API server"),
         ACTIVE_PORT(INTEGER, 19003, "The listen port of the active server"),
-        LOG_LEVEL(LEVEL, java.util.logging.Level.WARNING, "The logging level for master and slave processes"),
-        MAX_WAIT_ACTIVE_CLUSTER(INTEGER, 60, "The max pending time (in seconds) for cluster startup. After the " +
-                "threshold, if the cluster still is not up and running, it is considered unavailable"),
+        NC_API_PORT(INTEGER, 19004, "The listen port of the node controller API server"),
+        LOG_LEVEL(LEVEL, Level.WARN, "The logging level for master and slave processes"),
+        MAX_WAIT_ACTIVE_CLUSTER(
+                INTEGER,
+                60,
+                "The max pending time (in seconds) for cluster startup. After the "
+                        + "threshold, if the cluster still is not up and running, it is considered unavailable"),
         CC_JAVA_OPTS(STRING, "-Xmx1024m", "The JVM options passed to the cluster controller process by managix"),
         NC_JAVA_OPTS(STRING, "-Xmx1024m", "The JVM options passed to the node controller process(es) by managix");
 
@@ -55,6 +62,8 @@ public class ExternalProperties extends AbstractProperties {
                 case API_PORT:
                 case ACTIVE_PORT:
                     return Section.CC;
+                case NC_API_PORT:
+                    return Section.NC;
                 case LOG_LEVEL:
                 case MAX_WAIT_ACTIVE_CLUSTER:
                     return Section.COMMON;
@@ -102,7 +111,7 @@ public class ExternalProperties extends AbstractProperties {
         return accessor.getInt(Option.ACTIVE_PORT);
     }
 
-    public java.util.logging.Level getLogLevel() {
+    public Level getLogLevel() {
         return accessor.getLoggingLevel(Option.LOG_LEVEL);
     }
 
@@ -116,5 +125,9 @@ public class ExternalProperties extends AbstractProperties {
 
     public String getCCJavaParams() {
         return accessor.getString(Option.CC_JAVA_OPTS);
+    }
+
+    public int getNcApiPort() {
+        return accessor.getInt(Option.NC_API_PORT);
     }
 }

@@ -31,8 +31,6 @@ import java.util.Set;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Semaphore;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 
 import org.apache.hyracks.api.comm.IFrameReader;
 import org.apache.hyracks.api.comm.IFrameWriter;
@@ -69,9 +67,12 @@ import org.apache.hyracks.control.nc.io.WorkspaceFileFactory;
 import org.apache.hyracks.control.nc.resources.DefaultDeallocatableRegistry;
 import org.apache.hyracks.control.nc.work.NotifyTaskCompleteWork;
 import org.apache.hyracks.control.nc.work.NotifyTaskFailureWork;
+import org.apache.logging.log4j.Level;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 public class Task implements IHyracksTaskContext, ICounterContext, Runnable {
-    private static final Logger LOGGER = Logger.getLogger(Task.class.getName());
+    private static final Logger LOGGER = LogManager.getLogger();
 
     private final Joblet joblet;
 
@@ -355,9 +356,9 @@ public class Task implements IHyracksTaskContext, ICounterContext, Runnable {
             removePendingThread(ct);
         }
         if (!exceptions.isEmpty()) {
-            if (LOGGER.isLoggable(Level.WARNING)) {
+            if (LOGGER.isWarnEnabled()) {
                 for (int i = 0; i < exceptions.size(); i++) {
-                    LOGGER.log(Level.WARNING,
+                    LOGGER.log(Level.WARN,
                             "Task " + taskAttemptId + " failed with exception"
                                     + (exceptions.size() > 1 ? "s (" + (i + 1) + "/" + exceptions.size() + ")" : ""),
                             exceptions.get(i));
@@ -436,12 +437,13 @@ public class Task implements IHyracksTaskContext, ICounterContext, Runnable {
 
     @Override
     public void sendApplicationMessageToCC(byte[] message, DeploymentId deploymentId) throws Exception {
-        this.ncs.sendApplicationMessageToCC(message, deploymentId);
+        this.ncs.sendApplicationMessageToCC(getJobletContext().getJobId().getCcId(), message, deploymentId);
     }
 
     @Override
     public void sendApplicationMessageToCC(Serializable message, DeploymentId deploymentId) throws Exception {
-        this.ncs.sendApplicationMessageToCC(JavaSerializationUtils.serialize(message), deploymentId);
+        this.ncs.sendApplicationMessageToCC(getJobletContext().getJobId().getCcId(),
+                JavaSerializationUtils.serialize(message), deploymentId);
     }
 
     @Override
@@ -455,6 +457,10 @@ public class Task implements IHyracksTaskContext, ICounterContext, Runnable {
     }
 
     @Override
+    public byte[] getJobParameter(byte[] name, int start, int length) throws HyracksException {
+        return ncs.createOrGetJobParameterByteStore(joblet.getJobId()).getParameterValue(name, start, length);
+    }
+
     public Set<JobFlag> getJobFlags() {
         return jobFlags;
     }

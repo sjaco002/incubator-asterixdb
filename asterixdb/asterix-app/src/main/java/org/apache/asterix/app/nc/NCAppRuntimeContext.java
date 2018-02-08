@@ -22,23 +22,25 @@ import java.io.IOException;
 import java.rmi.RemoteException;
 import java.rmi.server.UnicastRemoteObject;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.logging.Level;
-import java.util.logging.Logger;
+import java.util.stream.Collectors;
 
 import org.apache.asterix.active.ActiveManager;
-import org.apache.asterix.api.common.AppRuntimeContextProviderForRecovery;
+import org.apache.asterix.common.api.ICoordinationService;
 import org.apache.asterix.common.api.IDatasetLifecycleManager;
+import org.apache.asterix.common.api.IDatasetMemoryManager;
 import org.apache.asterix.common.api.INcApplicationContext;
 import org.apache.asterix.common.cluster.ClusterPartition;
 import org.apache.asterix.common.config.ActiveProperties;
 import org.apache.asterix.common.config.AsterixExtension;
 import org.apache.asterix.common.config.BuildProperties;
 import org.apache.asterix.common.config.CompilerProperties;
-import org.apache.asterix.common.config.ExtensionProperties;
 import org.apache.asterix.common.config.ExternalProperties;
 import org.apache.asterix.common.config.MessagingProperties;
 import org.apache.asterix.common.config.MetadataProperties;
@@ -48,16 +50,15 @@ import org.apache.asterix.common.config.ReplicationProperties;
 import org.apache.asterix.common.config.StorageProperties;
 import org.apache.asterix.common.config.TransactionProperties;
 import org.apache.asterix.common.context.DatasetLifecycleManager;
+import org.apache.asterix.common.context.DatasetMemoryManager;
 import org.apache.asterix.common.context.IStorageComponentProvider;
 import org.apache.asterix.common.exceptions.ACIDException;
 import org.apache.asterix.common.exceptions.AsterixException;
 import org.apache.asterix.common.library.ILibraryManager;
-import org.apache.asterix.common.metadata.MetadataIndexImmutableProperties;
-import org.apache.asterix.common.replication.IRemoteRecoveryManager;
-import org.apache.asterix.common.replication.IReplicaResourcesManager;
 import org.apache.asterix.common.replication.IReplicationChannel;
 import org.apache.asterix.common.replication.IReplicationManager;
-import org.apache.asterix.common.transactions.IAppRuntimeContextProvider;
+import org.apache.asterix.common.storage.IIndexCheckpointManagerProvider;
+import org.apache.asterix.common.storage.IReplicaManager;
 import org.apache.asterix.common.transactions.IRecoveryManager;
 import org.apache.asterix.common.transactions.IRecoveryManager.SystemState;
 import org.apache.asterix.common.transactions.ITransactionSubsystem;
@@ -70,15 +71,15 @@ import org.apache.asterix.metadata.api.IMetadataNode;
 import org.apache.asterix.metadata.bootstrap.MetadataBootstrap;
 import org.apache.asterix.replication.management.ReplicationChannel;
 import org.apache.asterix.replication.management.ReplicationManager;
-import org.apache.asterix.replication.recovery.RemoteRecoveryManager;
-import org.apache.asterix.replication.storage.ReplicaResourcesManager;
 import org.apache.asterix.runtime.transaction.GlobalResourceIdFactoryProvider;
+import org.apache.asterix.runtime.utils.NoOpCoordinationService;
 import org.apache.asterix.transaction.management.resource.PersistentLocalResourceRepository;
 import org.apache.asterix.transaction.management.resource.PersistentLocalResourceRepositoryFactory;
 import org.apache.hyracks.api.application.INCServiceContext;
 import org.apache.hyracks.api.client.ClusterControllerInfo;
 import org.apache.hyracks.api.client.HyracksConnection;
 import org.apache.hyracks.api.client.IHyracksClientConnection;
+import org.apache.hyracks.api.control.CcId;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.apache.hyracks.api.io.IIOManager;
 import org.apache.hyracks.api.lifecycle.ILifeCycleComponent;
@@ -101,24 +102,28 @@ import org.apache.hyracks.storage.common.buffercache.IPageReplacementStrategy;
 import org.apache.hyracks.storage.common.file.FileMapManager;
 import org.apache.hyracks.storage.common.file.ILocalResourceRepositoryFactory;
 import org.apache.hyracks.storage.common.file.IResourceIdFactory;
+import org.apache.logging.log4j.Level;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 public class NCAppRuntimeContext implements INcApplicationContext {
-    private static final Logger LOGGER = Logger.getLogger(NCAppRuntimeContext.class.getName());
+    private static final Logger LOGGER = LogManager.getLogger();
 
     private ILSMMergePolicyFactory metadataMergePolicyFactory;
     private final INCServiceContext ncServiceContext;
     private final IResourceIdFactory resourceIdFactory;
-    private CompilerProperties compilerProperties;
-    private ExternalProperties externalProperties;
-    private MetadataProperties metadataProperties;
-    private StorageProperties storageProperties;
-    private TransactionProperties txnProperties;
-    private ActiveProperties activeProperties;
-    private BuildProperties buildProperties;
-    private ReplicationProperties replicationProperties;
-    private MessagingProperties messagingProperties;
+    private final CompilerProperties compilerProperties;
+    private final ExternalProperties externalProperties;
+    private final MetadataProperties metadataProperties;
+    private final StorageProperties storageProperties;
+    private final TransactionProperties txnProperties;
+    private final ActiveProperties activeProperties;
+    private final BuildProperties buildProperties;
+    private final ReplicationProperties replicationProperties;
+    private final MessagingProperties messagingProperties;
     private final NodeProperties nodeProperties;
     private ExecutorService threadExecutor;
+    private IDatasetMemoryManager datasetMemoryManager;
     private IDatasetLifecycleManager datasetLifecycleManager;
     private IBufferCache bufferCache;
     private ITransactionSubsystem txnSubsystem;
@@ -130,12 +135,12 @@ public class NCAppRuntimeContext implements INcApplicationContext {
     private ActiveManager activeManager;
     private IReplicationChannel replicationChannel;
     private IReplicationManager replicationManager;
-    private IRemoteRecoveryManager remoteRecoveryManager;
-    private IReplicaResourcesManager replicaResourcesManager;
     private final ILibraryManager libraryManager;
     private final NCExtensionManager ncExtensionManager;
     private final IStorageComponentProvider componentProvider;
     private IHyracksClientConnection hcc;
+    private IIndexCheckpointManagerProvider indexCheckpointManagerProvider;
+    private IReplicaManager replicaManager;
 
     public NCAppRuntimeContext(INCServiceContext ncServiceContext, List<AsterixExtension> extensions)
             throws AsterixException, InstantiationException, IllegalAccessException, ClassNotFoundException,
@@ -157,7 +162,7 @@ public class NCAppRuntimeContext implements INcApplicationContext {
         if (extensions != null) {
             allExtensions.addAll(extensions);
         }
-        allExtensions.addAll(new ExtensionProperties(propertiesAccessor).getExtensions());
+        allExtensions.addAll(propertiesAccessor.getExtensions());
         ncExtensionManager = new NCExtensionManager(allExtensions);
         componentProvider = new StorageComponentProvider();
         resourceIdFactory = new GlobalResourceIdFactoryProvider(ncServiceContext).createResourceIdFactory();
@@ -176,45 +181,41 @@ public class NCAppRuntimeContext implements INcApplicationContext {
         lsmIOScheduler = AsynchronousScheduler.INSTANCE;
 
         metadataMergePolicyFactory = new PrefixMergePolicyFactory();
+        indexCheckpointManagerProvider = new IndexCheckpointManagerProvider(ioManager);
 
         ILocalResourceRepositoryFactory persistentLocalResourceRepositoryFactory =
-                new PersistentLocalResourceRepositoryFactory(ioManager, getServiceContext().getNodeId(),
-                        metadataProperties);
+                new PersistentLocalResourceRepositoryFactory(ioManager, indexCheckpointManagerProvider);
 
         localResourceRepository =
                 (PersistentLocalResourceRepository) persistentLocalResourceRepositoryFactory.createRepository();
 
-        IAppRuntimeContextProvider asterixAppRuntimeContextProvider = new AppRuntimeContextProviderForRecovery(this);
-        txnSubsystem = new TransactionSubsystem(getServiceContext(), getServiceContext().getNodeId(),
-                asterixAppRuntimeContextProvider, txnProperties);
+        txnSubsystem = new TransactionSubsystem(this);
         IRecoveryManager recoveryMgr = txnSubsystem.getRecoveryManager();
         SystemState systemState = recoveryMgr.getSystemState();
         if (initialRun || systemState == SystemState.PERMANENT_DATA_LOSS) {
             //delete any storage data before the resource factory is initialized
-            if (LOGGER.isLoggable(Level.WARNING)) {
-                LOGGER.log(Level.WARNING,
+            if (LOGGER.isWarnEnabled()) {
+                LOGGER.log(Level.WARN,
                         "Deleting the storage dir. initialRun = " + initialRun + ", systemState = " + systemState);
             }
-            localResourceRepository.deleteStorageData(true);
+            localResourceRepository.deleteStorageData();
         }
-
-        datasetLifecycleManager = new DatasetLifecycleManager(storageProperties, localResourceRepository,
-                MetadataIndexImmutableProperties.FIRST_AVAILABLE_USER_DATASET_ID, txnSubsystem.getLogManager(),
-                ioManager.getIODevices().size());
-
+        datasetMemoryManager = new DatasetMemoryManager(storageProperties);
+        datasetLifecycleManager =
+                new DatasetLifecycleManager(storageProperties, localResourceRepository, txnSubsystem.getLogManager(),
+                        datasetMemoryManager, indexCheckpointManagerProvider, ioManager.getIODevices().size());
+        final String nodeId = getServiceContext().getNodeId();
+        final ClusterPartition[] nodePartitions = metadataProperties.getNodePartitions().get(nodeId);
+        final Set<Integer> nodePartitionsIds =
+                Arrays.stream(nodePartitions).map(ClusterPartition::getPartitionId).collect(Collectors.toSet());
+        replicaManager = new ReplicaManager(this, nodePartitionsIds);
         isShuttingdown = false;
-
         activeManager = new ActiveManager(threadExecutor, getServiceContext().getNodeId(),
                 activeProperties.getMemoryComponentGlobalBudget(), compilerProperties.getFrameSize(),
                 this.ncServiceContext);
 
-        if (replicationProperties.isParticipant(getServiceContext().getNodeId())) {
-            String nodeId = getServiceContext().getNodeId();
-
-            replicaResourcesManager = new ReplicaResourcesManager(localResourceRepository, metadataProperties);
-
-            replicationManager = new ReplicationManager(nodeId, replicationProperties, replicaResourcesManager,
-                    txnSubsystem.getLogManager(), asterixAppRuntimeContextProvider);
+        if (replicationProperties.isReplicationEnabled()) {
+            replicationManager = new ReplicationManager(this, replicationProperties);
 
             //pass replication manager to replication required object
             //LogManager to replicate logs
@@ -223,24 +224,8 @@ public class NCAppRuntimeContext implements INcApplicationContext {
             //PersistentLocalResourceRepository to replicate metadata files and delete backups on drop index
             localResourceRepository.setReplicationManager(replicationManager);
 
-            /*
-             * add the partitions that will be replicated in this node as inactive partitions
-             */
-            //get nodes which replicate to this node
-            Set<String> remotePrimaryReplicas = replicationProperties.getRemotePrimaryReplicasIds(nodeId);
-            for (String clientId : remotePrimaryReplicas) {
-                //get the partitions of each client
-                ClusterPartition[] clientPartitions = metadataProperties.getNodePartitions().get(clientId);
-                for (ClusterPartition partition : clientPartitions) {
-                    localResourceRepository.addInactivePartition(partition.getPartitionId());
-                }
-            }
-
             //initialize replication channel
-            replicationChannel = new ReplicationChannel(nodeId, replicationProperties, txnSubsystem.getLogManager(),
-                    replicaResourcesManager, replicationManager, getServiceContext(), asterixAppRuntimeContextProvider);
-
-            remoteRecoveryManager = new RemoteRecoveryManager(replicationManager, this, replicationProperties);
+            replicationChannel = new ReplicationChannel(this);
 
             bufferCache = new BufferCache(ioManager, prs, pcp, new FileMapManager(),
                     storageProperties.getBufferCacheMaxOpenFiles(), getServiceContext().getThreadFactory(),
@@ -316,6 +301,11 @@ public class NCAppRuntimeContext implements INcApplicationContext {
     }
 
     @Override
+    public IDatasetMemoryManager getDatasetMemoryManager() {
+        return datasetMemoryManager;
+    }
+
+    @Override
     public double getBloomFilterFalsePositiveRate() {
         return storageProperties.getBloomFilterFalsePositiveRate();
     }
@@ -386,8 +376,8 @@ public class NCAppRuntimeContext implements INcApplicationContext {
     }
 
     @Override
-    public ILSMOperationTracker getLSMBTreeOperationTracker(int datasetID) {
-        return datasetLifecycleManager.getOperationTracker(datasetID);
+    public ILSMOperationTracker getPrimaryOperationTracker(int datasetID, int partition) {
+        return datasetLifecycleManager.getOperationTracker(datasetID, partition);
     }
 
     @Override
@@ -416,16 +406,6 @@ public class NCAppRuntimeContext implements INcApplicationContext {
     }
 
     @Override
-    public IReplicaResourcesManager getReplicaResourcesManager() {
-        return replicaResourcesManager;
-    }
-
-    @Override
-    public IRemoteRecoveryManager getRemoteRecoveryManager() {
-        return remoteRecoveryManager;
-    }
-
-    @Override
     public IReplicationManager getReplicationManager() {
         return replicationManager;
     }
@@ -436,30 +416,26 @@ public class NCAppRuntimeContext implements INcApplicationContext {
     }
 
     @Override
-    public void initializeMetadata(boolean newUniverse) throws Exception {
-        IAsterixStateProxy proxy;
-        if (LOGGER.isLoggable(Level.INFO)) {
-            LOGGER.info("Bootstrapping metadata");
-        }
+    public void initializeMetadata(boolean newUniverse, int partitionId) throws Exception {
+        LOGGER.info("Bootstrapping metadata");
         MetadataNode.INSTANCE.initialize(this, ncExtensionManager.getMetadataTupleTranslatorProvider(),
-                ncExtensionManager.getMetadataExtensions());
+                ncExtensionManager.getMetadataExtensions(), partitionId);
 
-        proxy = (IAsterixStateProxy) getServiceContext().getDistributedState();
-        if (proxy == null) {
+        //noinspection unchecked
+        ConcurrentHashMap<CcId, IAsterixStateProxy> proxyMap =
+                (ConcurrentHashMap<CcId, IAsterixStateProxy>) getServiceContext().getDistributedState();
+        if (proxyMap == null) {
             throw new IllegalStateException("Metadata node cannot access distributed state");
         }
 
         // This is a special case, we just give the metadataNode directly.
         // This way we can delay the registration of the metadataNode until
         // it is completely initialized.
-        MetadataManager.initialize(proxy, MetadataNode.INSTANCE);
+        MetadataManager.initialize(proxyMap.values(), MetadataNode.INSTANCE);
         MetadataBootstrap.startUniverse(getServiceContext(), newUniverse);
         MetadataBootstrap.startDDLRecovery();
         ncExtensionManager.initializeMetadata(getServiceContext());
-
-        if (LOGGER.isLoggable(Level.INFO)) {
-            LOGGER.info("Metadata node bound");
-        }
+        LOGGER.info("Metadata node bound");
     }
 
     @Override
@@ -468,13 +444,25 @@ public class NCAppRuntimeContext implements INcApplicationContext {
             metadataNodeStub = (IMetadataNode) UnicastRemoteObject.exportObject(MetadataNode.INSTANCE,
                     getMetadataProperties().getMetadataPort());
         }
-        ((IAsterixStateProxy) getServiceContext().getDistributedState()).setMetadataNode(metadataNodeStub);
     }
 
     @Override
     public synchronized void unexportMetadataNodeStub() throws RemoteException {
-        UnicastRemoteObject.unexportObject(MetadataNode.INSTANCE, false);
+        if (metadataNodeStub != null) {
+            UnicastRemoteObject.unexportObject(MetadataNode.INSTANCE, false);
+        }
         metadataNodeStub = null;
+    }
+
+    @Override
+    public synchronized void bindMetadataNodeStub(CcId ccId) throws RemoteException {
+        if (metadataNodeStub == null) {
+            throw new IllegalStateException("Metadata node not exported");
+
+        }
+        //noinspection unchecked
+        ((ConcurrentMap<CcId, IAsterixStateProxy>) getServiceContext().getDistributedState()).get(ccId)
+                .setMetadataNode(metadataNodeStub);
     }
 
     public NCExtensionManager getNcExtensionManager() {
@@ -498,7 +486,9 @@ public class NCAppRuntimeContext implements INcApplicationContext {
                 if (hcc == null || !hcc.isConnected()) {
                     try {
                         NodeControllerService ncSrv = (NodeControllerService) ncServiceContext.getControllerService();
-                        ClusterControllerInfo ccInfo = ncSrv.getNodeParameters().getClusterControllerInfo();
+                        // TODO(mblow): multicc
+                        CcId primaryCcId = ncSrv.getPrimaryCcId();
+                        ClusterControllerInfo ccInfo = ncSrv.getNodeParameters(primaryCcId).getClusterControllerInfo();
                         hcc = new HyracksConnection(ccInfo.getClientNetAddress(), ccInfo.getClientNetPort());
                     } catch (Exception e) {
                         throw HyracksDataException.create(e);
@@ -507,5 +497,30 @@ public class NCAppRuntimeContext implements INcApplicationContext {
             }
         }
         return hcc;
+    }
+
+    @Override
+    public IReplicaManager getReplicaManager() {
+        return replicaManager;
+    }
+
+    @Override
+    public IIndexCheckpointManagerProvider getIndexCheckpointManagerProvider() {
+        return indexCheckpointManagerProvider;
+    }
+
+    @Override
+    public ICoordinationService getCoordinationService() {
+        return NoOpCoordinationService.INSTANCE;
+    }
+
+    @Override
+    public long getMaxTxnId() {
+        if (txnSubsystem == null) {
+            throw new IllegalStateException("cannot determine max txn id before txnSubsystem is initialized!");
+        }
+
+        return Math.max(MetadataManager.INSTANCE == null ? 0 : MetadataManager.INSTANCE.getMaxTxnId(),
+                txnSubsystem.getTransactionManager().getMaxTxnId());
     }
 }

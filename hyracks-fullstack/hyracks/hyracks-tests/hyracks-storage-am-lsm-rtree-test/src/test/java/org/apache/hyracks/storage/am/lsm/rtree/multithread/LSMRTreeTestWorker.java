@@ -28,12 +28,12 @@ import org.apache.hyracks.storage.am.common.TestOperationSelector;
 import org.apache.hyracks.storage.am.common.TestOperationSelector.TestOperation;
 import org.apache.hyracks.storage.am.common.api.ITreeIndexCursor;
 import org.apache.hyracks.storage.am.common.datagen.DataGenThread;
-import org.apache.hyracks.storage.am.lsm.common.impls.NoOpIOOperationCallbackFactory;
 import org.apache.hyracks.storage.am.lsm.rtree.impls.LSMRTree;
 import org.apache.hyracks.storage.am.lsm.rtree.impls.LSMRTreeAccessor;
 import org.apache.hyracks.storage.am.lsm.rtree.impls.LSMRTreeOpContext;
 import org.apache.hyracks.storage.am.rtree.impls.SearchPredicate;
 import org.apache.hyracks.storage.common.IIndex;
+import org.apache.hyracks.storage.common.IIndexCursor;
 import org.apache.hyracks.storage.common.MultiComparator;
 
 public class LSMRTreeTestWorker extends AbstractIndexTestWorker {
@@ -54,7 +54,7 @@ public class LSMRTreeTestWorker extends AbstractIndexTestWorker {
     @Override
     public void performOp(ITupleReference tuple, TestOperation op) throws HyracksDataException {
         LSMRTreeAccessor accessor = (LSMRTreeAccessor) indexAccessor;
-        ITreeIndexCursor searchCursor = accessor.createSearchCursor(false);
+        IIndexCursor searchCursor = accessor.createSearchCursor(false);
         LSMRTreeOpContext concreteCtx = (LSMRTreeOpContext) accessor.getCtx();
         MultiComparator cmp = concreteCtx.getCurrentRTreeOpContext().getCmp();
         SearchPredicate rangePred = new SearchPredicate(tuple, cmp);
@@ -71,15 +71,14 @@ public class LSMRTreeTestWorker extends AbstractIndexTestWorker {
                 break;
 
             case SCAN:
-                searchCursor.reset();
+                searchCursor.close();
                 rangePred.setSearchKey(null);
                 accessor.search(searchCursor, rangePred);
                 consumeCursorTuples(searchCursor);
                 break;
 
             case MERGE:
-                accessor.scheduleMerge(NoOpIOOperationCallbackFactory.INSTANCE.createIoOpCallback(),
-                        lsmRTree.getDiskComponents());
+                accessor.scheduleMerge(lsmRTree.getIOOperationCallback(), lsmRTree.getDiskComponents());
                 break;
 
             default:
@@ -124,7 +123,7 @@ public class LSMRTreeTestWorker extends AbstractIndexTestWorker {
                 cursor.next();
             }
         } finally {
-            cursor.close();
+            cursor.destroy();
         }
     }
 }

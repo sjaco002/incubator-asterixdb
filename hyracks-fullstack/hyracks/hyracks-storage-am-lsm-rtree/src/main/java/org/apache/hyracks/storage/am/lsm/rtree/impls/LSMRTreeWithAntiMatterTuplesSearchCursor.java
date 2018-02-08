@@ -27,7 +27,7 @@ import org.apache.hyracks.storage.am.btree.impls.BTreeRangeSearchCursor;
 import org.apache.hyracks.storage.am.btree.impls.RangePredicate;
 import org.apache.hyracks.storage.am.common.api.ITreeIndexAccessor;
 import org.apache.hyracks.storage.am.common.api.ITreeIndexCursor;
-import org.apache.hyracks.storage.am.common.impls.NoOpOperationCallback;
+import org.apache.hyracks.storage.am.common.impls.NoOpIndexAccessParameters;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMComponent;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMComponent.LSMComponentType;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMComponentFilter;
@@ -56,7 +56,7 @@ public class LSMRTreeWithAntiMatterTuplesSearchCursor extends LSMIndexSearchCurs
     private MultiComparator btreeCmp;
     private int currentCursor;
     private SearchPredicate rtreeSearchPredicate;
-    private int numMutableComponents;
+    private int numMemoryComponents;
     private boolean open;
     protected ISearchOperationCallback searchCallback;
 
@@ -79,27 +79,24 @@ public class LSMRTreeWithAntiMatterTuplesSearchCursor extends LSMIndexSearchCurs
         operationalComponents = lsmInitialState.getOperationalComponents();
         rtreeSearchPredicate = (SearchPredicate) searchPred;
         searchCallback = lsmInitialState.getSearchOperationCallback();
-
-        includeMutableComponent = false;
-        numMutableComponents = 0;
+        numMemoryComponents = 0;
         int numImmutableComponents = 0;
         for (ILSMComponent component : operationalComponents) {
             if (component.getType() == LSMComponentType.MEMORY) {
-                includeMutableComponent = true;
-                numMutableComponents++;
+                numMemoryComponents++;
             } else {
                 numImmutableComponents++;
             }
         }
-        if (includeMutableComponent) {
+        if (numMemoryComponents > 0) {
             btreeRangePredicate = new RangePredicate(null, null, true, true, btreeCmp, btreeCmp);
         }
 
-        mutableRTreeCursors = new RTreeSearchCursor[numMutableComponents];
-        mutableRTreeAccessors = new ITreeIndexAccessor[numMutableComponents];
-        btreeCursors = new BTreeRangeSearchCursor[numMutableComponents];
-        btreeAccessors = new ITreeIndexAccessor[numMutableComponents];
-        for (int i = 0; i < numMutableComponents; i++) {
+        mutableRTreeCursors = new RTreeSearchCursor[numMemoryComponents];
+        mutableRTreeAccessors = new ITreeIndexAccessor[numMemoryComponents];
+        btreeCursors = new BTreeRangeSearchCursor[numMemoryComponents];
+        btreeAccessors = new ITreeIndexAccessor[numMemoryComponents];
+        for (int i = 0; i < numMemoryComponents; i++) {
             ILSMComponent component = operationalComponents.get(i);
             RTree rtree = ((LSMRTreeMemoryComponent) component).getIndex();
             BTree btree = ((LSMRTreeMemoryComponent) component).getBuddyIndex();
@@ -108,22 +105,20 @@ public class LSMRTreeWithAntiMatterTuplesSearchCursor extends LSMIndexSearchCurs
                     (IRTreeLeafFrame) lsmInitialState.getRTreeLeafFrameFactory().createFrame());
             btreeCursors[i] = new BTreeRangeSearchCursor(
                     (IBTreeLeafFrame) lsmInitialState.getBTreeLeafFrameFactory().createFrame(), false);
-            btreeAccessors[i] = btree.createAccessor(NoOpOperationCallback.INSTANCE, NoOpOperationCallback.INSTANCE);
-            mutableRTreeAccessors[i] =
-                    rtree.createAccessor(NoOpOperationCallback.INSTANCE, NoOpOperationCallback.INSTANCE);
+            btreeAccessors[i] = btree.createAccessor(NoOpIndexAccessParameters.INSTANCE);
+            mutableRTreeAccessors[i] = rtree.createAccessor(NoOpIndexAccessParameters.INSTANCE);
         }
 
         rangeCursors = new RTreeSearchCursor[numImmutableComponents];
         ITreeIndexAccessor[] immutableRTreeAccessors = new ITreeIndexAccessor[numImmutableComponents];
         int j = 0;
-        for (int i = numMutableComponents; i < operationalComponents.size(); i++) {
+        for (int i = numMemoryComponents; i < operationalComponents.size(); i++) {
             ILSMComponent component = operationalComponents.get(i);
             rangeCursors[j] = new RTreeSearchCursor(
                     (IRTreeInteriorFrame) lsmInitialState.getRTreeInteriorFrameFactory().createFrame(),
                     (IRTreeLeafFrame) lsmInitialState.getRTreeLeafFrameFactory().createFrame());
             RTree rtree = ((LSMRTreeWithAntimatterDiskComponent) component).getIndex();
-            immutableRTreeAccessors[j] =
-                    rtree.createAccessor(NoOpOperationCallback.INSTANCE, NoOpOperationCallback.INSTANCE);
+            immutableRTreeAccessors[j] = rtree.createAccessor(NoOpIndexAccessParameters.INSTANCE);
             immutableRTreeAccessors[j].search(rangeCursors[j], searchPred);
             j++;
         }
@@ -134,20 +129,20 @@ public class LSMRTreeWithAntiMatterTuplesSearchCursor extends LSMIndexSearchCurs
     }
 
     private void searchNextCursor() throws HyracksDataException {
-        if (currentCursor < numMutableComponents) {
-            mutableRTreeCursors[currentCursor].reset();
+        if (currentCursor < numMemoryComponents) {
+            mutableRTreeCursors[currentCursor].close();
             mutableRTreeAccessors[currentCursor].search(mutableRTreeCursors[currentCursor], rtreeSearchPredicate);
         }
     }
 
     @Override
     public boolean hasNext() throws HyracksDataException {
-        if (includeMutableComponent) {
+        if (numMemoryComponents > 0) {
             if (foundNext) {
                 return true;
             }
 
-            while (currentCursor < numMutableComponents) {
+            while (currentCursor < numMemoryComponents) {
                 while (mutableRTreeCursors[currentCursor].hasNext()) {
                     mutableRTreeCursors[currentCursor].next();
                     ITupleReference currentTuple = mutableRTreeCursors[currentCursor].getTuple();
@@ -163,7 +158,7 @@ public class LSMRTreeWithAntiMatterTuplesSearchCursor extends LSMIndexSearchCurs
                         return true;
                     }
                 }
-                mutableRTreeCursors[currentCursor].close();
+                mutableRTreeCursors[currentCursor].destroy();
                 currentCursor++;
                 searchNextCursor();
             }
@@ -175,7 +170,7 @@ public class LSMRTreeWithAntiMatterTuplesSearchCursor extends LSMIndexSearchCurs
 
                 // Call proceed() to do necessary operations before returning this tuple.
                 searchCallback.proceed(diskRTreeTuple);
-                if (searchMemBTrees(diskRTreeTuple, numMutableComponents)) {
+                if (searchMemBTrees(diskRTreeTuple, numMemoryComponents)) {
                     // anti-matter tuple is NOT found
                     foundNext = true;
                     frameTuple = diskRTreeTuple;
@@ -205,7 +200,7 @@ public class LSMRTreeWithAntiMatterTuplesSearchCursor extends LSMIndexSearchCurs
     @Override
     public ITupleReference getFilterMinTuple() {
         ILSMComponentFilter filter = operationalComponents.get(
-                currentCursor < numMutableComponents ? currentCursor : outputElement.getCursorIndex() + currentCursor)
+                currentCursor < numMemoryComponents ? currentCursor : outputElement.getCursorIndex() + currentCursor)
                 .getLSMComponentFilter();
         return filter == null ? null : filter.getMinTuple();
     }
@@ -213,11 +208,10 @@ public class LSMRTreeWithAntiMatterTuplesSearchCursor extends LSMIndexSearchCurs
     @Override
     public ITupleReference getFilterMaxTuple() {
         ILSMComponentFilter filter = operationalComponents.get(
-                currentCursor < numMutableComponents ? currentCursor : outputElement.getCursorIndex() + currentCursor)
+                currentCursor < numMemoryComponents ? currentCursor : outputElement.getCursorIndex() + currentCursor)
                 .getLSMComponentFilter();
         return filter == null ? null : filter.getMaxTuple();
     }
-
 
     @Override
     public void next() throws HyracksDataException {
@@ -230,35 +224,35 @@ public class LSMRTreeWithAntiMatterTuplesSearchCursor extends LSMIndexSearchCurs
     }
 
     @Override
-    public void reset() throws HyracksDataException {
+    public void close() throws HyracksDataException {
         if (!open) {
             return;
         }
         currentCursor = 0;
         foundNext = false;
-        if (includeMutableComponent) {
-            for (int i = 0; i < numMutableComponents; i++) {
-                mutableRTreeCursors[i].reset();
-                btreeCursors[i].reset();
-            }
-        }
-        super.reset();
-    }
-
-    @Override
-    public void close() throws HyracksDataException {
-        if (!open) {
-            return;
-        }
-        if (includeMutableComponent) {
-            for (int i = 0; i < numMutableComponents; i++) {
+        if (numMemoryComponents > 0) {
+            for (int i = 0; i < numMemoryComponents; i++) {
                 mutableRTreeCursors[i].close();
                 btreeCursors[i].close();
             }
         }
+        super.close();
+    }
+
+    @Override
+    public void destroy() throws HyracksDataException {
+        if (!open) {
+            return;
+        }
+        if (numMemoryComponents > 0) {
+            for (int i = 0; i < numMemoryComponents; i++) {
+                mutableRTreeCursors[i].destroy();
+                btreeCursors[i].destroy();
+            }
+        }
         currentCursor = 0;
         open = false;
-        super.close();
+        super.destroy();
     }
 
     @Override
@@ -269,7 +263,7 @@ public class LSMRTreeWithAntiMatterTuplesSearchCursor extends LSMIndexSearchCurs
 
     private boolean searchMemBTrees(ITupleReference tuple, int lastBTreeToSearch) throws HyracksDataException {
         for (int i = 0; i < lastBTreeToSearch; i++) {
-            btreeCursors[i].reset();
+            btreeCursors[i].close();
             btreeRangePredicate.setHighKey(tuple, true);
             btreeRangePredicate.setLowKey(tuple, true);
             btreeAccessors[i].search(btreeCursors[i], btreeRangePredicate);
@@ -278,7 +272,7 @@ public class LSMRTreeWithAntiMatterTuplesSearchCursor extends LSMIndexSearchCurs
                     return false;
                 }
             } finally {
-                btreeCursors[i].close();
+                btreeCursors[i].destroy();
             }
         }
         return true;

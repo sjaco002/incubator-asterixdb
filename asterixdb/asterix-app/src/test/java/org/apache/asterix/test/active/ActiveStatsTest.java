@@ -60,10 +60,11 @@ public class ActiveStatsTest {
 
     protected boolean cleanUp = true;
     private static String EXPECTED_STATS = "\"Mock stats\"";
+    private static String CONF_PATH = "src/main/resources/cc.conf";
 
     @Before
     public void setUp() throws Exception {
-        ExecutionTestUtil.setUp(cleanUp);
+        ExecutionTestUtil.setUp(cleanUp, CONF_PATH);
     }
 
     @Test

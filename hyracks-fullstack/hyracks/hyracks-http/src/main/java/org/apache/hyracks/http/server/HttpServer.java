@@ -27,11 +27,12 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 
 import org.apache.hyracks.http.api.IServlet;
 import org.apache.hyracks.util.ThreadDumpUtil;
+import org.apache.logging.log4j.Level;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.buffer.PooledByteBufAllocator;
@@ -49,12 +50,12 @@ public class HttpServer {
     // Constants
     private static final int LOW_WRITE_BUFFER_WATER_MARK = 8 * 1024;
     private static final int HIGH_WRITE_BUFFER_WATER_MARK = 32 * 1024;
-    protected static final WriteBufferWaterMark WRITE_BUFFER_WATER_MARK = new WriteBufferWaterMark(
-            LOW_WRITE_BUFFER_WATER_MARK, HIGH_WRITE_BUFFER_WATER_MARK);
+    protected static final WriteBufferWaterMark WRITE_BUFFER_WATER_MARK =
+            new WriteBufferWaterMark(LOW_WRITE_BUFFER_WATER_MARK, HIGH_WRITE_BUFFER_WATER_MARK);
     protected static final int RECEIVE_BUFFER_SIZE = 4096;
     protected static final int DEFAULT_NUM_EXECUTOR_THREADS = 16;
     protected static final int DEFAULT_REQUEST_QUEUE_SIZE = 256;
-    private static final Logger LOGGER = Logger.getLogger(HttpServer.class.getName());
+    private static final Logger LOGGER = LogManager.getLogger();
     private static final int FAILED = -1;
     private static final int STOPPED = 0;
     private static final int STARTING = 1;
@@ -92,8 +93,8 @@ public class HttpServer {
         long directMemoryBudget = numExecutorThreads * (long) HIGH_WRITE_BUFFER_WATER_MARK
                 + numExecutorThreads * HttpServerInitializer.RESPONSE_CHUNK_SIZE;
         LOGGER.log(Level.INFO, "The output direct memory budget for this server is " + directMemoryBudget + " bytes");
-        long inputBudgetEstimate = (long) HttpServerInitializer.MAX_REQUEST_INITIAL_LINE_LENGTH
-                * (requestQueueSize + numExecutorThreads);
+        long inputBudgetEstimate =
+                (long) HttpServerInitializer.MAX_REQUEST_INITIAL_LINE_LENGTH * (requestQueueSize + numExecutorThreads);
         inputBudgetEstimate = inputBudgetEstimate * 2;
         LOGGER.log(Level.INFO,
                 "The \"estimated\" input direct memory budget for this server is " + inputBudgetEstimate + " bytes");
@@ -111,7 +112,7 @@ public class HttpServer {
                 doStart();
                 setStarted();
             } catch (Throwable e) { // NOSONAR
-                LOGGER.log(Level.SEVERE, "Failure starting an Http Server", e);
+                LOGGER.log(Level.ERROR, "Failure starting an Http Server with port: " + port, e);
                 setFailed(e);
                 throw e;
             }
@@ -128,7 +129,7 @@ public class HttpServer {
                 doStop();
                 setStopped();
             } catch (Throwable e) { // NOSONAR
-                LOGGER.log(Level.SEVERE, "Failure stopping an Http Server", e);
+                LOGGER.log(Level.ERROR, "Failure stopping an Http Server", e);
                 setFailed(e);
                 throw e;
             }
@@ -229,15 +230,15 @@ public class HttpServer {
             // wait 30s for interrupted requests to unwind
             executor.awaitTermination(30, TimeUnit.SECONDS);
             if (!executor.isTerminated()) {
-                if (LOGGER.isLoggable(Level.INFO)) {
-                    LOGGER.log(Level.SEVERE,
+                if (LOGGER.isErrorEnabled()) {
+                    LOGGER.log(Level.ERROR,
                             "Failed to shutdown http server executor; thread dump: " + ThreadDumpUtil.takeDumpString());
                 } else {
-                    LOGGER.log(Level.SEVERE, "Failed to shutdown http server executor");
+                    LOGGER.log(Level.ERROR, "Failed to shutdown http server executor");
                 }
             }
         } catch (Exception e) {
-            LOGGER.log(Level.SEVERE, "Error while shutting down http server executor", e);
+            LOGGER.log(Level.ERROR, "Error while shutting down http server executor", e);
         }
         channel.close();
         channel.closeFuture().sync();

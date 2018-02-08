@@ -24,6 +24,7 @@ import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.apache.hyracks.dataflow.common.data.accessors.ITupleReference;
 import org.apache.hyracks.storage.am.bloomfilter.impls.BloomFilter;
 import org.apache.hyracks.storage.am.btree.impls.RangePredicate;
+import org.apache.hyracks.storage.am.common.api.ILSMIndexCursor;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMComponent;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMComponent.LSMComponentType;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMComponentFilter;
@@ -40,7 +41,7 @@ import org.apache.hyracks.storage.common.MultiComparator;
  * Searches the components one-by-one, completely consuming a cursor before moving on to the next one.
  * Therefore, the are no guarantees about sort order of the results.
  */
-public class LSMInvertedIndexSearchCursor implements IIndexCursor {
+public class LSMInvertedIndexSearchCursor implements ILSMIndexCursor {
 
     private IIndexAccessor currentAccessor;
     private IIndexCursor currentCursor;
@@ -98,7 +99,7 @@ public class LSMInvertedIndexSearchCursor implements IIndexCursor {
         keySearchPred.setLowKey(key, true);
         keySearchPred.setHighKey(key, true);
         for (int i = 0; i < accessorIndex; i++) {
-            deletedKeysBTreeCursors[i].reset();
+            deletedKeysBTreeCursors[i].close();
             if (deletedKeysBTreeBloomFilters[i] != null && !deletedKeysBTreeBloomFilters[i].contains(key, hashes)) {
                 continue;
             }
@@ -108,7 +109,7 @@ public class LSMInvertedIndexSearchCursor implements IIndexCursor {
                     return true;
                 }
             } finally {
-                deletedKeysBTreeCursors[i].close();
+                deletedKeysBTreeCursors[i].destroy();
             }
         }
         return false;
@@ -147,7 +148,7 @@ public class LSMInvertedIndexSearchCursor implements IIndexCursor {
             if (nextValidTuple()) {
                 return true;
             }
-            currentCursor.close();
+            currentCursor.destroy();
             accessorIndex++;
         }
         while (accessorIndex < indexAccessors.size()) {
@@ -159,7 +160,7 @@ public class LSMInvertedIndexSearchCursor implements IIndexCursor {
                 return true;
             }
             // Close as we go to release resources.
-            currentCursor.close();
+            currentCursor.destroy();
             accessorIndex++;
         }
         return false;
@@ -172,15 +173,15 @@ public class LSMInvertedIndexSearchCursor implements IIndexCursor {
     }
 
     @Override
-    public void close() throws HyracksDataException {
-        reset();
+    public void destroy() throws HyracksDataException {
+        close();
     }
 
     @Override
-    public void reset() throws HyracksDataException {
+    public void close() throws HyracksDataException {
         try {
             if (currentCursor != null) {
-                currentCursor.close();
+                currentCursor.destroy();
                 currentCursor = null;
             }
             accessorIndex = 0;

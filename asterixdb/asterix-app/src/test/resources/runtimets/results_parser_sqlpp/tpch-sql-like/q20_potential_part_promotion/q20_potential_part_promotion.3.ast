@@ -62,11 +62,9 @@ FROM [  (
                   ]
                   FROM [                    (
                       SELECT ELEMENT [
-                      FunctionCall Metadata.resolve@-1[
-                        LiteralExpr [STRING] [l]
-                        Variable [ Name=$l_suppkey ]
+                      FunctionCall asterix.field-access-by-name@2[
                         Variable [ Name=$g ]
-                        Variable [ Name=$l_partkey ]
+                        LiteralExpr [STRING] [l]
                       ]
                       ]
                       FROM [                        Variable [ Name=$g ]
@@ -81,8 +79,8 @@ FROM [  (
           )
         ]
         ]
-        FROM [          FunctionCall Metadata.dataset@1[
-            LiteralExpr [STRING] [LineItem]
+        FROM [          FunctionCall asterix.dataset@1[
+            LiteralExpr [STRING] [tpch.LineItem]
           ]
           AS Variable [ Name=$l ]
         ]
@@ -136,8 +134,8 @@ FROM [  (
           )
         ]
         ]
-        FROM [          FunctionCall Metadata.dataset@1[
-            LiteralExpr [STRING] [Partsupp]
+        FROM [          FunctionCall asterix.dataset@1[
+            LiteralExpr [STRING] [tpch.Partsupp]
           ]
           AS Variable [ Name=$ps ]
 ,
@@ -154,8 +152,8 @@ FROM [  (
               )
             ]
             ]
-            FROM [              FunctionCall Metadata.dataset@1[
-                LiteralExpr [STRING] [Part]
+            FROM [              FunctionCall asterix.dataset@1[
+                LiteralExpr [STRING] [tpch.Part]
               ]
               AS Variable [ Name=$p ]
             ]
@@ -247,13 +245,13 @@ FROM [  (
       )
     ]
     ]
-    FROM [      FunctionCall Metadata.dataset@1[
-        LiteralExpr [STRING] [Nation]
+    FROM [      FunctionCall asterix.dataset@1[
+        LiteralExpr [STRING] [tpch.Nation]
       ]
       AS Variable [ Name=$n ]
 ,
-      FunctionCall Metadata.dataset@1[
-        LiteralExpr [STRING] [Supplier]
+      FunctionCall asterix.dataset@1[
+        LiteralExpr [STRING] [tpch.Supplier]
       ]
       AS Variable [ Name=$s ]
     ]

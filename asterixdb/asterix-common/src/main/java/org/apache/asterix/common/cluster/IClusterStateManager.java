@@ -25,8 +25,8 @@ import java.util.concurrent.TimeUnit;
 import org.apache.asterix.common.api.IClusterManagementWork.ClusterState;
 import org.apache.asterix.common.dataflow.ICcApplicationContext;
 import org.apache.asterix.common.exceptions.AsterixException;
-import org.apache.asterix.event.schema.cluster.Node;
 import org.apache.hyracks.algebricks.common.constraints.AlgebricksAbsolutePartitionConstraint;
+import org.apache.hyracks.algebricks.common.exceptions.AlgebricksException;
 import org.apache.hyracks.api.config.IOption;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.apache.hyracks.api.exceptions.HyracksException;
@@ -115,7 +115,7 @@ public interface IClusterStateManager {
      * @param nodePartitions
      * @throws AsterixException
      */
-    void registerNodePartitions(String nodeId, ClusterPartition[] nodePartitions) throws AsterixException;
+    void registerNodePartitions(String nodeId, ClusterPartition[] nodePartitions) throws AlgebricksException;
 
     /**
      * De-register the specified node's partitions from this cluster state manager
@@ -209,11 +209,6 @@ public interface IClusterStateManager {
     void notifyNodeFailure(String deadNode) throws HyracksException;
 
     /**
-     * @return a substitution node or null
-     */
-    Node getAvailableSubstitutionNode();
-
-    /**
      * Add node to the list of nodes pending removal
      *
      * @param nodeId
@@ -227,4 +222,20 @@ public interface IClusterStateManager {
      * @return
      */
     boolean cancelRemovePending(String nodeId);
+
+    Map<String, Map<IOption, Object>> getActiveNcConfiguration();
+
+    /**
+     * Sets the cluster partition in which metadata datasets stored
+     *
+     * @param partition
+     */
+    void setMetadataPartitionId(ClusterPartition partition);
+
+    /**
+     * Gets the cluster partition in which metadata datasets are stored
+     *
+     * @return The metadata cluster partitions
+     */
+    ClusterPartition getMetadataPartition();
 }

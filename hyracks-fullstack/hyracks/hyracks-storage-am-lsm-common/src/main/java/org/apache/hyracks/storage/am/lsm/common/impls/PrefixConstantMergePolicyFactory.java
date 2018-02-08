@@ -17,8 +17,6 @@
  * under the License.
  */
 
-
-
 package org.apache.hyracks.storage.am.lsm.common.impls;
 
 import java.util.Arrays;
@@ -55,4 +53,3 @@ public class PrefixConstantMergePolicyFactory implements ILSMMergePolicyFactory 
         return PROPERTIES_NAMES;
     }
 }
-

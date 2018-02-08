@@ -60,11 +60,19 @@ public class TestLsmBtreeLocalResource extends LSMBTreeLocalResource {
         IIOManager ioManager = serviceCtx.getIoManager();
         FileReference file = ioManager.resolve(path);
         List<IVirtualBufferCache> vbcs = vbcProvider.getVirtualBufferCaches(serviceCtx, file);
+        for (int i = 0; i < vbcs.size(); i++) {
+            IVirtualBufferCache vbc = vbcs.get(i);
+            if (!(vbc instanceof TestVirtualBufferCache)) {
+                vbcs.remove(i);
+                vbcs.add(i, new TestVirtualBufferCache(vbc));
+            }
+        }
+        ioOpCallbackFactory.initialize(serviceCtx, this);
         return TestLsmBtreeUtil.createLSMTree(ioManager, vbcs, file, storageManager.getBufferCache(serviceCtx),
                 typeTraits, cmpFactories, bloomFilterKeyFields, bloomFilterFalsePositiveRate,
                 mergePolicyFactory.createMergePolicy(mergePolicyProperties, serviceCtx),
-                opTrackerProvider.getOperationTracker(serviceCtx), ioSchedulerProvider.getIoScheduler(serviceCtx),
-                ioOpCallbackFactory.createIoOpCallback(), isPrimary, filterTypeTraits, filterCmpFactories, btreeFields,
-                filterFields, durable, metadataPageManagerFactory, false, serviceCtx.getTracer());
+                opTrackerProvider.getOperationTracker(serviceCtx, this), ioSchedulerProvider.getIoScheduler(serviceCtx),
+                ioOpCallbackFactory, isPrimary, filterTypeTraits, filterCmpFactories, btreeFields, filterFields,
+                durable, metadataPageManagerFactory, false, serviceCtx.getTracer());
     }
 }

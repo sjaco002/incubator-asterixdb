@@ -21,27 +21,20 @@ package org.apache.asterix.hyracks.bootstrap;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.concurrent.LinkedBlockingQueue;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 
 import org.apache.asterix.common.api.IClusterManagementWork;
-import org.apache.asterix.common.cluster.IClusterStateManager;
-import org.apache.asterix.common.dataflow.ICcApplicationContext;
-import org.apache.asterix.common.exceptions.AsterixException;
-import org.apache.asterix.event.schema.cluster.Node;
 import org.apache.asterix.metadata.cluster.AddNodeWork;
-import org.apache.asterix.metadata.cluster.ClusterManagerProvider;
 import org.apache.asterix.metadata.cluster.RemoveNodeWork;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 public class ClusterWorkExecutor implements Runnable {
 
-    private static final Logger LOGGER = Logger.getLogger(ClusterWorkExecutor.class.getName());
+    private static final Logger LOGGER = LogManager.getLogger();
 
-    private final ICcApplicationContext appCtx;
     private final LinkedBlockingQueue<Set<IClusterManagementWork>> inbox;
 
-    public ClusterWorkExecutor(ICcApplicationContext appCtx, LinkedBlockingQueue<Set<IClusterManagementWork>> inbox) {
-        this.appCtx = appCtx;
+    public ClusterWorkExecutor(LinkedBlockingQueue<Set<IClusterManagementWork>> inbox) {
         this.inbox = inbox;
     }
 
@@ -69,38 +62,14 @@ public class ClusterWorkExecutor implements Runnable {
                     }
                 }
 
-                IClusterStateManager csm = appCtx.getClusterStateManager();
-                Set<Node> addedNodes = new HashSet<>();
-                for (int i = 0; i < nodesToAdd; i++) {
-                    Node node = csm.getAvailableSubstitutionNode();
-                    if (node != null) {
-                        try {
-                            ClusterManagerProvider.getClusterManager().addNode(appCtx, node);
-                            addedNodes.add(node);
-                            if (LOGGER.isLoggable(Level.INFO)) {
-                                LOGGER.info("Added NC at:" + node.getId());
-                            }
-                        } catch (AsterixException e) {
-                            if (LOGGER.isLoggable(Level.WARNING)) {
-                                LOGGER.warning("Unable to add NC at:" + node.getId());
-                            }
-                            e.printStackTrace();
-                        }
-                    } else {
-                        if (LOGGER.isLoggable(Level.WARNING)) {
-                            LOGGER.warning("Unable to add NC: no more available nodes");
-                        }
-                    }
-                }
-
             } catch (InterruptedException e) {
-                if (LOGGER.isLoggable(Level.SEVERE)) {
-                    LOGGER.severe("interruped" + e.getMessage());
+                if (LOGGER.isErrorEnabled()) {
+                    LOGGER.error("interruped" + e.getMessage());
                 }
                 throw new IllegalStateException(e);
             } catch (Exception e) {
-                if (LOGGER.isLoggable(Level.SEVERE)) {
-                    LOGGER.severe("Unexpected exception in handling cluster event" + e.getMessage());
+                if (LOGGER.isErrorEnabled()) {
+                    LOGGER.error("Unexpected exception in handling cluster event" + e.getMessage());
                 }
             }
 

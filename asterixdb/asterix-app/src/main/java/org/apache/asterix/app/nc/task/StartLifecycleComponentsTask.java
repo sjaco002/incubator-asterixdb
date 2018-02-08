@@ -20,42 +20,41 @@ package org.apache.asterix.app.nc.task;
 
 import java.util.HashMap;
 import java.util.Map;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 
 import org.apache.asterix.common.api.INCLifecycleTask;
 import org.apache.asterix.common.api.INcApplicationContext;
 import org.apache.asterix.common.config.MetadataProperties;
 import org.apache.asterix.hyracks.bootstrap.AsterixStateDumpHandler;
+import org.apache.hyracks.api.control.CcId;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.apache.hyracks.api.lifecycle.ILifeCycleComponentManager;
 import org.apache.hyracks.api.lifecycle.LifeCycleComponentManager;
 import org.apache.hyracks.api.service.IControllerService;
 import org.apache.hyracks.control.nc.application.NCServiceContext;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 public class StartLifecycleComponentsTask implements INCLifecycleTask {
 
-    private static final Logger LOGGER = Logger.getLogger(StartLifecycleComponentsTask.class.getName());
+    private static final Logger LOGGER = LogManager.getLogger();
     private static final long serialVersionUID = 1L;
 
     @Override
-    public void perform(IControllerService cs) throws HyracksDataException {
+    public void perform(CcId ccId, IControllerService cs) throws HyracksDataException {
         INcApplicationContext applicationContext = (INcApplicationContext) cs.getApplicationContext();
         NCServiceContext serviceCtx = (NCServiceContext) cs.getContext();
         MetadataProperties metadataProperties = applicationContext.getMetadataProperties();
-        if (LOGGER.isLoggable(Level.INFO)) {
-            LOGGER.info("Starting lifecycle components");
-        }
+        LOGGER.info("Starting lifecycle components");
         Map<String, String> lifecycleMgmtConfiguration = new HashMap<>();
         String dumpPathKey = LifeCycleComponentManager.Config.DUMP_PATH_KEY;
         String dumpPath = metadataProperties.getCoredumpPath(serviceCtx.getNodeId());
         lifecycleMgmtConfiguration.put(dumpPathKey, dumpPath);
-        if (LOGGER.isLoggable(Level.INFO)) {
+        if (LOGGER.isInfoEnabled()) {
             LOGGER.info("Coredump directory for NC is: " + dumpPath);
         }
         ILifeCycleComponentManager lccm = serviceCtx.getLifeCycleComponentManager();
         lccm.configure(lifecycleMgmtConfiguration);
-        if (LOGGER.isLoggable(Level.INFO)) {
+        if (LOGGER.isInfoEnabled()) {
             LOGGER.info("Configured:" + lccm);
         }
         serviceCtx.setStateDumpHandler(new AsterixStateDumpHandler(serviceCtx.getNodeId(), lccm.getDumpPath(), lccm));

@@ -23,7 +23,6 @@ import java.util.List;
 import org.apache.asterix.common.config.DatasetConfig.DatasetType;
 import org.apache.asterix.common.config.GlobalConfig;
 import org.apache.asterix.common.exceptions.AsterixException;
-import org.apache.asterix.common.transactions.JobId;
 import org.apache.asterix.external.indexing.IndexingConstants;
 import org.apache.asterix.external.operators.ExternalScanOperatorDescriptor;
 import org.apache.asterix.formats.nontagged.BinaryComparatorFactoryProvider;
@@ -58,7 +57,6 @@ import org.apache.hyracks.storage.am.common.dataflow.IIndexDataflowHelperFactory
 import org.apache.hyracks.storage.am.common.dataflow.IndexDataflowHelperFactory;
 import org.apache.hyracks.storage.am.common.dataflow.TreeIndexBulkLoadOperatorDescriptor;
 
-@SuppressWarnings("rawtypes")
 public class SecondaryRTreeOperationsHelper extends SecondaryTreeIndexOperationsHelper {
 
     protected IPrimitiveValueProviderFactory[] valueProviderFactories;
@@ -99,9 +97,9 @@ public class SecondaryRTreeOperationsHelper extends SecondaryTreeIndexOperations
         int numDimensions = NonTaggedFormatUtil.getNumDimensions(spatialType.getTypeTag());
         numNestedSecondaryKeyFields = numDimensions * 2;
         int recordColumn = dataset.getDatasetType() == DatasetType.INTERNAL ? numPrimaryKeys : 0;
-        secondaryFieldAccessEvalFactories =
-                metadataProvider.getFormat().createMBRFactory(isOverridingKeyFieldTypes ? enforcedItemType : itemType,
-                        secondaryKeyFields.get(0), recordColumn, numDimensions, filterFieldName, isPointMBR);
+        secondaryFieldAccessEvalFactories = metadataProvider.getDataFormat().createMBRFactory(
+                metadataProvider.getFunctionManager(), isOverridingKeyFieldTypes ? enforcedItemType : itemType,
+                secondaryKeyFields.get(0), recordColumn, numDimensions, filterFieldName, isPointMBR);
         secondaryComparatorFactories = new IBinaryComparatorFactory[numNestedSecondaryKeyFields];
         valueProviderFactories = new IPrimitiveValueProviderFactory[numNestedSecondaryKeyFields];
         ISerializerDeserializer[] secondaryRecFields =
@@ -172,7 +170,7 @@ public class SecondaryRTreeOperationsHelper extends SecondaryTreeIndexOperations
     }
 
     @Override
-    public JobSpecification buildLoadingJobSpec() throws AsterixException, AlgebricksException {
+    public JobSpecification buildLoadingJobSpec() throws AlgebricksException {
         /***************************************************
          * [ About PointMBR Optimization ]
          * Instead of storing a MBR(4 doubles) for a point(2 doubles) in RTree leaf node,
@@ -201,11 +199,10 @@ public class SecondaryRTreeOperationsHelper extends SecondaryTreeIndexOperations
         if (dataset.getDatasetType() == DatasetType.INTERNAL) {
             // Create dummy key provider for feeding the primary index scan.
             IOperatorDescriptor keyProviderOp = DatasetUtil.createDummyKeyProviderOp(spec, dataset, metadataProvider);
-            JobId jobId = IndexUtil.bindJobEventListener(spec, metadataProvider);
+            IndexUtil.bindJobEventListener(spec, metadataProvider);
 
             // Create primary index scan op.
-            IOperatorDescriptor primaryScanOp = DatasetUtil.createPrimaryIndexScanOp(spec, metadataProvider, dataset,
-                    jobId);
+            IOperatorDescriptor primaryScanOp = DatasetUtil.createPrimaryIndexScanOp(spec, metadataProvider, dataset);
 
             // Assign op.
             IOperatorDescriptor sourceOp = primaryScanOp;

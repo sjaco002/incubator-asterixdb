@@ -23,15 +23,17 @@ import java.util.concurrent.Callable;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.apache.hyracks.api.io.FileReference;
 import org.apache.hyracks.api.io.IODeviceHandle;
+import org.apache.hyracks.storage.am.lsm.common.impls.LSMComponentFileReferences;
 
 public interface ILSMIOOperation extends Callable<Boolean> {
 
     /**
      * Represents the io operation type
      */
-    enum LSMIOOpertionType {
+    enum LSMIOOperationType {
         FLUSH,
-        MERGE
+        MERGE,
+        LOAD
     }
 
     /**
@@ -52,7 +54,7 @@ public interface ILSMIOOperation extends Callable<Boolean> {
     /**
      * @return the operation type
      */
-    LSMIOOpertionType getIOOpertionType();
+    LSMIOOperationType getIOOpertionType();
 
     @Override
     Boolean call() throws HyracksDataException;
@@ -66,4 +68,9 @@ public interface ILSMIOOperation extends Callable<Boolean> {
      * @return the accessor of the operation
      */
     ILSMIndexAccessor getAccessor();
+
+    /**
+     * @return the component files produced by this operation
+     */
+    LSMComponentFileReferences getComponentFiles();
 }

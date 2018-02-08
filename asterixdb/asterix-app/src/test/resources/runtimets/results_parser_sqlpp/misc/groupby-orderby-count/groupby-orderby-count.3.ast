@@ -13,10 +13,9 @@ RecordConstructor [
     FunctionCall asterix.count@1[
       (
         SELECT ELEMENT [
-        FunctionCall Metadata.resolve@-1[
-          LiteralExpr [STRING] [token]
+        FunctionCall asterix.field-access-by-name@2[
           Variable [ Name=$g ]
-          Variable [ Name=$tok ]
+          LiteralExpr [STRING] [token]
         ]
         ]
         FROM [          Variable [ Name=$g ]
@@ -27,8 +26,8 @@ RecordConstructor [
   )
 ]
 ]
-FROM [  FunctionCall Metadata.dataset@1[
-    LiteralExpr [STRING] [TwitterData]
+FROM [  FunctionCall asterix.dataset@1[
+    LiteralExpr [STRING] [twitter.TwitterData]
   ]
   AS Variable [ Name=$t ]
 ,
@@ -54,10 +53,9 @@ Orderby
   FunctionCall asterix.count@1[
     (
       SELECT ELEMENT [
-      FunctionCall Metadata.resolve@-1[
-        LiteralExpr [STRING] [token]
+      FunctionCall asterix.field-access-by-name@2[
         Variable [ Name=$g ]
-        Variable [ Name=$tok ]
+        LiteralExpr [STRING] [token]
       ]
       ]
       FROM [        Variable [ Name=$g ]

@@ -32,7 +32,7 @@ public class ExploringMergePolicyFactory implements ILSMMergePolicyFactory {
 
     private static final long serialVersionUID = 1L;
 
-    private static final String[] SET_VALUES = new String[] {"lambda", "min", "max" };
+    private static final String[] SET_VALUES = new String[] { "lambda", "min", "max" };
     private static final Set<String> PROPERTIES_NAMES = new HashSet<String>(Arrays.asList(SET_VALUES));
 
     @Override

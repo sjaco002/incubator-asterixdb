@@ -20,8 +20,6 @@ package org.apache.hyracks.control.nc.partitions;
 
 import java.nio.ByteBuffer;
 import java.util.concurrent.Executor;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 
 import org.apache.hyracks.api.comm.IFrameWriter;
 import org.apache.hyracks.api.context.IHyracksTaskContext;
@@ -33,36 +31,27 @@ import org.apache.hyracks.api.io.IIOManager;
 import org.apache.hyracks.api.partitions.IPartition;
 import org.apache.hyracks.api.partitions.PartitionId;
 import org.apache.hyracks.control.common.job.PartitionState;
+import org.apache.logging.log4j.Level;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 public class MaterializingPipelinedPartition implements IFrameWriter, IPartition {
-    private static final Logger LOGGER = Logger.getLogger(MaterializingPipelinedPartition.class.getName());
+    private static final Logger LOGGER = LogManager.getLogger();
 
     private final IHyracksTaskContext ctx;
-
     private final Executor executor;
-
     private final IIOManager ioManager;
-
     private final PartitionManager manager;
-
     private final PartitionId pid;
-
     private final TaskAttemptId taId;
-
     private FileReference fRef;
-
     private IFileHandle writeHandle;
-
     private long size;
-
     private boolean eos;
-
     private boolean failed;
-
     protected boolean flushRequest;
-
-    private Level openCloseLevel = Level.FINE;
-
+    private boolean deallocated;
+    private Level openCloseLevel = Level.DEBUG;
     private Thread dataConsumerThread;
 
     public MaterializingPipelinedPartition(IHyracksTaskContext ctx, PartitionManager manager, PartitionId pid,
@@ -89,6 +78,7 @@ public class MaterializingPipelinedPartition implements IFrameWriter, IPartition
         if (dataConsumerThread != null) {
             dataConsumerThread.interrupt();
         }
+        deallocated = true;
     }
 
     @Override
@@ -111,11 +101,16 @@ public class MaterializingPipelinedPartition implements IFrameWriter, IPartition
                     writer.open();
                     IFileHandle readHandle = fRefCopy == null ? null
                             : ioManager.open(fRefCopy, IIOManager.FileReadWriteMode.READ_ONLY,
-                                IIOManager.FileSyncMode.METADATA_ASYNC_DATA_ASYNC);
+                                    IIOManager.FileSyncMode.METADATA_ASYNC_DATA_ASYNC);
                     try {
                         if (readHandle == null) {
                             // Either fail() is called or close() is called with 0 tuples coming in.
                             return;
+                        }
+                        synchronized (MaterializingPipelinedPartition.this) {
+                            if (deallocated) {
+                                return;
+                            }
                         }
                         long offset = 0;
                         ByteBuffer buffer = ctx.allocateFrame();
@@ -170,7 +165,7 @@ public class MaterializingPipelinedPartition implements IFrameWriter, IPartition
                         }
                     }
                 } catch (Exception e) {
-                    LOGGER.log(Level.SEVERE, e.getMessage(), e);
+                    LOGGER.log(Level.ERROR, e.getMessage(), e);
                 } finally {
                     thread.setName(oldName);
                     setDataConsumerThread(null); // Sets back the data consumer thread to null.
@@ -186,13 +181,15 @@ public class MaterializingPipelinedPartition implements IFrameWriter, IPartition
 
     @Override
     public void open() throws HyracksDataException {
-        if (LOGGER.isLoggable(openCloseLevel)) {
+        if (LOGGER.isEnabled(openCloseLevel)) {
             LOGGER.log(openCloseLevel, "open(" + pid + " by " + taId);
         }
         size = 0;
         eos = false;
         failed = false;
-        manager.registerPartition(pid, taId, this, PartitionState.STARTED, false);
+        deallocated = false;
+        manager.registerPartition(pid, ctx.getJobletContext().getJobId().getCcId(), taId, this, PartitionState.STARTED,
+                false);
     }
 
     private void checkOrCreateFile() throws HyracksDataException {
@@ -218,7 +215,7 @@ public class MaterializingPipelinedPartition implements IFrameWriter, IPartition
 
     @Override
     public void close() throws HyracksDataException {
-        if (LOGGER.isLoggable(openCloseLevel)) {
+        if (LOGGER.isEnabled(openCloseLevel)) {
             LOGGER.log(openCloseLevel, "close(" + pid + " by " + taId);
         }
         if (writeHandle != null) {

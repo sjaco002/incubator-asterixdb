@@ -45,10 +45,9 @@ RecordConstructor [
         ]
         FROM [          (
             SELECT ELEMENT [
-            FunctionCall Metadata.resolve@-1[
-              LiteralExpr [STRING] [o]
+            FunctionCall asterix.field-access-by-name@2[
               Variable [ Name=$g ]
-              Variable [ Name=$l_shipmode ]
+              LiteralExpr [STRING] [o]
             ]
             ]
             FROM [              Variable [ Name=$g ]
@@ -95,10 +94,9 @@ RecordConstructor [
         ]
         FROM [          (
             SELECT ELEMENT [
-            FunctionCall Metadata.resolve@-1[
-              LiteralExpr [STRING] [o]
+            FunctionCall asterix.field-access-by-name@2[
               Variable [ Name=$g ]
-              Variable [ Name=$l_shipmode ]
+              LiteralExpr [STRING] [o]
             ]
             ]
             FROM [              Variable [ Name=$g ]
@@ -112,13 +110,13 @@ RecordConstructor [
   )
 ]
 ]
-FROM [  FunctionCall Metadata.dataset@1[
-    LiteralExpr [STRING] [LineItem]
+FROM [  FunctionCall asterix.dataset@1[
+    LiteralExpr [STRING] [tpch.LineItem]
   ]
   AS Variable [ Name=$l ]
 ,
-  FunctionCall Metadata.dataset@1[
-    LiteralExpr [STRING] [Orders]
+  FunctionCall asterix.dataset@1[
+    LiteralExpr [STRING] [tpch.Orders]
   ]
   AS Variable [ Name=$o ]
 ]

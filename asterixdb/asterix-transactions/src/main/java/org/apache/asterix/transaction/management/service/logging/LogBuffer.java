@@ -18,33 +18,33 @@
  */
 package org.apache.asterix.transaction.management.service.logging;
 
-import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.logging.Logger;
 
 import org.apache.asterix.common.context.PrimaryIndexOperationTracker;
 import org.apache.asterix.common.exceptions.ACIDException;
-import org.apache.asterix.common.replication.IReplicationThread;
 import org.apache.asterix.common.transactions.DatasetId;
 import org.apache.asterix.common.transactions.ILogBuffer;
 import org.apache.asterix.common.transactions.ILogRecord;
+import org.apache.asterix.common.transactions.ILogRequester;
 import org.apache.asterix.common.transactions.ITransactionContext;
 import org.apache.asterix.common.transactions.ITransactionSubsystem;
-import org.apache.asterix.common.transactions.JobId;
 import org.apache.asterix.common.transactions.LogRecord;
 import org.apache.asterix.common.transactions.LogSource;
 import org.apache.asterix.common.transactions.LogType;
 import org.apache.asterix.common.transactions.MutableLong;
+import org.apache.asterix.common.transactions.TxnId;
 import org.apache.asterix.transaction.management.service.transaction.TransactionManagementConstants.LockManagerConstants.LockMode;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 public class LogBuffer implements ILogBuffer {
 
     public static final boolean IS_DEBUG_MODE = false;//true
-    private static final Logger LOGGER = Logger.getLogger(LogBuffer.class.getName());
+    private static final Logger LOGGER = LogManager.getLogger();
     private final ITransactionSubsystem txnSubsystem;
     private final LogBufferTailReader logBufferTailReader;
     private final int logPageSize;
@@ -55,13 +55,12 @@ public class LogBuffer implements ILogBuffer {
     protected final ByteBuffer appendBuffer;
     private final ByteBuffer flushBuffer;
     private final ByteBuffer unlockBuffer;
-    private boolean isLastPage;
     protected final LinkedBlockingQueue<ILogRecord> syncCommitQ;
     protected final LinkedBlockingQueue<ILogRecord> flushQ;
     protected final LinkedBlockingQueue<ILogRecord> remoteJobsQ;
     private FileChannel fileChannel;
     private boolean stop;
-    private final JobId reusableJobId;
+    private final MutableTxnId reusableTxnId;
     private final DatasetId reusableDatasetId;
 
     public LogBuffer(ITransactionSubsystem txnSubsystem, int logPageSize, MutableLong flushLSN) {
@@ -75,11 +74,10 @@ public class LogBuffer implements ILogBuffer {
         full = new AtomicBoolean(false);
         appendOffset = 0;
         flushOffset = 0;
-        isLastPage = false;
         syncCommitQ = new LinkedBlockingQueue<>(logPageSize / ILogRecord.JOB_TERMINATE_LOG_SIZE);
         flushQ = new LinkedBlockingQueue<>();
         remoteJobsQ = new LinkedBlockingQueue<>();
-        reusableJobId = new JobId(-1);
+        reusableTxnId = new MutableTxnId(-1);
         reusableDatasetId = new DatasetId(-1);
     }
 
@@ -105,15 +103,15 @@ public class LogBuffer implements ILogBuffer {
                 if (logRecord.getLogType() == LogType.JOB_COMMIT || logRecord.getLogType() == LogType.ABORT
                         || logRecord.getLogType() == LogType.WAIT) {
                     logRecord.isFlushed(false);
-                    syncCommitQ.offer(logRecord);
+                    syncCommitQ.add(logRecord);
                 }
                 if (logRecord.getLogType() == LogType.FLUSH) {
                     logRecord.isFlushed(false);
-                    flushQ.offer(logRecord);
+                    flushQ.add(logRecord);
                 }
-            } else if (logRecord.getLogSource() == LogSource.REMOTE
-                    && (logRecord.getLogType() == LogType.JOB_COMMIT || logRecord.getLogType() == LogType.ABORT)) {
-                remoteJobsQ.offer(logRecord);
+            } else if (logRecord.getLogSource() == LogSource.REMOTE && (logRecord.getLogType() == LogType.JOB_COMMIT
+                    || logRecord.getLogType() == LogType.ABORT || logRecord.getLogType() == LogType.FLUSH)) {
+                remoteJobsQ.add(logRecord);
             }
             this.notify();
         }
@@ -124,14 +122,6 @@ public class LogBuffer implements ILogBuffer {
         this.fileChannel = fileChannel;
     }
 
-    public void setInitialFlushOffset(long offset) {
-        try {
-            fileChannel.position(offset);
-        } catch (IOException e) {
-            throw new IllegalStateException(e);
-        }
-    }
-
     @Override
     public synchronized void setFull() {
         this.full.set(true);
@@ -139,13 +129,8 @@ public class LogBuffer implements ILogBuffer {
     }
 
     @Override
-    public void setLastPage() {
-        this.isLastPage = true;
-    }
-
-    @Override
     public boolean hasSpace(int logSize) {
-        return appendOffset + logSize <= logPageSize;
+        return appendOffset + logSize <= logPageSize && !full.get();
     }
 
     @Override
@@ -159,7 +144,6 @@ public class LogBuffer implements ILogBuffer {
         full.set(false);
         appendOffset = 0;
         flushOffset = 0;
-        isLastPage = false;
         stop = false;
     }
 
@@ -168,36 +152,35 @@ public class LogBuffer implements ILogBuffer {
     ////////////////////////////////////
 
     @Override
-    public void flush() {
+    public void flush(boolean stopping) {
+        boolean interrupted = false;
         try {
             int endOffset;
             while (!full.get()) {
-                synchronized (this) {
-                    if (appendOffset - flushOffset == 0 && !full.get()) {
-                        try {
+                try {
+                    synchronized (this) {
+                        if (appendOffset - flushOffset == 0 && !full.get()) {
                             if (IS_DEBUG_MODE) {
                                 LOGGER.info("flush()| appendOffset: " + appendOffset + ", flushOffset: " + flushOffset
                                         + ", full: " + full.get());
                             }
-                            if (stop) {
-                                fileChannel.close();
+                            if (stopping || stop) {
                                 return;
                             }
-                            this.wait();
-                        } catch (InterruptedException e) {
-                            continue;
+                            wait();
                         }
+                        endOffset = appendOffset;
                     }
-                    endOffset = appendOffset;
+                    internalFlush(flushOffset, endOffset);
+                } catch (InterruptedException e) {
+                    interrupted = true;
                 }
-                internalFlush(flushOffset, endOffset);
             }
             internalFlush(flushOffset, appendOffset);
-            if (isLastPage) {
-                fileChannel.close();
+        } finally {
+            if (interrupted) {
+                Thread.currentThread().interrupt();
             }
-        } catch (IOException e) {
-            throw new IllegalStateException(e);
         }
     }
 
@@ -229,39 +212,36 @@ public class LogBuffer implements ILogBuffer {
     private void batchUnlock(int beginOffset, int endOffset) throws ACIDException {
         if (endOffset > beginOffset) {
             logBufferTailReader.initializeScan(beginOffset, endOffset);
-
-            ITransactionContext txnCtx = null;
-
+            ITransactionContext txnCtx;
             LogRecord logRecord = logBufferTailReader.next();
             while (logRecord != null) {
                 if (logRecord.getLogSource() == LogSource.LOCAL) {
                     if (logRecord.getLogType() == LogType.ENTITY_COMMIT) {
-                        reusableJobId.setId(logRecord.getJobId());
+                        reusableTxnId.setId(logRecord.getTxnId());
                         reusableDatasetId.setId(logRecord.getDatasetId());
-                        txnCtx = txnSubsystem.getTransactionManager().getTransactionContext(reusableJobId, false);
+                        txnCtx = txnSubsystem.getTransactionManager().getTransactionContext(reusableTxnId);
                         txnSubsystem.getLockManager().unlock(reusableDatasetId, logRecord.getPKHashValue(),
                                 LockMode.ANY, txnCtx);
-                        txnCtx.notifyOptracker(false);
+                        txnCtx.notifyEntityCommitted(logRecord.getResourcePartition());
                         if (txnSubsystem.getTransactionProperties().isCommitProfilerEnabled()) {
                             txnSubsystem.incrementEntityCommitCount();
                         }
+                    } else if (logRecord.getLogType() == LogType.UPDATE) {
+                        reusableTxnId.setId(logRecord.getTxnId());
+                        txnCtx = txnSubsystem.getTransactionManager().getTransactionContext(reusableTxnId);
+                        txnCtx.notifyUpdateCommitted(logRecord.getResourceId());
                     } else if (logRecord.getLogType() == LogType.JOB_COMMIT
                             || logRecord.getLogType() == LogType.ABORT) {
-                        reusableJobId.setId(logRecord.getJobId());
-                        txnCtx = txnSubsystem.getTransactionManager().getTransactionContext(reusableJobId, false);
-                        txnCtx.notifyOptracker(true);
                         notifyJobTermination();
                     } else if (logRecord.getLogType() == LogType.FLUSH) {
                         notifyFlushTermination();
                     } else if (logRecord.getLogType() == LogType.WAIT) {
                         notifyWaitTermination();
                     }
-                } else if (logRecord.getLogSource() == LogSource.REMOTE) {
-                    if (logRecord.getLogType() == LogType.JOB_COMMIT || logRecord.getLogType() == LogType.ABORT) {
-                        notifyReplicationTermination();
-                    }
+                } else if (logRecord.getLogSource() == LogSource.REMOTE && (logRecord.getLogType() == LogType.JOB_COMMIT
+                        || logRecord.getLogType() == LogType.ABORT || logRecord.getLogType() == LogType.FLUSH)) {
+                    notifyReplicationTermination();
                 }
-
                 logRecord = logBufferTailReader.next();
             }
         }
@@ -292,10 +272,12 @@ public class LogBuffer implements ILogBuffer {
 
     public void notifyFlushTermination() throws ACIDException {
         LogRecord logRecord = null;
-        try {
-            logRecord = (LogRecord) flushQ.take();
-        } catch (InterruptedException e) {
-            //ignore
+        while (logRecord == null) {
+            try {
+                logRecord = (LogRecord) flushQ.take();
+            } catch (InterruptedException e) { //NOSONAR LogFlusher should survive interrupts
+                //ignore
+            }
         }
         synchronized (logRecord) {
             logRecord.isFlushed(true);
@@ -313,26 +295,39 @@ public class LogBuffer implements ILogBuffer {
 
     public void notifyReplicationTermination() {
         LogRecord logRecord = null;
-        try {
-            logRecord = (LogRecord) remoteJobsQ.take();
-        } catch (InterruptedException e) {
-            //ignore
+        while (logRecord == null) {
+            try {
+                logRecord = (LogRecord) remoteJobsQ.take();
+            } catch (InterruptedException e) { //NOSONAR LogFlusher should survive interrupts
+                //ignore
+            }
         }
         logRecord.isFlushed(true);
-        IReplicationThread replicationThread = logRecord.getReplicationThread();
-
-        if (replicationThread != null) {
-            replicationThread.notifyLogReplicationRequester(logRecord);
+        final ILogRequester logRequester = logRecord.getRequester();
+        if (logRequester != null) {
+            logRequester.notifyFlushed(logRecord);
         }
     }
 
     @Override
-    public void stop() {
-        this.stop = true;
+    public synchronized void stop() {
+        stop = true;
+        notifyAll();
     }
 
     @Override
     public int getLogPageSize() {
         return logPageSize;
+    }
+
+    private class MutableTxnId extends TxnId {
+
+        public MutableTxnId(long id) {
+            super(id);
+        }
+
+        public void setId(long id) {
+            this.id = id;
+        }
     }
 }

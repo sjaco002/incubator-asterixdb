@@ -121,8 +121,8 @@ FROM [  (
       )
     ]
     ]
-    FROM [      FunctionCall Metadata.dataset@1[
-        LiteralExpr [STRING] [LineItem]
+    FROM [      FunctionCall asterix.dataset@1[
+        LiteralExpr [STRING] [tpch.LineItem]
       ]
       AS Variable [ Name=$l ]
 ,
@@ -195,18 +195,18 @@ FROM [  (
           )
         ]
         ]
-        FROM [          FunctionCall Metadata.dataset@1[
-            LiteralExpr [STRING] [Orders]
+        FROM [          FunctionCall asterix.dataset@1[
+            LiteralExpr [STRING] [tpch.Orders]
           ]
           AS Variable [ Name=$o ]
 ,
-          FunctionCall Metadata.dataset@1[
-            LiteralExpr [STRING] [Customer]
+          FunctionCall asterix.dataset@1[
+            LiteralExpr [STRING] [tpch.Customer]
           ]
           AS Variable [ Name=$c ]
 ,
-          FunctionCall Metadata.dataset@1[
-            LiteralExpr [STRING] [Nation]
+          FunctionCall asterix.dataset@1[
+            LiteralExpr [STRING] [tpch.Nation]
           ]
           AS Variable [ Name=$n ]
         ]
@@ -356,16 +356,9 @@ Let Variable [ Name=$revenue ]
       ]
       FROM [        (
           SELECT ELEMENT [
-          FunctionCall Metadata.resolve@-1[
-            LiteralExpr [STRING] [locn]
-            Variable [ Name=$c_address ]
+          FunctionCall asterix.field-access-by-name@2[
             Variable [ Name=$g ]
-            Variable [ Name=$c_name ]
-            Variable [ Name=$c_phone ]
-            Variable [ Name=$c_acctbal ]
-            Variable [ Name=$n_name ]
-            Variable [ Name=$c_custkey ]
-            Variable [ Name=$c_comment ]
+            LiteralExpr [STRING] [locn]
           ]
           ]
           FROM [            Variable [ Name=$g ]

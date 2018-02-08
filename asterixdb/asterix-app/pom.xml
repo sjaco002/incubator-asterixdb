@@ -34,6 +34,7 @@
     </license>
   </licenses>
   <properties>
+    <root.dir>${basedir}/..</root.dir>
     <appendedResourcesDirectory>${basedir}/src/main/appended-resources</appendedResourcesDirectory>
     <sonar.sources>pom.xml,src/main/java,src/main/resources</sonar.sources>
   </properties>
@@ -53,7 +54,6 @@
       <plugin>
         <groupId>pl.project13.maven</groupId>
         <artifactId>git-commit-id-plugin</artifactId>
-        <version>2.2.0</version>
         <executions>
           <execution>
             <goals>
@@ -122,6 +122,7 @@
                 </includes>
               </inputFiles>
               <outputDir>target/data</outputDir>
+              <skip>${skip.testResources}</skip>
             </configuration>
           </execution>
         </executions>
@@ -177,10 +178,13 @@
                 <exclude>src/test/resources/**/results/**</exclude>
                 <exclude>src/test/resources/fuzzyjoin/pub/fuzzy-join-aql*.dot</exclude>
                 <exclude>src/test/resources/fuzzyjoin/pub/fuzzy-join-aql*.json</exclude>
-                <exclude>data/**</exclude>
+                <exclude>**/data/**</exclude>
+                <exclude>src/test//resources/**/data/**</exclude>
                 <exclude>src/main/resources/queryui/**</exclude>
                 <exclude>src/main/resources/webui/**</exclude>
                 <exclude>src/test/resources/**/only*.xml</exclude>
+                <exclude>src/main/resources/sdk/**</exclude>
+                <exclude>src/main/resources/dashboard/**</exclude>
               </excludes>
             </configuration>
           </execution>
@@ -277,6 +281,63 @@
         </plugins>
       </build>
     </profile>
+    <profile>
+      <id>asterix-gerrit-asterix-app</id>
+      <properties>
+        <test.excludes>**/SqlppExecutionWithCancellationTest.java,**/DmlTest.java,**/RepeatedTest.java,**/SqlppExecutionTest.java</test.excludes>
+      </properties>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-surefire-plugin</artifactId>
+            <executions>
+              <execution>
+                <id>SqlppExecutionTest</id>
+                <configuration>
+                  <includes combine.self="override">
+                    <include>**/SqlppExecutionTest.java</include>
+                  </includes>
+                  <excludes combine.self="override"/>
+                  <argLine>
+                    -enableassertions -Xmx${test.heap.size}m
+                    -Dfile.encoding=UTF-8
+                    -Xdebug
+                    -Xrunjdwp:transport=dt_socket,server=y,address=8000,suspend=${debug.suspend.flag}
+                    -Xloggc:"${project.build.directory}/surefire-reports/SqlppExecutionTest-%p-gc.log" -XX:+PrintGC -XX:+PrintGCDateStamps -XX:GCLogFileSize=10M
+                  </argLine>
+                </configuration>
+                <goals>
+                  <goal>test</goal>
+                </goals>
+              </execution>
+            </executions>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+    <profile>
+      <id>asterix-gerrit-asterix-app-sql-execution</id>
+      <properties>
+        <test.includes/>
+        <itest.includes>**/SqlppExecution*IT.java</itest.includes>
+        <failIfNoTests>false</failIfNoTests>
+      </properties>
+    </profile>
+    <profile>
+      <id>asterix-gerrit-verify-asterix-app</id>
+      <properties>
+        <test.includes/>
+        <itest.excludes>**/SqlppExecution*IT.java,**/RebalanceWithCancellationIT.java</itest.excludes>
+        <failIfNoTests>false</failIfNoTests>
+      </properties>
+    </profile>
+    <profile>
+      <id>asterix-gerrit-rebalance-cancellation</id>
+      <properties>
+        <test.includes>**/RebalanceWithCancellationIT.java</test.includes>
+      </properties>
+    </profile>
   </profiles>
   <dependencies>
     <dependency>
@@ -321,6 +382,11 @@
     <dependency>
       <groupId>org.apache.asterix</groupId>
       <artifactId>asterix-common</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.asterix</groupId>
+      <artifactId>asterix-dashboard</artifactId>
       <version>${project.version}</version>
     </dependency>
     <dependency>
@@ -407,15 +473,6 @@
       <artifactId>hyracks-storage-am-lsm-btree</artifactId>
     </dependency>
     <dependency>
-      <groupId>org.apache.asterix</groupId>
-      <artifactId>asterix-events</artifactId>
-      <version>${project.version}</version>
-    </dependency>
-    <dependency>
-      <groupId>log4j</groupId>
-      <artifactId>log4j</artifactId>
-    </dependency>
-    <dependency>
       <groupId>org.apache.hadoop</groupId>
       <artifactId>hadoop-hdfs</artifactId>
       <classifier>tests</classifier>
@@ -445,8 +502,6 @@
     <dependency>
       <groupId>org.apache.commons</groupId>
       <artifactId>commons-compress</artifactId>
-      <version>1.4.1</version>
-      <scope>test</scope>
     </dependency>
     <dependency>
       <groupId>org.apache.hyracks</groupId>
@@ -573,6 +628,20 @@
       <artifactId>hyracks-storage-am-lsm-btree-test</artifactId>
       <type>test-jar</type>
       <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.hyracks</groupId>
+      <artifactId>hyracks-comm</artifactId>
+      <version>${hyracks.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.logging.log4j</groupId>
+      <artifactId>log4j-api</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.logging.log4j</groupId>
+      <artifactId>log4j-jul</artifactId>
+      <version>2.10.0</version>
     </dependency>
   </dependencies>
 </project>

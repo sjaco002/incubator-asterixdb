@@ -28,14 +28,18 @@ import org.apache.hyracks.storage.am.btree.impls.BTreeOpContext;
 import org.apache.hyracks.storage.am.btree.impls.BTreeRangeSearchCursor;
 import org.apache.hyracks.storage.am.btree.impls.RangePredicate;
 import org.apache.hyracks.storage.am.common.api.ITreeIndexFrameFactory;
+import org.apache.hyracks.storage.am.common.impls.IndexAccessParameters;
 import org.apache.hyracks.storage.am.common.impls.NoOpOperationCallback;
 import org.apache.hyracks.storage.am.common.ophelpers.IndexOperation;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMHarness;
+import org.apache.hyracks.storage.am.lsm.common.api.ILSMIndex;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMMemoryComponent;
 import org.apache.hyracks.storage.am.lsm.common.impls.AbstractLSMIndexOperationContext;
+import org.apache.hyracks.storage.common.IIndexAccessParameters;
 import org.apache.hyracks.storage.common.IModificationOperationCallback;
 import org.apache.hyracks.storage.common.ISearchOperationCallback;
 import org.apache.hyracks.storage.common.MultiComparator;
+import org.apache.hyracks.util.trace.ITracer;
 
 public final class LSMBTreeOpContext extends AbstractLSMIndexOperationContext {
 
@@ -60,11 +64,12 @@ public final class LSMBTreeOpContext extends AbstractLSMIndexOperationContext {
     private BTree.BTreeAccessor currentMutableBTreeAccessor;
     private BTreeOpContext currentMutableBTreeOpCtx;
 
-    public LSMBTreeOpContext(List<ILSMMemoryComponent> mutableComponents, ITreeIndexFrameFactory insertLeafFrameFactory,
-            ITreeIndexFrameFactory deleteLeafFrameFactory, IModificationOperationCallback modificationCallback,
-            ISearchOperationCallback searchCallback, int numBloomFilterKeyFields, int[] btreeFields, int[] filterFields,
-            ILSMHarness lsmHarness, IBinaryComparatorFactory[] filterCmpFactories) {
-        super(btreeFields, filterFields, filterCmpFactories, searchCallback, modificationCallback);
+    public LSMBTreeOpContext(ILSMIndex index, List<ILSMMemoryComponent> mutableComponents,
+            ITreeIndexFrameFactory insertLeafFrameFactory, ITreeIndexFrameFactory deleteLeafFrameFactory,
+            IModificationOperationCallback modificationCallback, ISearchOperationCallback searchCallback,
+            int numBloomFilterKeyFields, int[] btreeFields, int[] filterFields, ILSMHarness lsmHarness,
+            IBinaryComparatorFactory[] filterCmpFactories, ITracer tracer) {
+        super(index, btreeFields, filterFields, filterCmpFactories, searchCallback, modificationCallback, tracer);
         LSMBTreeMemoryComponent c = (LSMBTreeMemoryComponent) mutableComponents.get(0);
         IBinaryComparatorFactory cmpFactories[] = c.getIndex().getComparatorFactories();
         if (cmpFactories[0] != null) {
@@ -86,9 +91,9 @@ public final class LSMBTreeOpContext extends AbstractLSMIndexOperationContext {
                 mutableBTreeAccessors[i] = mutableBTrees[i].createAccessor(modificationCallback,
                         NoOpOperationCallback.INSTANCE, allFields);
             } else {
-
-                mutableBTreeAccessors[i] =
-                        mutableBTrees[i].createAccessor(modificationCallback, NoOpOperationCallback.INSTANCE);
+                IIndexAccessParameters iap =
+                        new IndexAccessParameters(modificationCallback, NoOpOperationCallback.INSTANCE);
+                mutableBTreeAccessors[i] = mutableBTrees[i].createAccessor(iap);
             }
             mutableBTreeOpCtxs[i] = mutableBTreeAccessors[i].getOpContext();
         }

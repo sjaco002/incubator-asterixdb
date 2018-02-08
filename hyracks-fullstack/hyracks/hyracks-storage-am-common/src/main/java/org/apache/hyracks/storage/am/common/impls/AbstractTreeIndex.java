@@ -81,12 +81,28 @@ public abstract class AbstractTreeIndex implements ITreeIndex {
             throw HyracksDataException.create(ErrorCode.CANNOT_CREATE_ACTIVE_INDEX);
         }
         fileId = bufferCache.createFile(file);
-        bufferCache.openFile(fileId);
-        freePageManager.open(fileId);
-        freePageManager.init(interiorFrameFactory, leafFrameFactory);
-        setRootPage();
-        freePageManager.close();
-        bufferCache.closeFile(fileId);
+        boolean failed = true;
+        try {
+            bufferCache.openFile(fileId);
+            failed = false;
+        } finally {
+            if (failed) {
+                bufferCache.deleteFile(fileId);
+            }
+        }
+        failed = true;
+        try {
+            freePageManager.open(fileId);
+            freePageManager.init(interiorFrameFactory, leafFrameFactory);
+            setRootPage();
+            freePageManager.close();
+            failed = false;
+        } finally {
+            bufferCache.closeFile(fileId);
+            if (failed) {
+                bufferCache.deleteFile(fileId);
+            }
+        }
     }
 
     private void setRootPage() throws HyracksDataException {
@@ -308,8 +324,7 @@ public abstract class AbstractTreeIndex implements ITreeIndex {
         ITreeIndexAccessor accessor;
 
         public TreeIndexInsertBulkLoader() throws HyracksDataException {
-            accessor =
-                    (ITreeIndexAccessor) createAccessor(NoOpOperationCallback.INSTANCE, NoOpOperationCallback.INSTANCE);
+            accessor = (ITreeIndexAccessor) createAccessor(NoOpIndexAccessParameters.INSTANCE);
         }
 
         @Override
@@ -339,7 +354,7 @@ public abstract class AbstractTreeIndex implements ITreeIndex {
     }
 
     @Override
-    public boolean hasMemoryComponents() {
-        return true;
+    public String toString() {
+        return "{\"class\":\"" + getClass().getSimpleName() + "\",\"file\":\"" + file.getRelativePath() + "\"}";
     }
 }

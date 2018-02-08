@@ -19,8 +19,6 @@
 
 package org.apache.hyracks.storage.am.lsm.common.impls;
 
-import java.util.logging.Logger;
-
 import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.apache.hyracks.api.io.FileReference;
 import org.apache.hyracks.api.io.IODeviceHandle;
@@ -29,30 +27,35 @@ import org.apache.hyracks.storage.am.lsm.common.api.ILSMIOOperationCallback;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMIndexAccessor;
 import org.apache.hyracks.util.trace.ITracer;
 import org.apache.hyracks.util.trace.ITracer.Scope;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 class TracedIOOperation implements ILSMIOOperation {
 
-    static final Logger LOGGER = Logger.getLogger(TracedIOOperation.class.getName());
+    static final Logger LOGGER = LogManager.getLogger();
 
     protected final ILSMIOOperation ioOp;
-    private final LSMIOOpertionType ioOpType;
+    private final LSMIOOperationType ioOpType;
     private final ITracer tracer;
-    private final String cat;
+    private final long traceCategory;
 
-    protected TracedIOOperation(ILSMIOOperation ioOp, ITracer tracer) {
+    protected TracedIOOperation(ILSMIOOperation ioOp, ITracer tracer, long traceCategory) {
         this.ioOp = ioOp;
         this.tracer = tracer;
         this.ioOpType = ioOp.getIOOpertionType();
-        this.cat = ioOpType.name().toLowerCase();
+        this.traceCategory = traceCategory;
     }
 
     public static ILSMIOOperation wrap(final ILSMIOOperation ioOp, final ITracer tracer) {
-        if (tracer != null && tracer.isEnabled()) {
-            tracer.instant(ioOp.getTarget().getRelativePath(),
-                    ioOp.getIOOpertionType() == LSMIOOpertionType.FLUSH ? "schedule-flush" : "schedule-merge", Scope.p,
-                    null);
-            return ioOp instanceof Comparable ? new ComparableTracedIOOperation(ioOp, tracer)
-                    : new TracedIOOperation(ioOp, tracer);
+        final String ioOpName = ioOp.getIOOpertionType().name().toLowerCase();
+        final long traceCategorySchedule = tracer.getRegistry().get("schedule-" + ioOpName);
+        if (tracer.isEnabled(traceCategorySchedule)) {
+            tracer.instant(ioOp.getTarget().getRelativePath(), traceCategorySchedule, Scope.p, null);
+        }
+        final long traceCategoryExec = tracer.getRegistry().get(ioOpName);
+        if (tracer.isEnabled(traceCategoryExec)) {
+            return ioOp instanceof Comparable ? new ComparableTracedIOOperation(ioOp, tracer, traceCategoryExec)
+                    : new TracedIOOperation(ioOp, tracer, traceCategoryExec);
         }
         return ioOp;
     }
@@ -77,18 +80,18 @@ class TracedIOOperation implements ILSMIOOperation {
     }
 
     @Override
-    public LSMIOOpertionType getIOOpertionType() {
+    public LSMIOOperationType getIOOpertionType() {
         return ioOpType;
     }
 
     @Override
     public Boolean call() throws HyracksDataException {
-        final long tid = tracer.durationB(getTarget().getRelativePath(), cat, null);
+        final String name = getTarget().getRelativePath();
+        final long tid = tracer.durationB(name, traceCategory, null);
         try {
             return ioOp.call();
         } finally {
-            tracer.durationE(getTarget().getRelativePath(), cat, tid,
-                    "{\"size\":" + getTarget().getFile().length() + "}");
+            tracer.durationE(name, traceCategory, tid, "{\"size\":" + getTarget().getFile().length() + "}");
         }
     }
 
@@ -101,12 +104,17 @@ class TracedIOOperation implements ILSMIOOperation {
     public ILSMIndexAccessor getAccessor() {
         return ioOp.getAccessor();
     }
+
+    @Override
+    public LSMComponentFileReferences getComponentFiles() {
+        return ioOp.getComponentFiles();
+    }
 }
 
 class ComparableTracedIOOperation extends TracedIOOperation implements Comparable<ILSMIOOperation> {
 
-    protected ComparableTracedIOOperation(ILSMIOOperation ioOp, ITracer trace) {
-        super(ioOp, trace);
+    protected ComparableTracedIOOperation(ILSMIOOperation ioOp, ITracer trace, long traceCategory) {
+        super(ioOp, trace, traceCategory);
     }
 
     @Override
@@ -125,8 +133,9 @@ class ComparableTracedIOOperation extends TracedIOOperation implements Comparabl
         if (myIoOp instanceof Comparable && other instanceof ComparableTracedIOOperation) {
             return ((Comparable) myIoOp).compareTo(((ComparableTracedIOOperation) other).getIoOp());
         }
-        LOGGER.warning("Comparing ioOps of type " + myIoOp.getClass().getSimpleName() + " and "
+        LOGGER.warn("Comparing ioOps of type " + myIoOp.getClass().getSimpleName() + " and "
                 + other.getClass().getSimpleName() + " in " + getClass().getSimpleName());
         return Integer.signum(hashCode() - other.hashCode());
     }
+
 }

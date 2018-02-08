@@ -32,7 +32,6 @@ import org.apache.hyracks.storage.am.common.AbstractIndexTestWorker;
 import org.apache.hyracks.storage.am.common.TestOperationSelector;
 import org.apache.hyracks.storage.am.common.TestOperationSelector.TestOperation;
 import org.apache.hyracks.storage.am.common.datagen.DataGenThread;
-import org.apache.hyracks.storage.am.lsm.common.impls.NoOpIOOperationCallbackFactory;
 import org.apache.hyracks.storage.am.lsm.invertedindex.api.IInvertedIndexSearchModifier;
 import org.apache.hyracks.storage.am.lsm.invertedindex.impls.LSMInvertedIndex;
 import org.apache.hyracks.storage.am.lsm.invertedindex.impls.LSMInvertedIndexAccessor;
@@ -92,7 +91,7 @@ public class LSMInvertedIndexTestWorker extends AbstractIndexTestWorker {
             }
 
             case POINT_SEARCH: {
-                searchCursor.reset();
+                searchCursor.close();
                 searchPred.setQueryTuple(tuple);
                 searchPred.setQueryFieldIndex(0);
                 try {
@@ -108,15 +107,14 @@ public class LSMInvertedIndexTestWorker extends AbstractIndexTestWorker {
             }
 
             case SCAN: {
-                rangeSearchCursor.reset();
+                rangeSearchCursor.close();
                 accessor.rangeSearch(rangeSearchCursor, rangePred);
                 consumeCursorTuples(rangeSearchCursor);
                 break;
             }
 
             case MERGE: {
-                accessor.scheduleMerge(NoOpIOOperationCallbackFactory.INSTANCE.createIoOpCallback(),
-                        invIndex.getDiskComponents());
+                accessor.scheduleMerge(invIndex.getIOOperationCallback(), invIndex.getDiskComponents());
                 break;
             }
 

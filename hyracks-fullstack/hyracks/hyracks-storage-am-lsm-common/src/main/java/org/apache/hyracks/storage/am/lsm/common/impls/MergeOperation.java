@@ -27,7 +27,7 @@ import org.apache.hyracks.storage.am.lsm.common.api.ILSMIOOperationCallback;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMIndexAccessor;
 import org.apache.hyracks.storage.common.IIndexCursor;
 
-public class MergeOperation extends AbstractIoOperation {
+public abstract class MergeOperation extends AbstractIoOperation {
     protected final IIndexCursor cursor;
 
     public MergeOperation(ILSMIndexAccessor accessor, FileReference target, ILSMIOOperationCallback callback,
@@ -47,8 +47,8 @@ public class MergeOperation extends AbstractIoOperation {
     }
 
     @Override
-    public LSMIOOpertionType getIOOpertionType() {
-        return LSMIOOpertionType.MERGE;
+    public LSMIOOperationType getIOOpertionType() {
+        return LSMIOOperationType.MERGE;
     }
 
     public IIndexCursor getCursor() {

@@ -22,14 +22,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 
 import org.apache.asterix.common.dataflow.ICcApplicationContext;
 import org.apache.asterix.common.exceptions.ErrorCode;
 import org.apache.asterix.common.exceptions.RuntimeDataException;
 import org.apache.asterix.common.messaging.api.ICCMessageBroker;
 import org.apache.asterix.common.messaging.api.ICcAddressedMessage;
+import org.apache.asterix.common.messaging.api.ICcIdentifiedMessage;
 import org.apache.asterix.common.messaging.api.INcAddressedMessage;
 import org.apache.asterix.common.messaging.api.INcResponse;
 import org.apache.commons.lang3.mutable.MutableInt;
@@ -41,10 +40,12 @@ import org.apache.hyracks.api.util.JavaSerializationUtils;
 import org.apache.hyracks.control.cc.ClusterControllerService;
 import org.apache.hyracks.control.cc.NodeControllerState;
 import org.apache.hyracks.control.cc.cluster.INodeManager;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 public class CCMessageBroker implements ICCMessageBroker {
 
-    private static final Logger LOGGER = Logger.getLogger(CCMessageBroker.class.getName());
+    private static final Logger LOGGER = LogManager.getLogger();
     private final ClusterControllerService ccs;
     private final Map<Long, MutablePair<MutableInt, MutablePair<ResponseState, Object>>> handles =
             new ConcurrentHashMap<>();
@@ -58,7 +59,7 @@ public class CCMessageBroker implements ICCMessageBroker {
     @Override
     public void receivedMessage(IMessage message, String nodeId) throws Exception {
         ICcAddressedMessage msg = (ICcAddressedMessage) message;
-        if (LOGGER.isLoggable(Level.INFO)) {
+        if (LOGGER.isInfoEnabled()) {
             LOGGER.info("Received message: " + msg);
         }
         ICcApplicationContext appCtx = (ICcApplicationContext) ccs.getApplicationContext();
@@ -69,11 +70,14 @@ public class CCMessageBroker implements ICCMessageBroker {
     public void sendApplicationMessageToNC(INcAddressedMessage msg, String nodeId) throws Exception {
         INodeManager nodeManager = ccs.getNodeManager();
         NodeControllerState state = nodeManager.getNodeControllerState(nodeId);
+        if (msg instanceof ICcIdentifiedMessage) {
+            ((ICcIdentifiedMessage) msg).setCcId(ccs.getCcId());
+        }
         if (state != null) {
             state.getNodeController().sendApplicationMessageToNC(JavaSerializationUtils.serialize(msg), null, nodeId);
         } else {
-            if (LOGGER.isLoggable(Level.WARNING)) {
-                LOGGER.warning("Couldn't send message to unregistered node (" + nodeId + ")");
+            if (LOGGER.isWarnEnabled()) {
+                LOGGER.warn("Couldn't send message to unregistered node (" + nodeId + ")");
             }
         }
     }
@@ -96,6 +100,9 @@ public class CCMessageBroker implements ICCMessageBroker {
                 for (int i = 0; i < ncs.size(); i++) {
                     String nc = ncs.get(i);
                     INcAddressedMessage message = requests.get(i);
+                    if (!(message instanceof ICcIdentifiedMessage)) {
+                        throw new IllegalStateException("sync request message not cc identified: " + message);
+                    }
                     sendApplicationMessageToNC(message, nc);
                 }
                 long time = System.currentTimeMillis();

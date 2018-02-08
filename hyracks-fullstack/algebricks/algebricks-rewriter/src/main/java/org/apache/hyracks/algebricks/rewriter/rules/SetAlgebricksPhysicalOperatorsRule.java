@@ -67,6 +67,7 @@ import org.apache.hyracks.algebricks.core.algebra.operators.physical.IntersectPO
 import org.apache.hyracks.algebricks.core.algebra.operators.physical.LeftOuterUnnestPOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.physical.MicroPreSortedDistinctByPOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.physical.MicroPreclusteredGroupByPOperator;
+import org.apache.hyracks.algebricks.core.algebra.operators.physical.MicroUnionAllPOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.physical.NestedTupleSourcePOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.physical.PreSortedDistinctByPOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.physical.PreclusteredGroupByPOperator;
@@ -172,8 +173,7 @@ public class SetAlgebricksPhysicalOperatorsRule implements IAlgebraicRewriteRule
                                 boolean hasIntermediateAgg = generateMergeAggregationExpressions(gby, context);
                                 if (hasIntermediateAgg) {
                                     ExternalGroupByPOperator externalGby = new ExternalGroupByPOperator(
-                                            gby.getGroupByList(),
-                                            physicalOptimizationConfig.getMaxFramesForGroupBy(),
+                                            gby.getGroupByList(), physicalOptimizationConfig.getMaxFramesForGroupBy(),
                                             (long) physicalOptimizationConfig.getMaxFramesForGroupBy()
                                                     * physicalOptimizationConfig.getFrameSize());
                                     op.setPhysicalOperator(externalGby);
@@ -201,11 +201,11 @@ public class SetAlgebricksPhysicalOperatorsRule implements IAlgebraicRewriteRule
                     break;
                 }
                 case INNERJOIN: {
-                    JoinUtils.setJoinAlgorithmAndExchangeAlgo((InnerJoinOperator) op, context);
+                    JoinUtils.setJoinAlgorithmAndExchangeAlgo((InnerJoinOperator) op, topLevelOp, context);
                     break;
                 }
                 case LEFTOUTERJOIN: {
-                    JoinUtils.setJoinAlgorithmAndExchangeAlgo((LeftOuterJoinOperator) op, context);
+                    JoinUtils.setJoinAlgorithmAndExchangeAlgo((LeftOuterJoinOperator) op, topLevelOp, context);
                     break;
                 }
                 case LIMIT: {
@@ -260,11 +260,19 @@ public class SetAlgebricksPhysicalOperatorsRule implements IAlgebraicRewriteRule
                     break;
                 }
                 case UNIONALL: {
-                    op.setPhysicalOperator(new UnionAllPOperator());
+                    if (topLevelOp) {
+                        op.setPhysicalOperator(new UnionAllPOperator());
+                    } else {
+                        op.setPhysicalOperator(new MicroUnionAllPOperator());
+                    }
                     break;
                 }
                 case INTERSECT: {
-                    op.setPhysicalOperator(new IntersectPOperator());
+                    if (topLevelOp) {
+                        op.setPhysicalOperator(new IntersectPOperator());
+                    } else {
+                        throw new IllegalStateException("Micro operator not implemented for: " + op.getOperatorTag());
+                    }
                     break;
                 }
                 case UNNEST: {
@@ -354,8 +362,9 @@ public class SetAlgebricksPhysicalOperatorsRule implements IAlgebraicRewriteRule
                             prevSecondaryKeys = new ArrayList<LogicalVariable>();
                             getKeys(opInsDel.getPrevSecondaryKeyExprs(), prevSecondaryKeys);
                             if (opInsDel.getPrevAdditionalFilteringExpression() != null) {
-                                prevAdditionalFilteringKey = ((VariableReferenceExpression) (opInsDel
-                                        .getPrevAdditionalFilteringExpression()).getValue()).getVariableReference();
+                                prevAdditionalFilteringKey =
+                                        ((VariableReferenceExpression) (opInsDel.getPrevAdditionalFilteringExpression())
+                                                .getValue()).getVariableReference();
                             }
                         }
                         op.setPhysicalOperator(new IndexInsertDeleteUpsertPOperator(primaryKeys, secondaryKeys,
@@ -441,8 +450,8 @@ public class SetAlgebricksPhysicalOperatorsRule implements IAlgebraicRewriteRule
                     "External group-by currently works only for one nested plan with one root containing"
                             + "an aggregate and a nested-tuple-source.");
         }
-        IMergeAggregationExpressionFactory mergeAggregationExpressionFactory = context
-                .getMergeAggregationExpressionFactory();
+        IMergeAggregationExpressionFactory mergeAggregationExpressionFactory =
+                context.getMergeAggregationExpressionFactory();
         Mutable<ILogicalOperator> r0 = p0.getRoots().get(0);
         AbstractLogicalOperator r0Logical = (AbstractLogicalOperator) r0.getValue();
         if (r0Logical.getOperatorTag() != LogicalOperatorTag.AGGREGATE) {

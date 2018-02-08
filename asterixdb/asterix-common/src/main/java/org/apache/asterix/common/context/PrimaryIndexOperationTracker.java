@@ -29,8 +29,10 @@ import org.apache.asterix.common.transactions.ILogManager;
 import org.apache.asterix.common.transactions.LogRecord;
 import org.apache.asterix.common.utils.TransactionUtil;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
+import org.apache.hyracks.storage.am.common.impls.NoOpIndexAccessParameters;
 import org.apache.hyracks.storage.am.common.impls.NoOpOperationCallback;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMComponent.ComponentState;
+import org.apache.hyracks.storage.am.lsm.common.api.ILSMComponentIdGenerator;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMIndex;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMIndexAccessor;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMMemoryComponent;
@@ -41,16 +43,21 @@ import org.apache.hyracks.storage.common.ISearchOperationCallback;
 
 public class PrimaryIndexOperationTracker extends BaseOperationTracker {
 
+    private final int partition;
     // Number of active operations on an ILSMIndex instance.
     private final AtomicInteger numActiveOperations;
     private final ILogManager logManager;
+    private final ILSMComponentIdGenerator idGenerator;
     private boolean flushOnExit = false;
     private boolean flushLogCreated = false;
 
-    public PrimaryIndexOperationTracker(int datasetID, ILogManager logManager, DatasetInfo dsInfo) {
+    public PrimaryIndexOperationTracker(int datasetID, int partition, ILogManager logManager, DatasetInfo dsInfo,
+            ILSMComponentIdGenerator idGenerator) {
         super(datasetID, dsInfo);
+        this.partition = partition;
         this.logManager = logManager;
         this.numActiveOperations = new AtomicInteger();
+        this.idGenerator = idGenerator;
     }
 
     @Override
@@ -68,7 +75,7 @@ public class PrimaryIndexOperationTracker extends BaseOperationTracker {
     public void afterOperation(ILSMIndex index, LSMOperationType opType, ISearchOperationCallback searchCallback,
             IModificationOperationCallback modificationCallback) throws HyracksDataException {
         // Searches are immediately considered complete, because they should not prevent the execution of flushes.
-        if (opType == LSMOperationType.FLUSH || opType == LSMOperationType.REPLICATE) {
+        if (opType == LSMOperationType.REPLICATE) {
             completeOperation(index, opType, searchCallback, modificationCallback);
         }
     }
@@ -95,7 +102,7 @@ public class PrimaryIndexOperationTracker extends BaseOperationTracker {
         // or if there is a flush scheduled by the checkpoint (flushOnExit), then schedule it
 
         boolean needsFlush = false;
-        Set<ILSMIndex> indexes = dsInfo.getDatasetIndexes();
+        Set<ILSMIndex> indexes = dsInfo.getDatasetPartitionOpenIndexes(partition);
 
         if (!flushOnExit) {
             for (ILSMIndex lsmIndex : indexes) {
@@ -124,8 +131,7 @@ public class PrimaryIndexOperationTracker extends BaseOperationTracker {
                  * Generate a FLUSH log.
                  * Flush will be triggered when the log is written to disk by LogFlusher.
                  */
-                TransactionUtil.formFlushLogRecord(logRecord, datasetID, this, logManager.getNodeId(),
-                        dsInfo.getDatasetIndexes().size());
+                TransactionUtil.formFlushLogRecord(logRecord, datasetID, this);
                 try {
                     logManager.log(logRecord);
                 } catch (ACIDException e) {
@@ -141,10 +147,10 @@ public class PrimaryIndexOperationTracker extends BaseOperationTracker {
 
     //This method is called sequentially by LogPage.notifyFlushTerminator in the sequence flushes were scheduled.
     public synchronized void triggerScheduleFlush(LogRecord logRecord) throws HyracksDataException {
-        for (ILSMIndex lsmIndex : dsInfo.getDatasetIndexes()) {
+        idGenerator.refresh();
+        for (ILSMIndex lsmIndex : dsInfo.getDatasetPartitionOpenIndexes(partition)) {
             //get resource
-            ILSMIndexAccessor accessor =
-                    lsmIndex.createAccessor(NoOpOperationCallback.INSTANCE, NoOpOperationCallback.INSTANCE);
+            ILSMIndexAccessor accessor = lsmIndex.createAccessor(NoOpIndexAccessParameters.INSTANCE);
             //update resource lsn
             AbstractLSMIOOperationCallback ioOpCallback =
                     (AbstractLSMIOOperationCallback) lsmIndex.getIOOperationCallback();
@@ -155,12 +161,6 @@ public class PrimaryIndexOperationTracker extends BaseOperationTracker {
         flushLogCreated = false;
     }
 
-    @Override
-    public void exclusiveJobCommitted() throws HyracksDataException {
-        numActiveOperations.set(0);
-        flushIfRequested();
-    }
-
     public int getNumActiveOperations() {
         return numActiveOperations.get();
     }
@@ -169,7 +169,7 @@ public class PrimaryIndexOperationTracker extends BaseOperationTracker {
         //modificationCallback can be NoOpOperationCallback when redo/undo operations are executed.
         if (modificationCallback != NoOpOperationCallback.INSTANCE) {
             numActiveOperations.incrementAndGet();
-            ((AbstractOperationCallback) modificationCallback).incrementLocalNumActiveOperations();
+            ((AbstractOperationCallback) modificationCallback).beforeOperation();
         }
     }
 
@@ -177,7 +177,7 @@ public class PrimaryIndexOperationTracker extends BaseOperationTracker {
         //modificationCallback can be NoOpOperationCallback when redo/undo operations are executed.
         if (modificationCallback != NoOpOperationCallback.INSTANCE) {
             numActiveOperations.decrementAndGet();
-            ((AbstractOperationCallback) modificationCallback).decrementLocalNumActiveOperations();
+            ((AbstractOperationCallback) modificationCallback).afterOperation();
         }
     }
 
@@ -199,6 +199,10 @@ public class PrimaryIndexOperationTracker extends BaseOperationTracker {
 
     public boolean isFlushLogCreated() {
         return flushLogCreated;
+    }
+
+    public int getPartition() {
+        return partition;
     }
 
 }

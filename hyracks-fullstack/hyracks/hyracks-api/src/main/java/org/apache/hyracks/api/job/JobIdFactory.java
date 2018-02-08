@@ -18,20 +18,23 @@
  */
 package org.apache.hyracks.api.job;
 
-import java.util.concurrent.atomic.AtomicLong;
+import org.apache.hyracks.api.control.CcId;
+import org.apache.hyracks.api.control.CcIdPartitionedLongFactory;
 
-public class JobIdFactory {
-    private final AtomicLong id = new AtomicLong(0);
+public class JobIdFactory extends CcIdPartitionedLongFactory {
+    public JobIdFactory(CcId ccId) {
+        super(ccId);
+    }
 
     public JobId create() {
-        return new JobId(id.getAndIncrement());
+        return new JobId(nextId());
     }
 
-    public long maxJobId() {
-        return id.get();
+    public JobId maxJobId() {
+        return new JobId(maxId());
     }
 
-    public void ensureMinimumId(long id) {
-        this.id.updateAndGet(current -> Math.max(current, id));
+    public void setMaxJobId(long maxJobId) {
+        ensureMinimumId(maxJobId + 1);
     }
 }

@@ -132,6 +132,14 @@ public class ErrorCode {
     public static final int CANNOT_CREATE_SEC_PRIMARY_IDX_ON_EXT_DATASET = 1053;
     public static final int COMPILATION_FAILED_DUE_TO_REPLICATE_OP = 1054;
     public static final int COMPILATION_INCOMPATIBLE_FUNCTION_LANGUAGE = 1055;
+    public static final int TOO_MANY_OPTIONS_FOR_FUNCTION = 1056;
+    public static final int EXPRESSION_NOT_SUPPORTED_IN_CONSTANT_RECORD = 1057;
+    public static final int LITERAL_TYPE_NOT_SUPPORTED_IN_CONSTANT_RECORD = 1058;
+    public static final int UNSUPPORTED_WITH_FIELD = 1059;
+    public static final int WITH_FIELD_MUST_BE_OF_TYPE = 1060;
+    public static final int WITH_FIELD_MUST_CONTAIN_SUB_FIELD = 1061;
+    public static final int MERGE_POLICY_PARAMETER_INVALID_TYPE = 1062;
+    public static final int NO_DATAVERSE_WITH_NAME = 1063;
 
     // Feed errors
     public static final int DATAFLOW_ILLEGAL_STATE = 3001;
@@ -229,7 +237,6 @@ public class ErrorCode {
     public static final int ACTIVE_ENTITY_LISTENER_IS_NOT_REGISTERED = 3097;
     public static final int CANNOT_DERIGESTER_ACTIVE_ENTITY_LISTENER = 3098;
     public static final int DOUBLE_INITIALIZATION_OF_ACTIVE_NOTIFICATION_HANDLER = 3099;
-    public static final int FAILED_TO_SHUTDOWN_EVENT_PROCESSOR = 3100;
     public static final int DOUBLE_RECOVERY_ATTEMPTS = 3101;
     public static final int UNREPORTED_TASK_FAILURE_EXCEPTION = 3102;
     public static final int ACTIVE_ENTITY_ALREADY_SUSPENDED = 3103;
@@ -241,6 +248,7 @@ public class ErrorCode {
     public static final int METADATA_DROP_FUCTION_IN_USE = 3109;
     public static final int FEED_FAILED_WHILE_GETTING_A_NEW_RECORD = 3110;
     public static final int FEED_START_FEED_WITHOUT_CONNECTION = 3111;
+    public static final int PARSER_COLLECTION_ITEM_CANNOT_BE_NULL = 3112;
 
     // Lifecycle management errors
     public static final int DUPLICATE_PARTITION_ID = 4000;

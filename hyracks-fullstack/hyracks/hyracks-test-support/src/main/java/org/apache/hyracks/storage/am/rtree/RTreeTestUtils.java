@@ -24,8 +24,6 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Iterator;
 import java.util.Random;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 
 import org.apache.hyracks.api.dataflow.value.ISerializerDeserializer;
 import org.apache.hyracks.api.exceptions.ErrorCode;
@@ -36,16 +34,18 @@ import org.apache.hyracks.dataflow.common.utils.TupleUtils;
 import org.apache.hyracks.storage.am.common.CheckTuple;
 import org.apache.hyracks.storage.am.common.IIndexTestContext;
 import org.apache.hyracks.storage.am.common.TreeIndexTestUtils;
-import org.apache.hyracks.storage.am.common.api.ITreeIndexCursor;
 import org.apache.hyracks.storage.am.common.util.HashMultiSet;
 import org.apache.hyracks.storage.am.rtree.impls.SearchPredicate;
 import org.apache.hyracks.storage.am.rtree.util.RTreeUtils;
+import org.apache.hyracks.storage.common.IIndexCursor;
 import org.apache.hyracks.storage.common.ISearchPredicate;
 import org.apache.hyracks.storage.common.MultiComparator;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 @SuppressWarnings("rawtypes")
 public class RTreeTestUtils extends TreeIndexTestUtils {
-    private static final Logger LOGGER = Logger.getLogger(RTreeTestUtils.class.getName());
+    private static final Logger LOGGER = LogManager.getLogger();
     private int intPayloadValue = 0;
     private double doublePayloadValue = 0.0;
 
@@ -65,13 +65,13 @@ public class RTreeTestUtils extends TreeIndexTestUtils {
     }
 
     public void checkRangeSearch(IIndexTestContext ictx, ITupleReference key) throws Exception {
-        if (LOGGER.isLoggable(Level.INFO)) {
+        if (LOGGER.isInfoEnabled()) {
             LOGGER.info("Testing Range Search.");
         }
         AbstractRTreeTestContext ctx = (AbstractRTreeTestContext) ictx;
         MultiComparator cmp = RTreeUtils.getSearchMultiComparator(ctx.getComparatorFactories(), key);
 
-        ITreeIndexCursor searchCursor = (ITreeIndexCursor) ctx.getIndexAccessor().createSearchCursor(false);
+        IIndexCursor searchCursor = ctx.getIndexAccessor().createSearchCursor(false);
         SearchPredicate searchPred = new SearchPredicate(key, cmp);
         ctx.getIndexAccessor().search(searchCursor, searchPred);
 
@@ -101,7 +101,7 @@ public class RTreeTestUtils extends TreeIndexTestUtils {
             // Set values.
             setDoublePayloadFields(fieldValues, numKeyFields, fieldCount);
             TupleUtils.createDoubleTuple(ctx.getTupleBuilder(), ctx.getTuple(), fieldValues);
-            if (LOGGER.isLoggable(Level.INFO)) {
+            if (LOGGER.isInfoEnabled()) {
                 if ((i + 1) % (numTuples / Math.min(10, numTuples)) == 0) {
                     LOGGER.info("Inserting Tuple " + (i + 1) + "/" + numTuples);
                 }
@@ -173,8 +173,8 @@ public class RTreeTestUtils extends TreeIndexTestUtils {
     }
 
     @Override
-    public void checkExpectedResults(ITreeIndexCursor cursor, Collection checkTuples,
-            ISerializerDeserializer[] fieldSerdes, int keyFieldCount, Iterator<CheckTuple> checkIter) throws Exception {
+    public void checkExpectedResults(IIndexCursor cursor, Collection checkTuples, ISerializerDeserializer[] fieldSerdes,
+            int keyFieldCount, Iterator<CheckTuple> checkIter) throws Exception {
         int actualCount = 0;
         try {
             while (cursor.hasNext()) {
@@ -196,7 +196,7 @@ public class RTreeTestUtils extends TreeIndexTestUtils {
                         + "\nActual  : " + actualCount);
             }
         } finally {
-            cursor.close();
+            cursor.destroy();
         }
     }
 

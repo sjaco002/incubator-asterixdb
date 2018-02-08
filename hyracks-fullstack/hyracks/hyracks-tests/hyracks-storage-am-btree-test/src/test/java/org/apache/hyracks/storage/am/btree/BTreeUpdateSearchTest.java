@@ -19,7 +19,6 @@
 package org.apache.hyracks.storage.am.btree;
 
 import java.util.Random;
-import java.util.logging.Level;
 
 import org.apache.hyracks.api.dataflow.value.IBinaryComparatorFactory;
 import org.apache.hyracks.api.dataflow.value.ISerializerDeserializer;
@@ -49,6 +48,7 @@ import org.apache.hyracks.storage.am.common.api.ITreeIndexFrameFactory;
 import org.apache.hyracks.storage.am.common.api.ITreeIndexMetadataFrameFactory;
 import org.apache.hyracks.storage.am.common.frames.LIFOMetaDataFrameFactory;
 import org.apache.hyracks.storage.am.common.freepage.LinkedMetaDataPageManager;
+import org.apache.hyracks.storage.am.common.impls.IndexAccessParameters;
 import org.apache.hyracks.storage.common.buffercache.IBufferCache;
 import org.junit.Test;
 
@@ -92,21 +92,22 @@ public class BTreeUpdateSearchTest extends AbstractBTreeTest {
 
         long start = System.currentTimeMillis();
 
-        if (LOGGER.isLoggable(Level.INFO)) {
+        if (LOGGER.isInfoEnabled()) {
             LOGGER.info("INSERTING INTO TREE");
         }
 
         ArrayTupleBuilder tb = new ArrayTupleBuilder(fieldCount);
         ArrayTupleReference insertTuple = new ArrayTupleReference();
-        ITreeIndexAccessor indexAccessor =
-                btree.createAccessor(TestOperationCallback.INSTANCE, TestOperationCallback.INSTANCE);
+        IndexAccessParameters actx =
+                new IndexAccessParameters(TestOperationCallback.INSTANCE, TestOperationCallback.INSTANCE);
+        ITreeIndexAccessor indexAccessor = btree.createAccessor(actx);
 
         int numInserts = 10000;
         for (int i = 0; i < numInserts; i++) {
             int f0 = rnd.nextInt() % 10000;
             int f1 = 5;
             TupleUtils.createIntegerTuple(tb, insertTuple, f0, f1);
-            if (LOGGER.isLoggable(Level.INFO)) {
+            if (LOGGER.isInfoEnabled()) {
                 if (i % 10000 == 0) {
                     long end = System.currentTimeMillis();
                     LOGGER.info("INSERTING " + i + " : " + f0 + " " + f1 + " " + (end - start));
@@ -124,12 +125,12 @@ public class BTreeUpdateSearchTest extends AbstractBTreeTest {
         }
         long end = System.currentTimeMillis();
         long duration = end - start;
-        if (LOGGER.isLoggable(Level.INFO)) {
+        if (LOGGER.isInfoEnabled()) {
             LOGGER.info("DURATION: " + duration);
         }
 
         // Update scan.
-        if (LOGGER.isLoggable(Level.INFO)) {
+        if (LOGGER.isInfoEnabled()) {
             LOGGER.info("UPDATE SCAN:");
         }
         // Set the cursor to X latch nodes.
@@ -146,11 +147,11 @@ public class BTreeUpdateSearchTest extends AbstractBTreeTest {
         } catch (Exception e) {
             e.printStackTrace();
         } finally {
-            updateScanCursor.close();
+            updateScanCursor.destroy();
         }
 
         // Ordered scan to verify the values.
-        if (LOGGER.isLoggable(Level.INFO)) {
+        if (LOGGER.isInfoEnabled()) {
             LOGGER.info("ORDERED SCAN:");
         }
         // Set the cursor to X latch nodes.
@@ -161,14 +162,14 @@ public class BTreeUpdateSearchTest extends AbstractBTreeTest {
                 scanCursor.next();
                 ITupleReference tuple = scanCursor.getTuple();
                 String rec = TupleUtils.printTuple(tuple, recDescSers);
-                if (LOGGER.isLoggable(Level.INFO)) {
+                if (LOGGER.isInfoEnabled()) {
                     LOGGER.info(rec);
                 }
             }
         } catch (Exception e) {
             e.printStackTrace();
         } finally {
-            scanCursor.close();
+            scanCursor.destroy();
         }
         btree.deactivate();
         btree.destroy();

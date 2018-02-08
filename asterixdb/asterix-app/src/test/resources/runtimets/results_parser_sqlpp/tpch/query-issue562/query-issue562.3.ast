@@ -36,7 +36,7 @@ FunctionDecl q22_customer_tmp([]) {
           Variable [ Name=$c ]
           Field=c_phone
         ]
-        LiteralExpr [LONG] [1]
+        LiteralExpr [LONG] [0]
         LiteralExpr [LONG] [2]
       ]
     Where
@@ -97,8 +97,8 @@ Let Variable [ Name=$avg ]
         Field=c_acctbal
       ]
       ]
-      FROM [        FunctionCall Metadata.dataset@1[
-          LiteralExpr [STRING] [Customer]
+      FROM [        FunctionCall asterix.dataset@1[
+          LiteralExpr [STRING] [tpch.Customer]
         ]
         AS Variable [ Name=$c ]
       ]
@@ -109,7 +109,7 @@ Let Variable [ Name=$avg ]
             Variable [ Name=$c ]
             Field=c_phone
           ]
-          LiteralExpr [LONG] [1]
+          LiteralExpr [LONG] [0]
           LiteralExpr [LONG] [2]
         ]
       Where
@@ -206,10 +206,9 @@ RecordConstructor [
         ]
         FROM [          (
             SELECT ELEMENT [
-            FunctionCall Metadata.resolve@-1[
-              LiteralExpr [STRING] [ct]
+            FunctionCall asterix.field-access-by-name@2[
               Variable [ Name=$g ]
-              Variable [ Name=$cntrycode ]
+              LiteralExpr [STRING] [ct]
             ]
             ]
             FROM [              Variable [ Name=$g ]
@@ -234,8 +233,8 @@ Where
         SELECT ELEMENT [
         Variable [ Name=$o ]
         ]
-        FROM [          FunctionCall Metadata.dataset@1[
-            LiteralExpr [STRING] [Orders]
+        FROM [          FunctionCall asterix.dataset@1[
+            LiteralExpr [STRING] [tpch.Orders]
           ]
           AS Variable [ Name=$o ]
         ]

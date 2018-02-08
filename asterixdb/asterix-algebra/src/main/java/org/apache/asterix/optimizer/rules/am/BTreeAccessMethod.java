@@ -87,12 +87,8 @@ public class BTreeAccessMethod implements IAccessMethod {
     }
 
     private static final List<FunctionIdentifier> FUNC_IDENTIFIERS =
-            Collections.unmodifiableList(Arrays.asList(
-                    AlgebricksBuiltinFunctions.EQ,
-                    AlgebricksBuiltinFunctions.LE,
-                    AlgebricksBuiltinFunctions.GE,
-                    AlgebricksBuiltinFunctions.LT,
-                    AlgebricksBuiltinFunctions.GT));
+            Collections.unmodifiableList(Arrays.asList(AlgebricksBuiltinFunctions.EQ, AlgebricksBuiltinFunctions.LE,
+                    AlgebricksBuiltinFunctions.GE, AlgebricksBuiltinFunctions.LT, AlgebricksBuiltinFunctions.GT));
 
     public static final BTreeAccessMethod INSTANCE = new BTreeAccessMethod();
 
@@ -105,9 +101,8 @@ public class BTreeAccessMethod implements IAccessMethod {
     public boolean analyzeFuncExprArgsAndUpdateAnalysisCtx(AbstractFunctionCallExpression funcExpr,
             List<AbstractLogicalOperator> assignsAndUnnests, AccessMethodAnalysisContext analysisCtx,
             IOptimizationContext context, IVariableTypeEnvironment typeEnvironment) throws AlgebricksException {
-        boolean matches =
-                AccessMethodUtils.analyzeFuncExprArgsForOneConstAndVarAndUpdateAnalysisCtx(
-                        funcExpr, analysisCtx, context, typeEnvironment);
+        boolean matches = AccessMethodUtils.analyzeFuncExprArgsForOneConstAndVarAndUpdateAnalysisCtx(funcExpr,
+                analysisCtx, context, typeEnvironment);
         if (!matches) {
             matches = AccessMethodUtils.analyzeFuncExprArgsForTwoVarsAndUpdateAnalysisCtx(funcExpr, analysisCtx);
         }
@@ -131,13 +126,13 @@ public class BTreeAccessMethod implements IAccessMethod {
         SelectOperator select = (SelectOperator) selectRef.getValue();
         Mutable<ILogicalExpression> conditionRef = select.getCondition();
 
-        ILogicalOperator primaryIndexUnnestOp = createSecondaryToPrimaryPlan(conditionRef, subTree, null, chosenIndex,
-                analysisCtx,
-                AccessMethodUtils.retainInputs(subTree.getDataSourceVariables(), subTree.getDataSourceRef().getValue(),
-                        afterSelectRefs),
-                false, subTree.getDataSourceRef().getValue().getInputs().get(0).getValue()
-                        .getExecutionMode() == ExecutionMode.UNPARTITIONED,
-                context);
+        ILogicalOperator primaryIndexUnnestOp =
+                createSecondaryToPrimaryPlan(conditionRef, subTree, null, chosenIndex, analysisCtx,
+                        AccessMethodUtils.retainInputs(subTree.getDataSourceVariables(),
+                                subTree.getDataSourceRef().getValue(), afterSelectRefs),
+                        false, subTree.getDataSourceRef().getValue().getInputs().get(0).getValue()
+                                .getExecutionMode() == ExecutionMode.UNPARTITIONED,
+                        context);
 
         if (primaryIndexUnnestOp == null) {
             return false;
@@ -416,22 +411,21 @@ public class BTreeAccessMethod implements IAccessMethod {
             return null;
         }
 
-        // If the select condition contains mixed open/closed intervals on multiple keys, then we make all intervals
-        // closed to obtain a superset of answers and leave the original selection in place.
+        // if we have composite search keys, we should always need a post-processing to ensure the correctness
+        // of search results because of the way a BTree is searched, unless only the last key is a range search.
+        // During a BTree search, we iterate from the start index
+        // (based on the low keys) to the end index (based on the high keys). During the iteration,
+        // we can encounter a lot of false positives
         boolean primaryIndexPostProccessingIsNeeded = false;
-        for (int i = 1; i < numSecondaryKeys; ++i) {
-            if (lowKeyInclusive[i] != lowKeyInclusive[0]) {
-                Arrays.fill(lowKeyInclusive, true);
+        for (int i = 0; i < numSecondaryKeys - 1; i++) {
+            if (!LimitType.EQUAL.equals(lowKeyLimits[i]) || !LimitType.EQUAL.equals(highKeyLimits[i])) {
                 primaryIndexPostProccessingIsNeeded = true;
-                break;
             }
         }
-        for (int i = 1; i < numSecondaryKeys; ++i) {
-            if (highKeyInclusive[i] != highKeyInclusive[0]) {
-                Arrays.fill(highKeyInclusive, true);
-                primaryIndexPostProccessingIsNeeded = true;
-                break;
-            }
+
+        if (primaryIndexPostProccessingIsNeeded) {
+            Arrays.fill(lowKeyInclusive, true);
+            Arrays.fill(highKeyInclusive, true);
         }
 
         // determine cases when prefix search could be applied

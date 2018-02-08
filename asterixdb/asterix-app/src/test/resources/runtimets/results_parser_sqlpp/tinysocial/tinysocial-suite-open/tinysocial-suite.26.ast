@@ -1,14 +1,7 @@
 DataverseUse TinySocial
 Query:
 SELECT [
-FieldAccessor [
-  FunctionCall Metadata.resolve@-1[
-    LiteralExpr [STRING] [employment]
-    Variable [ Name=#1 ]
-    Variable [ Name=$organization-name ]
-  ]
-  Field=organization-name
-]
+Variable [ Name=$organization-name ]
 organization
 FunctionCall asterix.sql-avg@1[
   (
@@ -100,8 +93,8 @@ FunctionCall asterix.sql-max@1[
 ]
 max
 ]
-FROM [  FunctionCall Metadata.dataset@1[
-    LiteralExpr [STRING] [FacebookUsers]
+FROM [  FunctionCall asterix.dataset@1[
+    LiteralExpr [STRING] [TinySocial.FacebookUsers]
   ]
   AS Variable [ Name=$fbu ]
 ,
@@ -125,13 +118,6 @@ Groupby
   )
 
 Orderby
-  FieldAccessor [
-    FunctionCall Metadata.resolve@-1[
-      LiteralExpr [STRING] [employment]
-      Variable [ Name=#1 ]
-      Variable [ Name=$organization-name ]
-    ]
-    Field=organization-name
-  ]
+  Variable [ Name=$organization-name ]
   ASC
 

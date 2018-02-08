@@ -18,7 +18,7 @@
  */
 package org.apache.hyracks.storage.am.lsm.common.impls;
 
-import java.util.LinkedList;
+import java.util.ArrayList;
 import java.util.List;
 
 import org.apache.hyracks.api.dataflow.value.IBinaryComparatorFactory;
@@ -27,14 +27,18 @@ import org.apache.hyracks.storage.am.common.ophelpers.IndexOperation;
 import org.apache.hyracks.storage.am.common.tuples.PermutingTupleReference;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMComponent;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMDiskComponent;
+import org.apache.hyracks.storage.am.lsm.common.api.ILSMIndex;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMIndexOperationContext;
 import org.apache.hyracks.storage.common.IModificationOperationCallback;
 import org.apache.hyracks.storage.common.ISearchOperationCallback;
 import org.apache.hyracks.storage.common.ISearchPredicate;
 import org.apache.hyracks.storage.common.MultiComparator;
+import org.apache.hyracks.util.trace.ITracer;
+import org.apache.hyracks.util.trace.ITracer.Scope;
 
 public abstract class AbstractLSMIndexOperationContext implements ILSMIndexOperationContext {
 
+    protected final ILSMIndex index;
     protected final PermutingTupleReference indexTuple;
     protected final MultiComparator filterCmp;
     protected final PermutingTupleReference filterTuple;
@@ -47,15 +51,19 @@ public abstract class AbstractLSMIndexOperationContext implements ILSMIndexOpera
     protected IndexOperation op;
     protected boolean accessingComponents = false;
     protected ISearchPredicate searchPredicate;
+    protected final ITracer tracer;
+    protected final long traceCategory;
+    private long enterExitTime = 0L;
 
-    public AbstractLSMIndexOperationContext(int[] treeFields, int[] filterFields,
+    public AbstractLSMIndexOperationContext(ILSMIndex index, int[] treeFields, int[] filterFields,
             IBinaryComparatorFactory[] filterCmpFactories, ISearchOperationCallback searchCallback,
-            IModificationOperationCallback modificationCallback) {
+            IModificationOperationCallback modificationCallback, ITracer tracer) {
+        this.index = index;
         this.searchCallback = searchCallback;
         this.modificationCallback = modificationCallback;
-        this.componentHolder = new LinkedList<>();
-        this.componentsToBeMerged = new LinkedList<>();
-        this.componentsToBeReplicated = new LinkedList<>();
+        this.componentHolder = new ArrayList<>();
+        this.componentsToBeMerged = new ArrayList<>();
+        this.componentsToBeReplicated = new ArrayList<>();
         if (filterFields != null) {
             indexTuple = new PermutingTupleReference(treeFields);
             filterCmp = MultiComparator.create(filterCmpFactories);
@@ -73,6 +81,8 @@ public abstract class AbstractLSMIndexOperationContext implements ILSMIndexOpera
             filterTuple = null;
             allFields = null;
         }
+        this.tracer = tracer;
+        this.traceCategory = tracer.getRegistry().get("op-ctx");
     }
 
     @Override
@@ -152,5 +162,33 @@ public abstract class AbstractLSMIndexOperationContext implements ILSMIndexOpera
     @Override
     public ISearchPredicate getSearchPredicate() {
         return searchPredicate;
+    }
+
+    @Override
+    public final boolean isTracingEnabled() {
+        return tracer.isEnabled(traceCategory);
+    }
+
+    @Override
+    public void logPerformanceCounters(int tupleCount) {
+        if (isTracingEnabled()) {
+            tracer.instant("store-counters", traceCategory, Scope.t,
+                    "{\"count\":" + tupleCount + ",\"enter-exit-duration-ns\":" + enterExitTime + "}");
+            resetCounters();
+        }
+    }
+
+    public void resetCounters() {
+        enterExitTime = 0L;
+    }
+
+    @Override
+    public void incrementEnterExitTime(long increment) {
+        enterExitTime += increment;
+    }
+
+    @Override
+    public ILSMIndex getIndex() {
+        return index;
     }
 }

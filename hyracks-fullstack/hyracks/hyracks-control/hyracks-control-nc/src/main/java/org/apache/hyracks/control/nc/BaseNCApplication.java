@@ -20,19 +20,21 @@ package org.apache.hyracks.control.nc;
 
 import java.lang.management.ManagementFactory;
 import java.util.Arrays;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 
 import org.apache.hyracks.api.application.INCApplication;
 import org.apache.hyracks.api.application.IServiceContext;
 import org.apache.hyracks.api.config.IConfigManager;
 import org.apache.hyracks.api.config.Section;
+import org.apache.hyracks.api.control.CcId;
 import org.apache.hyracks.api.io.IFileDeviceResolver;
 import org.apache.hyracks.api.job.resource.NodeCapacity;
+import org.apache.hyracks.api.util.HyracksConstants;
 import org.apache.hyracks.control.common.controllers.CCConfig;
 import org.apache.hyracks.control.common.controllers.ControllerConfig;
 import org.apache.hyracks.control.common.controllers.NCConfig;
 import org.apache.hyracks.control.nc.io.DefaultDeviceResolver;
+import org.apache.hyracks.util.LoggingConfigUtil;
+import org.apache.logging.log4j.Level;
 
 public class BaseNCApplication implements INCApplication {
     public static final BaseNCApplication INSTANCE = new BaseNCApplication();
@@ -58,7 +60,7 @@ public class BaseNCApplication implements INCApplication {
     }
 
     @Override
-    public void onRegisterNode() throws Exception {
+    public void onRegisterNode(CcId ccId) throws Exception {
         // no-op
     }
 
@@ -97,7 +99,7 @@ public class BaseNCApplication implements INCApplication {
     }
 
     protected void configureLoggingLevel(Level level) {
-        Logger.getLogger("org.apache.hyracks").setLevel(level);
+        LoggingConfigUtil.defaultIfMissing(HyracksConstants.HYRACKS_LOGGER_NAME, level);
     }
 
 }

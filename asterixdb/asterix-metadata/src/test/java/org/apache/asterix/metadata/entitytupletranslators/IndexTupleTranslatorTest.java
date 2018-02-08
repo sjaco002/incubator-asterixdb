@@ -41,6 +41,7 @@ import org.apache.asterix.metadata.entities.InternalDatasetDetails.PartitioningS
 import org.apache.asterix.om.types.ARecordType;
 import org.apache.asterix.om.types.BuiltinType;
 import org.apache.asterix.om.types.IAType;
+import org.apache.hyracks.algebricks.common.exceptions.AlgebricksException;
 import org.apache.hyracks.dataflow.common.data.accessors.ITupleReference;
 import org.junit.Assert;
 import org.junit.Test;
@@ -48,7 +49,7 @@ import org.junit.Test;
 public class IndexTupleTranslatorTest {
 
     @Test
-    public void test() throws MetadataException, IOException {
+    public void test() throws AlgebricksException, IOException {
         Integer[] indicators = { 0, 1, null };
         for (Integer indicator : indicators) {
             Map<String, String> compactionPolicyProperties = new HashMap<>();
@@ -59,7 +60,7 @@ public class IndexTupleTranslatorTest {
                     Collections.singletonList(Collections.singletonList("row_id")),
                     Collections.singletonList(Collections.singletonList("row_id")),
                     indicator == null ? null : Collections.singletonList(indicator),
-                    Collections.singletonList(BuiltinType.AINT64), false, Collections.emptyList(), false);
+                    Collections.singletonList(BuiltinType.AINT64), false, Collections.emptyList());
 
             Dataset dataset =
                     new Dataset("test", "d1", "foo", "LogType", "CB", "MetaType", "DEFAULT_NG_ALL_NODES", "prefix",

@@ -34,8 +34,9 @@ public interface ILogBuffer {
 
     /**
      * flush content of buffer to disk
+     * @param stopping
      */
-    void flush();
+    void flush(boolean stopping);
 
     /**
      * @param logSize
@@ -59,11 +60,6 @@ public interface ILogBuffer {
      * reset the buffer for re-use
      */
     void reset();
-
-    /**
-     * Set current page to be the last page of the associated file
-     */
-    void setLastPage();
 
     /**
      * stops the log buffer

@@ -62,7 +62,7 @@ public class TreeTupleSorter implements ITreeIndexCursor {
     }
 
     @Override
-    public void reset() {
+    public void close() {
         numTuples = 0;
         currentTupleIndex = 0;
     }
@@ -94,16 +94,6 @@ public class TreeTupleSorter implements ITreeIndexCursor {
     @Override
     public ITupleReference getTuple() {
         return frameTuple1;
-    }
-
-    @Override
-    public ITupleReference getFilterMinTuple() {
-        return null;
-    }
-
-    @Override
-    public ITupleReference getFilterMaxTuple() {
-        return null;
     }
 
     public void insertTupleEntry(int pageId, int tupleOffset) {
@@ -217,7 +207,7 @@ public class TreeTupleSorter implements ITreeIndexCursor {
     }
 
     @Override
-    public void close() throws HyracksDataException {
+    public void destroy() throws HyracksDataException {
         // do nothing
     }
 

@@ -22,8 +22,6 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 
 import org.apache.asterix.active.ActiveEvent;
 import org.apache.asterix.active.ActiveEvent.Kind;
@@ -31,10 +29,8 @@ import org.apache.asterix.active.ActivityState;
 import org.apache.asterix.active.EntityId;
 import org.apache.asterix.active.IActiveEntityEventsListener;
 import org.apache.asterix.active.IActiveNotificationHandler;
-import org.apache.asterix.active.SingleThreadEventProcessor;
 import org.apache.asterix.active.message.ActivePartitionMessage;
 import org.apache.asterix.common.api.IMetadataLockManager;
-import org.apache.asterix.common.exceptions.AsterixException;
 import org.apache.asterix.common.exceptions.ErrorCode;
 import org.apache.asterix.common.exceptions.RuntimeDataException;
 import org.apache.asterix.metadata.api.IActiveEntityController;
@@ -42,17 +38,22 @@ import org.apache.asterix.metadata.declared.MetadataProvider;
 import org.apache.asterix.metadata.entities.Dataset;
 import org.apache.asterix.metadata.utils.DatasetUtil;
 import org.apache.commons.lang3.tuple.Pair;
+import org.apache.hyracks.algebricks.common.exceptions.AlgebricksException;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.apache.hyracks.api.exceptions.HyracksException;
 import org.apache.hyracks.api.job.IJobLifecycleListener;
 import org.apache.hyracks.api.job.JobId;
 import org.apache.hyracks.api.job.JobSpecification;
 import org.apache.hyracks.api.job.JobStatus;
+import org.apache.hyracks.api.util.SingleThreadEventProcessor;
+import org.apache.logging.log4j.Level;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 public class ActiveNotificationHandler extends SingleThreadEventProcessor<ActiveEvent>
         implements IActiveNotificationHandler, IJobLifecycleListener {
 
-    private static final Logger LOGGER = Logger.getLogger(ActiveNotificationHandler.class.getName());
+    private static final Logger LOGGER = LogManager.getLogger();
     private static final Level level = Level.INFO;
     public static final String ACTIVE_ENTITY_PROPERTY_NAME = "ActiveJob";
     private final Map<EntityId, IActiveEntityEventsListener> entityEventListeners;
@@ -83,7 +84,7 @@ public class ActiveNotificationHandler extends SingleThreadEventProcessor<Active
                 listener.notify(event);
             }
         } else {
-            LOGGER.log(Level.SEVERE, "Entity not found for received message for job " + event.getJobId());
+            LOGGER.log(Level.ERROR, "Entity not found for received message for job " + event.getJobId());
         }
     }
 
@@ -111,7 +112,7 @@ public class ActiveNotificationHandler extends SingleThreadEventProcessor<Active
         LOGGER.log(level, "Job was found to be: " + (found ? "Active" : "Inactive"));
         if (entityEventListeners.containsKey(entityId)) {
             if (jobId2EntityId.containsKey(jobId)) {
-                LOGGER.severe("Job is already being monitored for job: " + jobId);
+                LOGGER.error("Job is already being monitored for job: " + jobId);
                 return;
             }
             LOGGER.log(level, "monitoring started for job id: " + jobId);
@@ -226,7 +227,7 @@ public class ActiveNotificationHandler extends SingleThreadEventProcessor<Active
     }
 
     public void suspend(MetadataProvider mdProvider)
-            throws AsterixException, HyracksDataException, InterruptedException {
+            throws AlgebricksException, HyracksDataException, InterruptedException {
         synchronized (this) {
             if (suspended) {
                 throw new RuntimeDataException(ErrorCode.ACTIVE_EVENT_HANDLER_ALREADY_SUSPENDED);
@@ -255,8 +256,7 @@ public class ActiveNotificationHandler extends SingleThreadEventProcessor<Active
         }
     }
 
-    public void resume(MetadataProvider mdProvider)
-            throws AsterixException, HyracksDataException, InterruptedException {
+    public void resume(MetadataProvider mdProvider) throws HyracksDataException, InterruptedException {
         LOGGER.log(level, "Resuming active events handler");
         for (IActiveEntityEventsListener listener : entityEventListeners.values()) {
             LOGGER.log(level, "Resuming " + listener.getEntityId());

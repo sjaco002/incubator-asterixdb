@@ -53,8 +53,8 @@ public class AsterixClientDriver {
         }
         boolean exec = new Boolean(acc.execute);
         IHyracksClientConnection hcc = exec ? new HyracksConnection("localhost", acc.hyracksPort) : null;
-        AsterixJavaClient q = compileQuery(hcc, acc.getArguments().get(0), new Boolean(acc.optimize),
-                new Boolean(acc.onlyPhysical), exec || new Boolean(acc.hyracksJob));
+        AsterixJavaClient q = compileQuery(hcc, acc.getArguments().get(0), new Boolean(acc.optimize), false,
+                exec || new Boolean(acc.hyracksJob));
         if (exec) {
             q.execute();
         }

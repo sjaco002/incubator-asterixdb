@@ -24,14 +24,14 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 
 import org.apache.asterix.external.generator.DataGenerator.TweetMessage;
 import org.apache.asterix.external.generator.DataGenerator.TweetMessageIterator;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 public class TweetGenerator {
-    private static final Logger LOGGER = Logger.getLogger(TweetGenerator.class.getName());
+    private static final Logger LOGGER = LogManager.getLogger();
 
     public static final String KEY_DURATION = "duration";
     public static final String KEY_TPS = "tps";
@@ -99,13 +99,13 @@ public class TweetGenerator {
         outputBuffer.limit(32 * 1024);
     }
 
-    public boolean generateNextBatch(int numTweets) throws IOException{
+    public boolean generateNextBatch(int numTweets) throws IOException {
         boolean moreData = tweetIterator.hasNext();
         if (!moreData) {
             if (outputBuffer.position() > 0) {
                 flush();
             }
-            if (LOGGER.isLoggable(Level.INFO)) {
+            if (LOGGER.isInfoEnabled()) {
                 LOGGER.info("Reached end of batch. Tweet Count: [" + partition + "]" + tweetCount);
             }
             return false;

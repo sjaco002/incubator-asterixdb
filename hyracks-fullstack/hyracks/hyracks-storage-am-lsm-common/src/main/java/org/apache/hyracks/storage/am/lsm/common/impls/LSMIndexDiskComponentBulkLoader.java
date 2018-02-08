@@ -21,13 +21,14 @@ package org.apache.hyracks.storage.am.lsm.common.impls;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.apache.hyracks.dataflow.common.data.accessors.ITupleReference;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMDiskComponent;
-import org.apache.hyracks.storage.am.lsm.common.api.LSMOperationType;
+import org.apache.hyracks.storage.am.lsm.common.api.ILSMDiskComponentBulkLoader;
+import org.apache.hyracks.storage.am.lsm.common.api.ILSMIOOperation.LSMIOOperationType;
 import org.apache.hyracks.storage.common.IIndexBulkLoader;
 
 public class LSMIndexDiskComponentBulkLoader implements IIndexBulkLoader {
     private final AbstractLSMIndex lsmIndex;
     private final ILSMDiskComponent component;
-    private final IIndexBulkLoader componentBulkLoader;
+    private final ILSMDiskComponentBulkLoader componentBulkLoader;
 
     public LSMIndexDiskComponentBulkLoader(AbstractLSMIndex lsmIndex, float fillFactor, boolean verifyInput,
             long numElementsHint) throws HyracksDataException {
@@ -39,26 +40,43 @@ public class LSMIndexDiskComponentBulkLoader implements IIndexBulkLoader {
                 component.createBulkLoader(fillFactor, verifyInput, numElementsHint, false, true, true);
     }
 
+    public ILSMDiskComponent getComponent() {
+        return component;
+    }
+
     @Override
     public void add(ITupleReference tuple) throws HyracksDataException {
         componentBulkLoader.add(tuple);
     }
 
+    public void delete(ITupleReference tuple) throws HyracksDataException {
+        componentBulkLoader.delete(tuple);
+    }
+
     @Override
     public void end() throws HyracksDataException {
-        componentBulkLoader.end();
-        if (component.getComponentSize() > 0) {
-            //TODO(amoudi): Ensure Bulk load follow the same lifecycle Other Operations (Flush, Merge, etc).
-            //then after operation should be called from harness as well
-            //https://issues.apache.org/jira/browse/ASTERIXDB-1764
-            lsmIndex.getIOOperationCallback().afterOperation(LSMOperationType.FLUSH, null, component);
-            lsmIndex.getLsmHarness().addBulkLoadedComponent(component);
+        try {
+            componentBulkLoader.end();
+            if (component.getComponentSize() > 0) {
+                //TODO(amoudi): Ensure Bulk load follow the same lifecycle Other Operations (Flush, Merge, etc).
+                //then after operation should be called from harness as well
+                //https://issues.apache.org/jira/browse/ASTERIXDB-1764
+                lsmIndex.getIOOperationCallback().afterOperation(LSMIOOperationType.LOAD, null, component);
+                lsmIndex.getHarness().addBulkLoadedComponent(component);
+            }
+        } finally {
+            lsmIndex.getIOOperationCallback().afterFinalize(LSMIOOperationType.LOAD, component);
         }
     }
 
     @Override
     public void abort() throws HyracksDataException {
-        componentBulkLoader.abort();
+        try {
+            componentBulkLoader.abort();
+            lsmIndex.getIOOperationCallback().afterOperation(LSMIOOperationType.LOAD, null, null);
+        } finally {
+            lsmIndex.getIOOperationCallback().afterFinalize(LSMIOOperationType.LOAD, null);
+        }
     }
 
 }

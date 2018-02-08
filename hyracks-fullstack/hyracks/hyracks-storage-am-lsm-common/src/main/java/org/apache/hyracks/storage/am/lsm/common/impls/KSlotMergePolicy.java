@@ -28,7 +28,7 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import org.apache.hyracks.api.exceptions.HyracksDataException;
-import org.apache.hyracks.storage.am.common.impls.NoOpOperationCallback;
+import org.apache.hyracks.storage.am.common.impls.NoOpIndexAccessParameters;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMComponent;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMComponent.ComponentState;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMDiskComponent;
@@ -60,8 +60,7 @@ public class KSlotMergePolicy implements ILSMMergePolicy {
         }
         if (fullMergeIsRequested) {
             updateMergeCosts(0, 0);
-            ILSMIndexAccessor accessor = (ILSMIndexAccessor) index.createAccessor(NoOpOperationCallback.INSTANCE,
-                    NoOpOperationCallback.INSTANCE);
+            ILSMIndexAccessor accessor = (ILSMIndexAccessor) index.createAccessor(NoOpIndexAccessParameters.INSTANCE);
             accessor.scheduleFullMerge(index.getIOOperationCallback());
             long mergeSize = getMergeSize(immutableComponents);
             logDiskComponentsSnapshot(immutableComponents);
@@ -96,8 +95,7 @@ public class KSlotMergePolicy implements ILSMMergePolicy {
         for (int i = startIndex; i >= -1; i--) {
             if (i == -1) {
                 mergedIndex = i + 1;
-            } else if (immutableComponents.get(i).getComponentSize() >= mergeCosts[i]
-                    + delta) {
+            } else if (immutableComponents.get(i).getComponentSize() >= mergeCosts[i] + delta) {
                 mergedIndex = i + 1;
                 break;
             }
@@ -111,8 +109,7 @@ public class KSlotMergePolicy implements ILSMMergePolicy {
                 mergableComponents.add(immutableComponents.get(j));
             }
             Collections.reverse(mergableComponents);
-            ILSMIndexAccessor accessor = (ILSMIndexAccessor) index.createAccessor(NoOpOperationCallback.INSTANCE,
-                    NoOpOperationCallback.INSTANCE);
+            ILSMIndexAccessor accessor = (ILSMIndexAccessor) index.createAccessor(NoOpIndexAccessParameters.INSTANCE);
             accessor.scheduleMerge(index.getIOOperationCallback(), mergableComponents);
             logDiskComponentsSnapshot(immutableComponents);
             logMergeInfo(mergeSize, false, mergableComponents.size(), immutableComponents.size());
@@ -153,8 +150,7 @@ public class KSlotMergePolicy implements ILSMMergePolicy {
 
     }
 
-    private boolean scheduleLaggedMerge(final ILSMIndex index, int mergedIndex)
- throws HyracksDataException {
+    private boolean scheduleLaggedMerge(final ILSMIndex index, int mergedIndex) throws HyracksDataException {
         long mergeSize = 0;
         List<ILSMDiskComponent> immutableComponents = new ArrayList<>(index.getDiskComponents());
         Collections.reverse(immutableComponents);
@@ -164,8 +160,7 @@ public class KSlotMergePolicy implements ILSMMergePolicy {
             mergableComponents.add(immutableComponents.get(j));
         }
         Collections.reverse(mergableComponents);
-        ILSMIndexAccessor accessor = (ILSMIndexAccessor) index.createAccessor(NoOpOperationCallback.INSTANCE,
-                NoOpOperationCallback.INSTANCE);
+        ILSMIndexAccessor accessor = (ILSMIndexAccessor) index.createAccessor(NoOpIndexAccessParameters.INSTANCE);
         accessor.scheduleMerge(index.getIOOperationCallback(), mergableComponents);
         logDiskComponentsSnapshot(immutableComponents);
         logMergeInfo(mergeSize, false, mergableComponents.size(), immutableComponents.size());
@@ -236,8 +231,7 @@ public class KSlotMergePolicy implements ILSMMergePolicy {
             String snapshotStr = "";
             for (int j = 0; j < immutableComponents.size(); j++) {
 
-                snapshotStr =
- snapshotStr + "," + immutableComponents.get(j).getComponentSize();
+                snapshotStr = snapshotStr + "," + immutableComponents.get(j).getComponentSize();
             }
             if (snapshotStr.length() > 1) {
                 snapshotStr = snapshotStr.substring(1);

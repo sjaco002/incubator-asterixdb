@@ -24,17 +24,19 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 import org.apache.asterix.common.api.IDatasetLifecycleManager;
 import org.apache.commons.lang3.tuple.Pair;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
-import org.apache.hyracks.storage.am.common.impls.NoOpOperationCallback;
+import org.apache.hyracks.storage.am.common.impls.NoOpIndexAccessParameters;
+import org.apache.hyracks.storage.am.lsm.common.api.ILSMComponent;
+import org.apache.hyracks.storage.am.lsm.common.api.ILSMComponentId;
+import org.apache.hyracks.storage.am.lsm.common.api.ILSMComponentId.IdCompareResult;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMDiskComponent;
-import org.apache.hyracks.storage.am.lsm.common.api.ILSMDiskComponentId;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMIndex;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMIndexAccessor;
 import org.apache.hyracks.storage.am.lsm.common.impls.PrefixMergePolicy;
+import org.apache.hyracks.storage.am.lsm.common.util.LSMComponentIdUtils;
 
 public class CorrelatedPrefixMergePolicy extends PrefixMergePolicy {
 
@@ -88,48 +90,43 @@ public class CorrelatedPrefixMergePolicy extends PrefixMergePolicy {
             //nothing to merge
             return false;
         }
-        long minID = immutableComponents.get(mergeableIndexes.getLeft()).getComponentId().getMinId();
-        long maxID = immutableComponents.get(mergeableIndexes.getRight()).getComponentId().getMaxId();
-
-        Set<IndexInfo> indexInfos = datasetLifecycleManager.getDatasetInfo(datasetId).getDatsetIndexInfos();
-        int partition = getIndexPartition(index, indexInfos);
-        triggerScheduledMerge(minID, maxID,
-                indexInfos.stream().filter(info -> info.getPartition() == partition).collect(Collectors.toSet()));
+        ILSMComponent leftComponent = immutableComponents.get(mergeableIndexes.getLeft());
+        ILSMComponent rightComponent = immutableComponents.get(mergeableIndexes.getRight());
+        ILSMComponentId targetId = LSMComponentIdUtils.union(leftComponent.getId(), rightComponent.getId());
+        int partition = ((PrimaryIndexOperationTracker) index.getOperationTracker()).getPartition();
+        Set<ILSMIndex> indexes =
+                datasetLifecycleManager.getDatasetInfo(datasetId).getDatasetPartitionOpenIndexes(partition);
+        triggerScheduledMerge(targetId, indexes);
         return true;
     }
 
     /**
-     * Submit merge requests for all disk components within [minID, maxID]
+     * Submit merge requests for all disk components within the range specified by targetId
      * of all indexes of a given dataset in the given partition
      *
-     * @param minID
-     * @param maxID
-     * @param partition
+     * @param targetId
      * @param indexInfos
      * @throws HyracksDataException
      */
-    private void triggerScheduledMerge(long minID, long maxID, Set<IndexInfo> indexInfos) throws HyracksDataException {
-        for (IndexInfo info : indexInfos) {
-            ILSMIndex lsmIndex = info.getIndex();
-
+    private void triggerScheduledMerge(ILSMComponentId targetId, Set<ILSMIndex> indexes) throws HyracksDataException {
+        for (ILSMIndex lsmIndex : indexes) {
             List<ILSMDiskComponent> immutableComponents = new ArrayList<>(lsmIndex.getDiskComponents());
             if (isMergeOngoing(immutableComponents)) {
                 continue;
             }
             List<ILSMDiskComponent> mergableComponents = new ArrayList<>();
             for (ILSMDiskComponent component : immutableComponents) {
-                ILSMDiskComponentId id = component.getComponentId();
-                if (id.getMinId() >= minID && id.getMaxId() <= maxID) {
+                ILSMComponentId id = component.getId();
+                IdCompareResult cmp = targetId.compareTo(id);
+                if (cmp == IdCompareResult.INCLUDE) {
                     mergableComponents.add(component);
-                }
-                if (id.getMaxId() < minID) {
+                } else if (cmp == IdCompareResult.GREATER_THAN) {
                     //disk components are ordered from latest (with largest IDs) to oldest (with smallest IDs)
-                    //if the component.maxID < minID, we can safely skip the rest disk components in the list
+                    // if targetId>component.Id, we can safely skip the rest disk components in the list
                     break;
                 }
             }
-            ILSMIndexAccessor accessor =
-                    lsmIndex.createAccessor(NoOpOperationCallback.INSTANCE, NoOpOperationCallback.INSTANCE);
+            ILSMIndexAccessor accessor = lsmIndex.createAccessor(NoOpIndexAccessParameters.INSTANCE);
             accessor.scheduleMerge(lsmIndex.getIOOperationCallback(), mergableComponents);
         }
     }

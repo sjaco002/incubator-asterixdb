@@ -24,6 +24,9 @@
     <version>0.9.3-SNAPSHOT</version>
   </parent>
   <artifactId>asterix-active</artifactId>
+  <properties>
+    <root.dir>${basedir}/..</root.dir>
+  </properties>
   <dependencies>
     <dependency>
       <groupId>org.apache.asterix</groupId>
@@ -45,6 +48,10 @@
     <dependency>
       <groupId>org.apache.commons</groupId>
       <artifactId>commons-lang3</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.logging.log4j</groupId>
+      <artifactId>log4j-api</artifactId>
     </dependency>
   </dependencies>
 </project>

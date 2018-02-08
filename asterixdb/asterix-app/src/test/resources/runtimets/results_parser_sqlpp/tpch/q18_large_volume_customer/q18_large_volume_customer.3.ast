@@ -40,14 +40,9 @@ RecordConstructor [
         ]
         FROM [          (
             SELECT ELEMENT [
-            FunctionCall Metadata.resolve@-1[
-              LiteralExpr [STRING] [l]
+            FunctionCall asterix.field-access-by-name@2[
               Variable [ Name=$g ]
-              Variable [ Name=$o_orderdate ]
-              Variable [ Name=$c_name ]
-              Variable [ Name=$o_orderkey ]
-              Variable [ Name=$o_totalprice ]
-              Variable [ Name=$c_custkey ]
+              LiteralExpr [STRING] [l]
             ]
             ]
             FROM [              Variable [ Name=$g ]
@@ -61,13 +56,13 @@ RecordConstructor [
   )
 ]
 ]
-FROM [  FunctionCall Metadata.dataset@1[
-    LiteralExpr [STRING] [Customer]
+FROM [  FunctionCall asterix.dataset@1[
+    LiteralExpr [STRING] [tpch.Customer]
   ]
   AS Variable [ Name=$c ]
 ,
-  FunctionCall Metadata.dataset@1[
-    LiteralExpr [STRING] [Orders]
+  FunctionCall asterix.dataset@1[
+    LiteralExpr [STRING] [tpch.Orders]
   ]
   AS Variable [ Name=$o ]
 ,
@@ -92,12 +87,9 @@ FROM [  FunctionCall Metadata.dataset@1[
             ]
             FROM [              (
                 SELECT ELEMENT [
-                FunctionCall Metadata.resolve@-1[
-                  LiteralExpr [STRING] [l]
-                  Variable [ Name=$o ]
-                  Variable [ Name=$l_orderkey ]
+                FunctionCall asterix.field-access-by-name@2[
                   Variable [ Name=$g2 ]
-                  Variable [ Name=$c ]
+                  LiteralExpr [STRING] [l]
                 ]
                 ]
                 FROM [                  Variable [ Name=$g2 ]
@@ -111,8 +103,8 @@ FROM [  FunctionCall Metadata.dataset@1[
       )
     ]
     ]
-    FROM [      FunctionCall Metadata.dataset@1[
-        LiteralExpr [STRING] [LineItem]
+    FROM [      FunctionCall asterix.dataset@1[
+        LiteralExpr [STRING] [tpch.LineItem]
       ]
       AS Variable [ Name=$l ]
     ]
@@ -131,8 +123,8 @@ FROM [  FunctionCall Metadata.dataset@1[
   )
   AS Variable [ Name=$t ]
 ,
-  FunctionCall Metadata.dataset@1[
-    LiteralExpr [STRING] [LineItem]
+  FunctionCall asterix.dataset@1[
+    LiteralExpr [STRING] [tpch.LineItem]
   ]
   AS Variable [ Name=$l ]
 ]

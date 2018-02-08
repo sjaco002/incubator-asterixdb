@@ -27,7 +27,7 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import org.apache.hyracks.api.exceptions.HyracksDataException;
-import org.apache.hyracks.storage.am.common.impls.NoOpOperationCallback;
+import org.apache.hyracks.storage.am.common.impls.NoOpIndexAccessParameters;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMComponent;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMComponent.ComponentState;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMDiskComponent;
@@ -56,8 +56,7 @@ public class RatioBasedMergePolicy implements ILSMMergePolicy {
             return;
         }
         if (fullMergeIsRequested) {
-            ILSMIndexAccessor accessor = (ILSMIndexAccessor) index.createAccessor(NoOpOperationCallback.INSTANCE,
-                    NoOpOperationCallback.INSTANCE);
+            ILSMIndexAccessor accessor = (ILSMIndexAccessor) index.createAccessor(NoOpIndexAccessParameters.INSTANCE);
             accessor.scheduleFullMerge(index.getIOOperationCallback());
             long mergeSize = getMergeSize(immutableComponents);
             logDiskComponentsSnapshot(immutableComponents, false);
@@ -104,8 +103,7 @@ public class RatioBasedMergePolicy implements ILSMMergePolicy {
                 mergableComponents.add(immutableComponents.get(i));
             }
             Collections.reverse(mergableComponents);
-            ILSMIndexAccessor accessor = (ILSMIndexAccessor) index.createAccessor(NoOpOperationCallback.INSTANCE,
-                    NoOpOperationCallback.INSTANCE);
+            ILSMIndexAccessor accessor = (ILSMIndexAccessor) index.createAccessor(NoOpIndexAccessParameters.INSTANCE);
             accessor.scheduleMerge(index.getIOOperationCallback(), mergableComponents);
             logDiskComponentsSnapshot(immutableComponents, special);
             logMergeInfo(mergeSize, false, mergableComponents.size(), immutableComponents.size());
@@ -176,8 +174,7 @@ public class RatioBasedMergePolicy implements ILSMMergePolicy {
             String snapshotStr = "";
             for (int j = 0; j < immutableComponents.size(); j++) {
 
-                snapshotStr =
- snapshotStr + "," + immutableComponents.get(j).getComponentSize();
+                snapshotStr = snapshotStr + "," + immutableComponents.get(j).getComponentSize();
             }
             if (snapshotStr.length() > 1) {
                 snapshotStr = snapshotStr.substring(1);

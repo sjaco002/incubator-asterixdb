@@ -81,14 +81,14 @@ public abstract class AbstractSerializableAvgAggregateFunction implements ISeria
     private ClosedRecordConstructorEval recordEval;
 
     @SuppressWarnings("unchecked")
-    private ISerializerDeserializer<ADouble> doubleSerde = SerializerDeserializerProvider.INSTANCE
-            .getSerializerDeserializer(BuiltinType.ADOUBLE);
+    private ISerializerDeserializer<ADouble> doubleSerde =
+            SerializerDeserializerProvider.INSTANCE.getSerializerDeserializer(BuiltinType.ADOUBLE);
     @SuppressWarnings("unchecked")
-    private ISerializerDeserializer<AInt64> longSerde = SerializerDeserializerProvider.INSTANCE
-            .getSerializerDeserializer(BuiltinType.AINT64);
+    private ISerializerDeserializer<AInt64> longSerde =
+            SerializerDeserializerProvider.INSTANCE.getSerializerDeserializer(BuiltinType.AINT64);
     @SuppressWarnings("unchecked")
-    private ISerializerDeserializer<ANull> nullSerde = SerializerDeserializerProvider.INSTANCE
-            .getSerializerDeserializer(BuiltinType.ANULL);
+    private ISerializerDeserializer<ANull> nullSerde =
+            SerializerDeserializerProvider.INSTANCE.getSerializerDeserializer(BuiltinType.ANULL);
 
     public AbstractSerializableAvgAggregateFunction(IScalarEvaluatorFactory[] args, IHyracksTaskContext context)
             throws HyracksDataException {
@@ -194,7 +194,7 @@ public abstract class AbstractSerializableAvgAggregateFunction implements ISeria
         try {
             if (aggType == ATypeTag.SYSTEM_NULL) {
                 if (GlobalConfig.DEBUG) {
-                    GlobalConfig.ASTERIX_LOGGER.finest("AVG aggregate ran over empty input.");
+                    GlobalConfig.ASTERIX_LOGGER.trace("AVG aggregate ran over empty input.");
                 }
                 result.writeByte(ATypeTag.SERIALIZED_SYSTEM_NULL_TYPE_TAG);
             } else if (aggType == ATypeTag.NULL) {

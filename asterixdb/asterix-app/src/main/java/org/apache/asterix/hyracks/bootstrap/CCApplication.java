@@ -25,11 +25,11 @@ import static org.apache.asterix.api.http.server.ServletConstants.ASTERIX_APP_CO
 import static org.apache.asterix.api.http.server.ServletConstants.HYRACKS_CONNECTION_ATTR;
 import static org.apache.asterix.common.api.IClusterManagementWork.ClusterState.SHUTTING_DOWN;
 
+import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.ConcurrentMap;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 
 import org.apache.asterix.api.http.ctx.StatementExecutorContext;
 import org.apache.asterix.api.http.server.ActiveStatsApiServlet;
@@ -55,18 +55,19 @@ import org.apache.asterix.api.http.server.VersionApiServlet;
 import org.apache.asterix.app.active.ActiveNotificationHandler;
 import org.apache.asterix.app.cc.CCExtensionManager;
 import org.apache.asterix.app.external.ExternalLibraryUtils;
-import org.apache.asterix.app.replication.FaultToleranceStrategyFactory;
+import org.apache.asterix.app.replication.NcLifecycleCoordinator;
 import org.apache.asterix.common.api.AsterixThreadFactory;
-import org.apache.asterix.common.api.IClusterManagementWork.ClusterState;
+import org.apache.asterix.common.api.INodeJobTracker;
 import org.apache.asterix.common.config.AsterixExtension;
-import org.apache.asterix.common.config.ClusterProperties;
 import org.apache.asterix.common.config.ExternalProperties;
+import org.apache.asterix.common.config.GlobalConfig;
 import org.apache.asterix.common.config.MetadataProperties;
+import org.apache.asterix.common.config.PropertiesAccessor;
+import org.apache.asterix.common.config.ReplicationProperties;
 import org.apache.asterix.common.context.IStorageComponentProvider;
 import org.apache.asterix.common.dataflow.ICcApplicationContext;
 import org.apache.asterix.common.library.ILibraryManager;
-import org.apache.asterix.common.replication.IFaultToleranceStrategy;
-import org.apache.asterix.common.replication.IReplicationStrategy;
+import org.apache.asterix.common.replication.INcLifecycleCoordinator;
 import org.apache.asterix.common.utils.Servlets;
 import org.apache.asterix.external.library.ExternalLibraryManager;
 import org.apache.asterix.file.StorageComponentProvider;
@@ -74,12 +75,13 @@ import org.apache.asterix.messaging.CCMessageBroker;
 import org.apache.asterix.metadata.MetadataManager;
 import org.apache.asterix.metadata.api.IAsterixStateProxy;
 import org.apache.asterix.metadata.bootstrap.AsterixStateProxy;
-import org.apache.asterix.metadata.cluster.ClusterManagerProvider;
 import org.apache.asterix.metadata.lock.MetadataLockManager;
 import org.apache.asterix.runtime.job.resource.JobCapacityController;
 import org.apache.asterix.runtime.utils.CcApplicationContext;
 import org.apache.asterix.translator.IStatementExecutorContext;
 import org.apache.asterix.translator.IStatementExecutorFactory;
+import org.apache.asterix.util.MetadataBuiltinFunctions;
+import org.apache.hyracks.algebricks.common.exceptions.AlgebricksException;
 import org.apache.hyracks.api.application.ICCServiceContext;
 import org.apache.hyracks.api.application.IServiceContext;
 import org.apache.hyracks.api.client.HyracksConnection;
@@ -93,17 +95,21 @@ import org.apache.hyracks.control.common.controllers.CCConfig;
 import org.apache.hyracks.http.api.IServlet;
 import org.apache.hyracks.http.server.HttpServer;
 import org.apache.hyracks.http.server.WebManager;
+import org.apache.hyracks.util.LoggingConfigUtil;
+import org.apache.logging.log4j.Level;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 public class CCApplication extends BaseCCApplication {
 
-    private static final Logger LOGGER = Logger.getLogger(CCApplication.class.getName());
+    private static final Logger LOGGER = LogManager.getLogger();
     private static IAsterixStateProxy proxy;
     protected ICCServiceContext ccServiceCtx;
     protected CCExtensionManager ccExtensionManager;
     protected IStorageComponentProvider componentProvider;
     protected StatementExecutorContext statementExecutorCtx;
     protected WebManager webManager;
-    protected CcApplicationContext appCtx;
+    protected ICcApplicationContext appCtx;
     private IJobCapacityController jobCapacityController;
     private IHyracksClientConnection hcc;
 
@@ -119,63 +125,74 @@ public class CCApplication extends BaseCCApplication {
         if (args.length > 0) {
             throw new IllegalArgumentException("Unrecognized argument(s): " + Arrays.toString(args));
         }
-        final ClusterControllerService controllerService = (ClusterControllerService) ccServiceCtx
-                .getControllerService();
+        final ClusterControllerService controllerService =
+                (ClusterControllerService) ccServiceCtx.getControllerService();
         ccServiceCtx.setMessageBroker(new CCMessageBroker(controllerService));
 
         configureLoggingLevel(ccServiceCtx.getAppConfig().getLoggingLevel(ExternalProperties.Option.LOG_LEVEL));
 
-        if (LOGGER.isLoggable(Level.INFO)) {
-            LOGGER.info("Starting Asterix cluster controller");
-        }
+        LOGGER.info("Starting Asterix cluster controller");
 
         String strIP = ccServiceCtx.getCCContext().getClusterControllerInfo().getClientNetAddress();
         int port = ccServiceCtx.getCCContext().getClusterControllerInfo().getClientNetPort();
         hcc = new HyracksConnection(strIP, port);
+        MetadataBuiltinFunctions.init();
         ILibraryManager libraryManager = new ExternalLibraryManager();
-
-        IReplicationStrategy repStrategy = ClusterProperties.INSTANCE.getReplicationStrategy();
-        IFaultToleranceStrategy ftStrategy = FaultToleranceStrategyFactory
-                .create(ClusterProperties.INSTANCE.getCluster(), repStrategy, ccServiceCtx);
+        ReplicationProperties repProp =
+                new ReplicationProperties(PropertiesAccessor.getInstance(ccServiceCtx.getAppConfig()));
+        INcLifecycleCoordinator lifecycleCoordinator = createNcLifeCycleCoordinator(repProp.isReplicationEnabled());
         ExternalLibraryUtils.setUpExternaLibraries(libraryManager, false);
         componentProvider = new StorageComponentProvider();
         GlobalRecoveryManager globalRecoveryManager = createGlobalRecoveryManager();
         statementExecutorCtx = new StatementExecutorContext();
-        appCtx = new CcApplicationContext(ccServiceCtx, getHcc(), libraryManager, () -> MetadataManager.INSTANCE,
-                globalRecoveryManager, ftStrategy, new ActiveNotificationHandler(), componentProvider,
-                new MetadataLockManager());
-        ccExtensionManager = new CCExtensionManager(getExtensions());
+        appCtx = createApplicationContext(libraryManager, globalRecoveryManager, lifecycleCoordinator);
+        List<AsterixExtension> extensions = new ArrayList<>();
+        extensions.addAll(this.getExtensions());
+        ccExtensionManager = new CCExtensionManager(extensions);
         appCtx.setExtensionManager(ccExtensionManager);
         final CCConfig ccConfig = controllerService.getCCConfig();
         if (System.getProperty("java.rmi.server.hostname") == null) {
-            System.setProperty("java.rmi.server.hostname", ccConfig.getClusterListenAddress());
+            System.setProperty("java.rmi.server.hostname", ccConfig.getClusterPublicAddress());
         }
         MetadataProperties metadataProperties = appCtx.getMetadataProperties();
 
         setAsterixStateProxy(AsterixStateProxy.registerRemoteObject(metadataProperties.getMetadataCallbackPort()));
         ccServiceCtx.setDistributedState(proxy);
-        MetadataManager.initialize(proxy, metadataProperties);
+        MetadataManager.initialize(proxy, metadataProperties, appCtx);
         ccServiceCtx.addJobLifecycleListener(appCtx.getActiveNotificationHandler());
 
         // create event loop groups
         webManager = new WebManager();
         configureServers();
         webManager.start();
-        ClusterManagerProvider.getClusterManager().registerSubscriber(globalRecoveryManager);
         ccServiceCtx.addClusterLifecycleListener(new ClusterLifecycleListener(appCtx));
+        final INodeJobTracker nodeJobTracker = appCtx.getNodeJobTracker();
+        ccServiceCtx.addJobLifecycleListener(nodeJobTracker);
+        ccServiceCtx.addClusterLifecycleListener(nodeJobTracker);
 
         jobCapacityController = new JobCapacityController(controllerService.getResourceManager());
+    }
+
+    protected ICcApplicationContext createApplicationContext(ILibraryManager libraryManager,
+            GlobalRecoveryManager globalRecoveryManager, INcLifecycleCoordinator lifecycleCoordinator)
+            throws AlgebricksException, IOException {
+        return new CcApplicationContext(ccServiceCtx, getHcc(), libraryManager, () -> MetadataManager.INSTANCE,
+                globalRecoveryManager, lifecycleCoordinator, new ActiveNotificationHandler(), componentProvider,
+                new MetadataLockManager());
     }
 
     protected GlobalRecoveryManager createGlobalRecoveryManager() throws Exception {
         return new GlobalRecoveryManager(ccServiceCtx, getHcc(), componentProvider);
     }
 
+    protected INcLifecycleCoordinator createNcLifeCycleCoordinator(boolean replicationEnabled) {
+        return new NcLifecycleCoordinator(ccServiceCtx, replicationEnabled);
+    }
+
     @Override
     protected void configureLoggingLevel(Level level) {
         super.configureLoggingLevel(level);
-        LOGGER.info("Setting Asterix log level to " + level);
-        Logger.getLogger("org.apache.asterix").setLevel(level);
+        LoggingConfigUtil.defaultIfMissing(GlobalConfig.ASTERIX_LOGGER_NAME, level);
     }
 
     protected List<AsterixExtension> getExtensions() {
@@ -190,13 +207,9 @@ public class CCApplication extends BaseCCApplication {
 
     @Override
     public void stop() throws Exception {
-        if (LOGGER.isLoggable(Level.INFO)) {
-            LOGGER.info("Stopping Asterix cluster controller");
-        }
+        LOGGER.info("Stopping Asterix cluster controller");
         appCtx.getClusterStateManager().setState(SHUTTING_DOWN);
-        if (appCtx != null) {
-            ((ActiveNotificationHandler) appCtx.getActiveNotificationHandler()).stop();
-        }
+        ((ActiveNotificationHandler) appCtx.getActiveNotificationHandler()).stop();
         AsterixStateProxy.unregisterRemoteObject();
         webManager.stop();
     }
@@ -212,8 +225,8 @@ public class CCApplication extends BaseCCApplication {
     }
 
     protected HttpServer setupJSONAPIServer(ExternalProperties externalProperties) throws Exception {
-        HttpServer jsonAPIServer = new HttpServer(webManager.getBosses(), webManager.getWorkers(),
-                externalProperties.getAPIServerPort());
+        HttpServer jsonAPIServer =
+                new HttpServer(webManager.getBosses(), webManager.getWorkers(), externalProperties.getAPIServerPort());
         jsonAPIServer.setAttribute(HYRACKS_CONNECTION_ATTR, hcc);
         jsonAPIServer.setAttribute(ASTERIX_APP_CONTEXT_INFO_ATTR, appCtx);
         jsonAPIServer.setAttribute(ServletConstants.EXECUTOR_SERVICE_ATTR,
@@ -331,15 +344,6 @@ public class CCApplication extends BaseCCApplication {
 
     public IStatementExecutorContext getStatementExecutorContext() {
         return statementExecutorCtx;
-    }
-
-    @Override
-    public void startupCompleted() throws Exception {
-        ccServiceCtx.getControllerService().getExecutor().submit(() -> {
-            appCtx.getClusterStateManager().waitForState(ClusterState.ACTIVE);
-            ClusterManagerProvider.getClusterManager().notifyStartupCompleted();
-            return null;
-        });
     }
 
     @Override

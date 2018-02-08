@@ -21,28 +21,32 @@ package org.apache.hyracks.storage.am.lsm.common.impls;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.apache.hyracks.storage.am.common.api.IMetadataPageManager;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMComponentFilter;
+import org.apache.hyracks.storage.am.lsm.common.api.ILSMComponentId;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMDiskComponent;
-import org.apache.hyracks.storage.am.lsm.common.api.ILSMDiskComponentId;
 import org.apache.hyracks.storage.am.lsm.common.api.LSMOperationType;
 import org.apache.hyracks.storage.am.lsm.common.util.ComponentUtils;
+import org.apache.hyracks.storage.am.lsm.common.util.LSMComponentIdUtils;
 import org.apache.hyracks.storage.common.MultiComparator;
+import org.apache.logging.log4j.Level;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 public abstract class AbstractLSMDiskComponent extends AbstractLSMComponent implements ILSMDiskComponent {
 
+    private static final Logger LOGGER = LogManager.getLogger();
+
     private final DiskComponentMetadata metadata;
-    private final AbstractLSMIndex lsmIndex;
+
+    // a variable cache of componentId stored in metadata.
+    // since componentId is immutable, we do not want to read from metadata every time the componentId
+    // is requested.
+    private ILSMComponentId componentId;
 
     public AbstractLSMDiskComponent(AbstractLSMIndex lsmIndex, IMetadataPageManager mdPageManager,
             ILSMComponentFilter filter) {
-        super(filter);
-        this.lsmIndex = lsmIndex;
+        super(lsmIndex, filter);
         state = ComponentState.READABLE_UNWRITABLE;
         metadata = new DiskComponentMetadata(mdPageManager);
-    }
-
-    @Override
-    public AbstractLSMIndex getLsmIndex() {
-        return lsmIndex;
     }
 
     @Override
@@ -111,13 +115,23 @@ public abstract class AbstractLSMDiskComponent extends AbstractLSMComponent impl
     }
 
     @Override
-    public ILSMDiskComponentId getComponentId() throws HyracksDataException {
-        long minID = ComponentUtils.getLong(metadata, ILSMDiskComponentId.COMPONENT_ID_MIN_KEY,
-                ILSMDiskComponentId.NOT_FOUND);
-        long maxID = ComponentUtils.getLong(metadata, ILSMDiskComponentId.COMPONENT_ID_MAX_KEY,
-                ILSMDiskComponentId.NOT_FOUND);
-        //TODO: do we need to throw an exception when ID is not found?
-        return new LSMDiskComponentId(minID, maxID);
+    public ILSMComponentId getId() throws HyracksDataException {
+        if (componentId != null) {
+            return componentId;
+        }
+        synchronized (this) {
+            if (componentId == null) {
+                componentId = LSMComponentIdUtils.readFrom(metadata);
+            }
+        }
+        if (componentId.missing()) {
+            // For normal datasets, componentId shouldn't be missing, since otherwise it'll be a bug.
+            // However, we cannot throw an exception here to be compatible with legacy datasets.
+            // In this case, the disk component would always get a garbage Id [-1, -1], which makes the
+            // component Id-based optimization useless but still correct.
+            LOGGER.warn("Component Id not found from disk component metadata");
+        }
+        return componentId;
     }
 
     /**
@@ -130,6 +144,9 @@ public abstract class AbstractLSMDiskComponent extends AbstractLSMComponent impl
     @Override
     public void markAsValid(boolean persist) throws HyracksDataException {
         ComponentUtils.markAsValid(getMetadataHolder(), persist);
+        if (LOGGER.isInfoEnabled()) {
+            LOGGER.log(Level.INFO, "Marked as valid component with id: " + getId());
+        }
     }
 
     @Override
@@ -196,5 +213,10 @@ public abstract class AbstractLSMDiskComponent extends AbstractLSMComponent impl
         chainedBulkLoader
                 .addBulkLoader(createIndexBulkLoader(fillFactor, verifyInput, numElementsHint, checkIfEmptyIndex));
         return chainedBulkLoader;
+    }
+
+    @Override
+    public String toString() {
+        return "{\"class\":" + getClass().getSimpleName() + "\", \"index\":" + getIndex().toString() + "}";
     }
 }

@@ -27,7 +27,7 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import org.apache.hyracks.api.exceptions.HyracksDataException;
-import org.apache.hyracks.storage.am.common.impls.NoOpOperationCallback;
+import org.apache.hyracks.storage.am.common.impls.NoOpIndexAccessParameters;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMComponent;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMComponent.ComponentState;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMDiskComponent;
@@ -58,8 +58,7 @@ public class ExploringMergePolicy implements ILSMMergePolicy {
             return;
         }
         if (fullMergeIsRequested) {
-            ILSMIndexAccessor accessor = (ILSMIndexAccessor) index.createAccessor(NoOpOperationCallback.INSTANCE,
-                    NoOpOperationCallback.INSTANCE);
+            ILSMIndexAccessor accessor = (ILSMIndexAccessor) index.createAccessor(NoOpIndexAccessParameters.INSTANCE);
             long mergeSize = getMergeSize(immutableComponents);
             logMergeInfo(mergeSize, true, immutableComponents.size(), immutableComponents.size(), immutableComponents);
             accessor.scheduleFullMerge(index.getIOOperationCallback());
@@ -132,8 +131,7 @@ public class ExploringMergePolicy implements ILSMMergePolicy {
         if (merging) {
             Collections.reverse(mergableComponents);
             long mergeSize = getMergeSize(mergableComponents);
-            ILSMIndexAccessor accessor = (ILSMIndexAccessor) index.createAccessor(NoOpOperationCallback.INSTANCE,
-                    NoOpOperationCallback.INSTANCE);
+            ILSMIndexAccessor accessor = (ILSMIndexAccessor) index.createAccessor(NoOpIndexAccessParameters.INSTANCE);
             logMergeInfo(mergeSize, false, mergableComponents.size(), immutableComponents.size(), immutableComponents);
             accessor.scheduleMerge(index.getIOOperationCallback(), mergableComponents);
             numMerges++;
@@ -146,8 +144,7 @@ public class ExploringMergePolicy implements ILSMMergePolicy {
     }
 
     public boolean isBetterSelection(List<ILSMDiskComponent> bestSelection, long bestSize,
-            List<ILSMDiskComponent> selection,
-            long size, boolean mightBeStuck) {
+            List<ILSMDiskComponent> selection, long size, boolean mightBeStuck) {
         if (mightBeStuck && bestSize > 0 && size > 0) {
             double thresholdQuantity = ((double) bestSelection.size() / bestSize);
             return thresholdQuantity < ((double) selection.size() / size);

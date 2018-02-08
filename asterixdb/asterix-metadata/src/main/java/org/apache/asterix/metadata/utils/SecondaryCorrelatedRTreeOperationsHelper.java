@@ -23,7 +23,6 @@ import java.util.List;
 import org.apache.asterix.common.config.DatasetConfig.DatasetType;
 import org.apache.asterix.common.exceptions.AsterixException;
 import org.apache.asterix.common.exceptions.ErrorCode;
-import org.apache.asterix.common.transactions.JobId;
 import org.apache.asterix.formats.nontagged.BinaryComparatorFactoryProvider;
 import org.apache.asterix.formats.nontagged.SerializerDeserializerProvider;
 import org.apache.asterix.formats.nontagged.TypeTraitProvider;
@@ -52,7 +51,6 @@ import org.apache.hyracks.dataflow.std.connectors.OneToOneConnectorDescriptor;
 import org.apache.hyracks.dataflow.std.sort.ExternalSortOperatorDescriptor;
 import org.apache.hyracks.storage.am.common.api.IPrimitiveValueProviderFactory;
 
-@SuppressWarnings("rawtypes")
 public class SecondaryCorrelatedRTreeOperationsHelper extends SecondaryCorrelatedTreeIndexOperationsHelper {
 
     protected IPrimitiveValueProviderFactory[] valueProviderFactories;
@@ -89,9 +87,9 @@ public class SecondaryCorrelatedRTreeOperationsHelper extends SecondaryCorrelate
         int numDimensions = NonTaggedFormatUtil.getNumDimensions(spatialType.getTypeTag());
         numNestedSecondaryKeyFields = numDimensions * 2;
         int recordColumn = NUM_TAG_FIELDS + numPrimaryKeys;
-        secondaryFieldAccessEvalFactories =
-                metadataProvider.getFormat().createMBRFactory(isOverridingKeyFieldTypes ? enforcedItemType : itemType,
-                        secondaryKeyFields.get(0), recordColumn, numDimensions, filterFieldName, isPointMBR);
+        secondaryFieldAccessEvalFactories = metadataProvider.getDataFormat().createMBRFactory(
+                metadataProvider.getFunctionManager(), isOverridingKeyFieldTypes ? enforcedItemType : itemType,
+                secondaryKeyFields.get(0), recordColumn, numDimensions, filterFieldName, isPointMBR);
         secondaryComparatorFactories = new IBinaryComparatorFactory[numNestedSecondaryKeyFields];
         valueProviderFactories = new IPrimitiveValueProviderFactory[numNestedSecondaryKeyFields];
         ISerializerDeserializer[] secondaryRecFields =
@@ -155,7 +153,7 @@ public class SecondaryCorrelatedRTreeOperationsHelper extends SecondaryCorrelate
     }
 
     @Override
-    public JobSpecification buildLoadingJobSpec() throws AsterixException, AlgebricksException {
+    public JobSpecification buildLoadingJobSpec() throws AlgebricksException {
         /***************************************************
          * [ About PointMBR Optimization ]
          * Instead of storing a MBR(4 doubles) for a point(2 doubles) in RTree leaf node,
@@ -184,11 +182,11 @@ public class SecondaryCorrelatedRTreeOperationsHelper extends SecondaryCorrelate
 
         // Create dummy key provider for feeding the primary index scan.
         IOperatorDescriptor keyProviderOp = DatasetUtil.createDummyKeyProviderOp(spec, dataset, metadataProvider);
-        JobId jobId = IndexUtil.bindJobEventListener(spec, metadataProvider);
+        IndexUtil.bindJobEventListener(spec, metadataProvider);
 
         // Create primary index scan op.
         IOperatorDescriptor primaryScanOp = createPrimaryIndexScanDiskComponentsOp(spec, metadataProvider,
-                getTaggedRecordDescriptor(dataset.getPrimaryRecordDescriptor(metadataProvider)), jobId);
+                getTaggedRecordDescriptor(dataset.getPrimaryRecordDescriptor(metadataProvider)));
 
         // Assign op.
         IOperatorDescriptor sourceOp = primaryScanOp;

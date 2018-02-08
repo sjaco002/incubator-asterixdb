@@ -25,11 +25,9 @@ RecordConstructor [
         ]
         FROM [          (
             SELECT ELEMENT [
-            FunctionCall Metadata.resolve@-1[
-              LiteralExpr [STRING] [profit]
+            FunctionCall asterix.field-access-by-name@2[
               Variable [ Name=$g ]
-              Variable [ Name=$nation ]
-              Variable [ Name=$o_year ]
+              LiteralExpr [STRING] [profit]
             ]
             ]
             FROM [              Variable [ Name=$g ]
@@ -66,8 +64,8 @@ FROM [  (
       )
     ]
     ]
-    FROM [      FunctionCall Metadata.dataset@1[
-        LiteralExpr [STRING] [Orders]
+    FROM [      FunctionCall asterix.dataset@1[
+        LiteralExpr [STRING] [tpch.Orders]
       ]
       AS Variable [ Name=$o ]
 ,
@@ -124,8 +122,8 @@ FROM [  (
           )
         ]
         ]
-        FROM [          FunctionCall Metadata.dataset@1[
-            LiteralExpr [STRING] [Part]
+        FROM [          FunctionCall asterix.dataset@1[
+            LiteralExpr [STRING] [tpch.Part]
           ]
           AS Variable [ Name=$p ]
           INNER JOIN
@@ -190,8 +188,8 @@ FROM [  (
                 )
               ]
               ]
-              FROM [                FunctionCall Metadata.dataset@1[
-                  LiteralExpr [STRING] [Partsupp]
+              FROM [                FunctionCall asterix.dataset@1[
+                  LiteralExpr [STRING] [tpch.Partsupp]
                 ]
                 AS Variable [ Name=$ps ]
                 INNER JOIN
@@ -277,13 +275,13 @@ FROM [  (
                           )
                         ]
                         ]
-                        FROM [                          FunctionCall Metadata.dataset@1[
-                            LiteralExpr [STRING] [Supplier]
+                        FROM [                          FunctionCall asterix.dataset@1[
+                            LiteralExpr [STRING] [tpch.Supplier]
                           ]
                           AS Variable [ Name=$s ]
 ,
-                          FunctionCall Metadata.dataset@1[
-                            LiteralExpr [STRING] [Nation]
+                          FunctionCall asterix.dataset@1[
+                            LiteralExpr [STRING] [tpch.Nation]
                           ]
                           AS Variable [ Name=$n ]
                         ]
@@ -302,8 +300,8 @@ FROM [  (
                       )
                       AS Variable [ Name=$s1 ]
                       INNER JOIN
-                        FunctionCall Metadata.dataset@1[
-                          LiteralExpr [STRING] [LineItem]
+                        FunctionCall asterix.dataset@1[
+                          LiteralExpr [STRING] [tpch.LineItem]
                         ]
                         AS Variable [ Name=$l ]
                         ON

@@ -49,13 +49,19 @@ create type LineItemType as closed {
 }
 
 create dataset LineItem(LineItemType)
-  primary key l_orderkey, l_linenumber using compaction policy correlated-prefix
-(("max-mergable-component-size"="16384"),("max-tolerance-component-count"="3"));
+primary key l_orderkey, l_linenumber
+with {
+  "merge-policy": {
+    "name": "correlated-prefix",
+    "parameters": { "max-mergable-component-size": 16384, "max-tolerance-component-count": 3 }
+  }
+};
 
-create feed LineItemFeed
-using localfs
-(("path"="asterix_nc1://data/tpch0.001/lineitem.tbl"),
-("format"="delimited-text"),
-("delimiter"="|"),
-("type-name"="LineItemType"),
-("tuple-interval"="10"));
+create feed LineItemFeed with {
+  "adapter-name" : "localfs",
+  "path" : "asterix_nc1://data/tpch0.001/lineitem.tbl",
+  "format" : "delimited-text",
+  "delimiter" : "|",
+  "type-name" : "LineItemType",
+  "tuple-interval" : "10"
+};

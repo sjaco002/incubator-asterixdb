@@ -23,7 +23,7 @@ import org.apache.hyracks.dataflow.common.data.accessors.ITupleReference;
 import org.apache.hyracks.storage.am.btree.impls.BTree;
 import org.apache.hyracks.storage.am.btree.impls.RangePredicate;
 import org.apache.hyracks.storage.am.common.api.IIndexOperationContext;
-import org.apache.hyracks.storage.am.common.impls.NoOpOperationCallback;
+import org.apache.hyracks.storage.am.common.impls.NoOpIndexAccessParameters;
 import org.apache.hyracks.storage.am.common.tuples.ConcatenatingTupleReference;
 import org.apache.hyracks.storage.am.common.tuples.PermutingTupleReference;
 import org.apache.hyracks.storage.am.lsm.invertedindex.api.IInPlaceInvertedIndex;
@@ -53,7 +53,7 @@ public class OnDiskInvertedIndexRangeSearchCursor implements IIndexCursor {
 
     public OnDiskInvertedIndexRangeSearchCursor(IInPlaceInvertedIndex invIndex, IIndexOperationContext opCtx) {
         this.btree = ((OnDiskInvertedIndex) invIndex).getBTree();
-        this.btreeAccessor = btree.createAccessor(NoOpOperationCallback.INSTANCE, NoOpOperationCallback.INSTANCE);
+        this.btreeAccessor = btree.createAccessor(NoOpIndexAccessParameters.INSTANCE);
         this.invIndex = invIndex;
         this.opCtx = opCtx;
         // Project away non-token fields of the BTree tuples.
@@ -109,35 +109,25 @@ public class OnDiskInvertedIndexRangeSearchCursor implements IIndexCursor {
     }
 
     @Override
+    public void destroy() throws HyracksDataException {
+        if (unpinNeeded) {
+            invListCursor.unpinPages();
+            unpinNeeded = false;
+        }
+        btreeCursor.destroy();
+    }
+
+    @Override
     public void close() throws HyracksDataException {
         if (unpinNeeded) {
             invListCursor.unpinPages();
             unpinNeeded = false;
         }
-        btreeCursor.close();
-    }
-
-    @Override
-    public void reset() throws HyracksDataException {
-        if (unpinNeeded) {
-            invListCursor.unpinPages();
-            unpinNeeded = false;
-        }
-        btreeCursor.close();
+        btreeCursor.destroy();
     }
 
     @Override
     public ITupleReference getTuple() {
         return concatTuple;
-    }
-
-    @Override
-    public ITupleReference getFilterMinTuple() {
-        return null;
-    }
-
-    @Override
-    public ITupleReference getFilterMaxTuple() {
-        return null;
     }
 }

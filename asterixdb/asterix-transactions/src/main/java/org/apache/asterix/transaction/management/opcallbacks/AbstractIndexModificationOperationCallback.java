@@ -68,7 +68,6 @@ public abstract class AbstractIndexModificationOperationCallback extends Abstrac
         }
     }
 
-    protected final long resourceId;
     protected final byte resourceType;
     protected final Operation indexOp;
     protected final ITransactionSubsystem txnSubsystem;
@@ -77,15 +76,14 @@ public abstract class AbstractIndexModificationOperationCallback extends Abstrac
     protected AbstractIndexModificationOperationCallback(DatasetId datasetId, int[] primaryKeyFields,
             ITransactionContext txnCtx, ILockManager lockManager, ITransactionSubsystem txnSubsystem, long resourceId,
             int resourcePartition, byte resourceType, Operation indexOp) {
-        super(datasetId, primaryKeyFields, txnCtx, lockManager);
-        this.resourceId = resourceId;
+        super(datasetId, resourceId, primaryKeyFields, txnCtx, lockManager);
         this.resourceType = resourceType;
         this.indexOp = indexOp;
         this.txnSubsystem = txnSubsystem;
         logRecord = new LogRecord();
         logRecord.setTxnCtx(txnCtx);
         logRecord.setLogType(LogType.UPDATE);
-        logRecord.setJobId(txnCtx.getJobId().getId());
+        logRecord.setTxnId(txnCtx.getTxnId().getId());
         logRecord.setDatasetId(datasetId.getId());
         logRecord.setResourceId(resourceId);
         logRecord.setResourcePartition(resourcePartition);

@@ -21,7 +21,10 @@ package org.apache.asterix.runtime.utils;
 import java.io.IOException;
 import java.util.function.Supplier;
 
+import org.apache.asterix.common.api.ICoordinationService;
 import org.apache.asterix.common.api.IMetadataLockManager;
+import org.apache.asterix.common.api.INodeJobTracker;
+import org.apache.asterix.common.transactions.ITxnIdFactory;
 import org.apache.asterix.common.cluster.IClusterStateManager;
 import org.apache.asterix.common.cluster.IGlobalRecoveryManager;
 import org.apache.asterix.common.config.ActiveProperties;
@@ -38,12 +41,13 @@ import org.apache.asterix.common.config.StorageProperties;
 import org.apache.asterix.common.config.TransactionProperties;
 import org.apache.asterix.common.context.IStorageComponentProvider;
 import org.apache.asterix.common.dataflow.ICcApplicationContext;
-import org.apache.asterix.common.exceptions.AsterixException;
 import org.apache.asterix.common.library.ILibraryManager;
 import org.apache.asterix.common.metadata.IMetadataBootstrap;
-import org.apache.asterix.common.replication.IFaultToleranceStrategy;
+import org.apache.asterix.common.replication.INcLifecycleCoordinator;
 import org.apache.asterix.common.transactions.IResourceIdManager;
+import org.apache.asterix.runtime.job.listener.NodeJobTracker;
 import org.apache.asterix.runtime.transaction.ResourceIdManager;
+import org.apache.hyracks.algebricks.common.exceptions.AlgebricksException;
 import org.apache.hyracks.api.application.ICCServiceContext;
 import org.apache.hyracks.api.client.HyracksConnection;
 import org.apache.hyracks.api.client.IHyracksClientConnection;
@@ -77,16 +81,18 @@ public class CcApplicationContext implements ICcApplicationContext {
     private Supplier<IMetadataBootstrap> metadataBootstrapSupplier;
     private IHyracksClientConnection hcc;
     private Object extensionManager;
-    private IFaultToleranceStrategy ftStrategy;
+    private INcLifecycleCoordinator ftStrategy;
     private IJobLifecycleListener activeLifeCycleListener;
     private IMetadataLockManager mdLockManager;
     private IClusterStateManager clusterStateManager;
+    private final INodeJobTracker nodeJobTracker;
+    private final ITxnIdFactory txnIdFactory;
 
     public CcApplicationContext(ICCServiceContext ccServiceCtx, IHyracksClientConnection hcc,
             ILibraryManager libraryManager, Supplier<IMetadataBootstrap> metadataBootstrapSupplier,
-            IGlobalRecoveryManager globalRecoveryManager, IFaultToleranceStrategy ftStrategy,
+            IGlobalRecoveryManager globalRecoveryManager, INcLifecycleCoordinator ftStrategy,
             IJobLifecycleListener activeLifeCycleListener, IStorageComponentProvider storageComponentProvider,
-            IMetadataLockManager mdLockManager) throws AsterixException, IOException {
+            IMetadataLockManager mdLockManager) throws AlgebricksException, IOException {
         this.ccServiceCtx = ccServiceCtx;
         this.hcc = hcc;
         this.libraryManager = libraryManager;
@@ -103,7 +109,6 @@ public class CcApplicationContext implements ICcApplicationContext {
         extensionProperties = new ExtensionProperties(propertiesAccessor);
         replicationProperties = new ReplicationProperties(propertiesAccessor);
         this.ftStrategy = ftStrategy;
-        this.hcc = hcc;
         this.buildProperties = new BuildProperties(propertiesAccessor);
         this.messagingProperties = new MessagingProperties(propertiesAccessor);
         this.nodeProperties = new NodeProperties(propertiesAccessor);
@@ -114,6 +119,9 @@ public class CcApplicationContext implements ICcApplicationContext {
         clusterStateManager = new ClusterStateManager();
         clusterStateManager.setCcAppCtx(this);
         this.resourceIdManager = new ResourceIdManager(clusterStateManager);
+        nodeJobTracker = new NodeJobTracker();
+        txnIdFactory = new BulkTxnIdFactory();
+
     }
 
     @Override
@@ -197,10 +205,12 @@ public class CcApplicationContext implements ICcApplicationContext {
         return extensionManager;
     }
 
+    @Override
     public void setExtensionManager(Object extensionManager) {
         this.extensionManager = extensionManager;
     }
 
+    @Override
     public ExtensionProperties getExtensionProperties() {
         return extensionProperties;
     }
@@ -226,7 +236,7 @@ public class CcApplicationContext implements ICcApplicationContext {
     }
 
     @Override
-    public IFaultToleranceStrategy getFaultToleranceStrategy() {
+    public INcLifecycleCoordinator getNcLifecycleCoordinator() {
         return ftStrategy;
     }
 
@@ -248,5 +258,19 @@ public class CcApplicationContext implements ICcApplicationContext {
     @Override
     public IClusterStateManager getClusterStateManager() {
         return clusterStateManager;
+    }
+
+    @Override
+    public INodeJobTracker getNodeJobTracker() {
+        return nodeJobTracker;
+    }
+
+    @Override
+    public ICoordinationService getCoordinationService() {
+        return NoOpCoordinationService.INSTANCE;
+    }
+
+    public ITxnIdFactory getTxnIdFactory() {
+        return txnIdFactory;
     }
 }

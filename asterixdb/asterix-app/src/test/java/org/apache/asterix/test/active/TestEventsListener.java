@@ -107,6 +107,12 @@ public class TestEventsListener extends ActiveEntityEventsListener {
     @Override
     protected void doStart(MetadataProvider metadataProvider) throws HyracksDataException {
         step(onStart);
+        try {
+            metadataProvider.getApplicationContext().getMetadataLockManager()
+                    .acquireDatasetReadLock(metadataProvider.getLocks(), "Default.type");
+        } catch (AlgebricksException e) {
+            throw HyracksDataException.create(e);
+        }
         failCompile(onStart);
         JobId jobId = jobIdFactory.create();
         Action startJob = clusterController.startActiveJob(jobId, entityId);
@@ -139,13 +145,14 @@ public class TestEventsListener extends ActiveEntityEventsListener {
     @SuppressWarnings("deprecation")
     @Override
     protected Void doStop(MetadataProvider metadataProvider) throws HyracksDataException {
+        ActivityState intention = state;
         step(onStop);
         failCompile(onStop);
         try {
             Set<ActivityState> waitFor;
-            if (state == ActivityState.STOPPING) {
+            if (intention == ActivityState.STOPPING) {
                 waitFor = EnumSet.of(ActivityState.STOPPED, ActivityState.PERMANENTLY_FAILED);
-            } else if (state == ActivityState.SUSPENDING) {
+            } else if (intention == ActivityState.SUSPENDING) {
                 waitFor = EnumSet.of(ActivityState.SUSPENDED, ActivityState.TEMPORARILY_FAILED);
             } else {
                 throw new IllegalStateException("stop with what intention??");
@@ -177,8 +184,7 @@ public class TestEventsListener extends ActiveEntityEventsListener {
     }
 
     @Override
-    protected void setRunning(MetadataProvider metadataProvider, boolean running)
-            throws HyracksDataException {
+    protected void setRunning(MetadataProvider metadataProvider, boolean running) throws HyracksDataException {
         try {
             IMetadataLockManager lockManager = metadataProvider.getApplicationContext().getMetadataLockManager();
             LockList locks = metadataProvider.getLocks();

@@ -25,7 +25,6 @@ import java.nio.ByteBuffer;
 import org.apache.asterix.common.api.INcApplicationContext;
 import org.apache.asterix.common.dataflow.LSMIndexUtil;
 import org.apache.asterix.common.exceptions.ACIDException;
-import org.apache.asterix.common.exceptions.AsterixException;
 import org.apache.asterix.common.transactions.ILogMarkerCallback;
 import org.apache.asterix.common.transactions.PrimaryIndexLogMarkerCallback;
 import org.apache.asterix.om.pointables.nonvisitor.ARecordPointable;
@@ -55,6 +54,7 @@ import org.apache.hyracks.storage.am.common.api.IModificationOperationCallbackFa
 import org.apache.hyracks.storage.am.common.api.ISearchOperationCallbackFactory;
 import org.apache.hyracks.storage.am.common.api.ITreeIndex;
 import org.apache.hyracks.storage.am.common.dataflow.IIndexDataflowHelperFactory;
+import org.apache.hyracks.storage.am.common.impls.IndexAccessParameters;
 import org.apache.hyracks.storage.am.common.ophelpers.IndexOperation;
 import org.apache.hyracks.storage.am.common.tuples.PermutingFrameTupleReference;
 import org.apache.hyracks.storage.am.lsm.common.api.IFrameOperationCallback;
@@ -64,6 +64,7 @@ import org.apache.hyracks.storage.am.lsm.common.api.ILSMIndexAccessor;
 import org.apache.hyracks.storage.am.lsm.common.dataflow.LSMIndexInsertUpdateDeleteOperatorNodePushable;
 import org.apache.hyracks.storage.am.lsm.common.impls.AbstractLSMIndex;
 import org.apache.hyracks.storage.am.lsm.common.impls.LSMTreeIndexAccessor;
+import org.apache.hyracks.storage.common.IIndexAccessParameters;
 import org.apache.hyracks.storage.common.IIndexCursor;
 import org.apache.hyracks.storage.common.MultiComparator;
 
@@ -96,6 +97,7 @@ public class LSMPrimaryUpsertOperatorNodePushable extends LSMIndexInsertUpdateDe
     private final ISearchOperationCallbackFactory searchCallbackFactory;
     private final IFrameTupleProcessor processor;
     private LSMTreeIndexAccessor lsmAccessor;
+    private IIndexAccessParameters iap;
 
     public LSMPrimaryUpsertOperatorNodePushable(IHyracksTaskContext ctx, int partition,
             IIndexDataflowHelperFactory indexHelperFactory, int[] fieldPermutation, RecordDescriptor inputRecDesc,
@@ -134,13 +136,14 @@ public class LSMPrimaryUpsertOperatorNodePushable extends LSMIndexInsertUpdateDe
                     tb.reset();
                     boolean recordWasInserted = false;
                     boolean recordWasDeleted = false;
+                    boolean isDelete = isDeleteOperation(tuple, numOfPrimaryKeys);
                     resetSearchPredicate(index);
-                    if (isFiltered || hasSecondaries) {
+                    if (isFiltered || isDelete || hasSecondaries) {
                         lsmAccessor.search(cursor, searchPred);
                         if (cursor.hasNext()) {
                             cursor.next();
                             prevTuple = cursor.getTuple();
-                            cursor.reset(); // end the search
+                            cursor.close(); // end the search
                             appendFilterToPrevTuple();
                             appendPrevRecord();
                             appendPreviousMeta();
@@ -152,12 +155,13 @@ public class LSMPrimaryUpsertOperatorNodePushable extends LSMIndexInsertUpdateDe
                         searchCallback.before(key); // lock
                         appendPreviousTupleAsMissing();
                     }
-                    if (isDeleteOperation(tuple, numOfPrimaryKeys)) {
+                    if (isDelete && prevTuple != null) {
                         // Only delete if it is a delete and not upsert
+                        // And previous tuple with the same key was found
                         abstractModCallback.setOp(Operation.DELETE);
                         lsmAccessor.forceDelete(tuple);
                         recordWasDeleted = true;
-                    } else {
+                    } else if (!isDelete) {
                         abstractModCallback.setOp(Operation.UPSERT);
                         lsmAccessor.forceUpsert(tuple);
                         recordWasInserted = true;
@@ -218,7 +222,8 @@ public class LSMPrimaryUpsertOperatorNodePushable extends LSMIndexInsertUpdateDe
             abstractModCallback = (AbstractIndexModificationOperationCallback) modCallback;
             searchCallback = (LockThenSearchOperationCallback) searchCallbackFactory
                     .createSearchOperationCallback(indexHelper.getResource().getId(), ctx, this);
-            indexAccessor = index.createAccessor(abstractModCallback, searchCallback);
+            iap = new IndexAccessParameters(abstractModCallback, searchCallback);
+            indexAccessor = index.createAccessor(iap);
             lsmAccessor = (LSMTreeIndexAccessor) indexAccessor;
             cursor = indexAccessor.createSearchCursor(false);
             frameTuple = new FrameTupleReference();
@@ -314,7 +319,7 @@ public class LSMPrimaryUpsertOperatorNodePushable extends LSMIndexInsertUpdateDe
         if (isFiltered) {
             writeMissingField();
         }
-        cursor.reset();
+        cursor.close();
     }
 
     /**
@@ -326,7 +331,7 @@ public class LSMPrimaryUpsertOperatorNodePushable extends LSMIndexInsertUpdateDe
         appender.write(writer, true);
     }
 
-    private void appendFilterToPrevTuple() throws IOException, AsterixException {
+    private void appendFilterToPrevTuple() throws IOException {
         if (isFiltered) {
             prevRecWithPKWithFilterValue.reset();
             for (int i = 0; i < prevTuple.getFieldCount(); i++) {
@@ -357,7 +362,7 @@ public class LSMPrimaryUpsertOperatorNodePushable extends LSMIndexInsertUpdateDe
     public void close() throws HyracksDataException {
         try {
             try {
-                cursor.close();
+                cursor.destroy();
             } finally {
                 writer.close();
             }
