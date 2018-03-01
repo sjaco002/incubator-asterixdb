@@ -86,7 +86,7 @@ public abstract class AbstractLSMIndex implements ILSMIndex {
     protected final IBufferCache diskBufferCache;
     protected final ILSMIndexFileManager fileManager;
     // components with lower indexes are newer than components with higher index
-    protected final List<ILSMDiskComponent> diskComponents;
+    public final List<ILSMDiskComponent> diskComponents;
     protected final List<ILSMDiskComponent> inactiveDiskComponents;
     protected final double bloomFilterFalsePositiveRate;
     protected final IComponentFilterHelper filterHelper;

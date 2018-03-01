@@ -16,49 +16,40 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.hyracks.storage.am.lsm.common.impls;
 
+import java.util.Arrays;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 
-import org.apache.hyracks.api.exceptions.HyracksDataException;
-import org.apache.hyracks.storage.am.lsm.common.api.ILSMIndex;
+import org.apache.hyracks.api.application.INCServiceContext;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMMergePolicy;
+import org.apache.hyracks.storage.am.lsm.common.api.ILSMMergePolicyFactory;
 
-public class NoMergePolicy implements ILSMMergePolicy {
+public class MLatencyKMergePolicyFactory implements ILSMMergePolicyFactory {
 
-    private long numFlushes = 0;
+    private static final long serialVersionUID = 1L;
+
+    private static final String[] SET_VALUES = new String[] { "num-components" };
+    private static final Set<String> PROPERTIES_NAMES = new HashSet<String>(Arrays.asList(SET_VALUES));
 
     @Override
-    public void diskComponentAdded(final ILSMIndex index, boolean fullMergeIsRequested, boolean isMergeOp)
-            throws HyracksDataException {
-        numFlushes++;
+    public ILSMMergePolicy createMergePolicy(Map<String, String> properties, INCServiceContext ctx) {
+        ILSMMergePolicy policy = new MLatencyKMergePolicy();
+        policy.configure(properties);
+        return policy;
     }
 
     @Override
-    public void configure(Map<String, String> properties) {
-        // Do nothing
+    public String getName() {
+        return "MLatencyK";
     }
 
     @Override
-    public boolean isMergeLagging(ILSMIndex index) {
-        return false;
+    public Set<String> getPropertiesNames() {
+        return PROPERTIES_NAMES;
     }
 
-    @Override
-    public long getNumberOfFlushes() {
-
-        return numFlushes;
-    }
-
-    @Override
-    public long getNumberOfMerges() {
-
-        return 0;
-    }
-
-    @Override
-    public double getMergeCost() {
-
-        return 0;
-    }
 }

@@ -232,8 +232,8 @@ public class ExternalRTree extends LSMRTree implements ITwoPCIndex {
 
     // we override this method because this index uses a different opcontext
     @Override
-    public void search(ILSMIndexOperationContext ictx, IIndexCursor cursor, ISearchPredicate pred)
-            throws HyracksDataException {
+    public void search(ILSMIndexOperationContext ictx, IIndexCursor cursor, ISearchPredicate pred, long start,
+            int stackSize) throws HyracksDataException {
         ExternalRTreeOpContext ctx = (ExternalRTreeOpContext) ictx;
         List<ILSMComponent> operationalComponents = ictx.getComponentHolder();
         ctx.getInitialState().setOperationalComponents(operationalComponents);
@@ -250,7 +250,7 @@ public class ExternalRTree extends LSMRTree implements ITwoPCIndex {
         IIndexCursor cursor = mergeOp.getCursor();
         ISearchPredicate rtreeSearchPred = new SearchPredicate(null, null);
         ILSMIndexOperationContext opCtx = ((LSMRTreeSortedCursor) cursor).getOpCtx();
-        search(opCtx, cursor, rtreeSearchPred);
+        search(opCtx, cursor, rtreeSearchPred, 0, 0);
 
         LSMRTreeDiskComponent mergedComponent = (LSMRTreeDiskComponent) createDiskComponent(componentFactory,
                 mergeOp.getTarget(), mergeOp.getBTreeTarget(), mergeOp.getBloomFilterTarget(), true);
@@ -273,7 +273,7 @@ public class ExternalRTree extends LSMRTree implements ITwoPCIndex {
             // included in the merge operation
 
             LSMRTreeDeletedKeysBTreeMergeCursor btreeCursor = new LSMRTreeDeletedKeysBTreeMergeCursor(opCtx);
-            search(opCtx, btreeCursor, rtreeSearchPred);
+            search(opCtx, btreeCursor, rtreeSearchPred, 0, 0);
 
             BTree btree = mergedComponent.getBuddyIndex();
             IIndexBulkLoader btreeBulkLoader = btree.createBulkLoader(1.0f, true, 0L, false);

@@ -20,6 +20,7 @@
 package org.apache.hyracks.storage.am.lsm.common.impls;
 
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -87,6 +88,11 @@ public class LSMHarness implements ILSMHarness {
             this.componentsToBeReplicated = new ArrayList<>();
         }
         componentReplacementCtx = new ComponentReplacementContext(lsmIndex);
+    }
+
+    @Override
+    public ILSMIndex getLsmIndex() {
+        return lsmIndex;
     }
 
     protected boolean getAndEnterComponents(ILSMIndexOperationContext ctx, LSMOperationType opType,
@@ -346,7 +352,7 @@ public class LSMHarness implements ILSMHarness {
                         componentsToBeReplicated.add(newComponent);
                         triggerReplication(componentsToBeReplicated, false, opType);
                     }
-                    mergePolicy.diskComponentAdded(lsmIndex, false);
+                    mergePolicy.diskComponentAdded(lsmIndex, false, false);
                 }
                 break;
             case MERGE:
@@ -358,7 +364,7 @@ public class LSMHarness implements ILSMHarness {
                         componentsToBeReplicated.add(newComponent);
                         triggerReplication(componentsToBeReplicated, false, opType);
                     }
-                    mergePolicy.diskComponentAdded(lsmIndex, fullMergeIsRequested.get());
+                    mergePolicy.diskComponentAdded(lsmIndex, fullMergeIsRequested.get(), true);
                 }
                 break;
             default:
@@ -495,16 +501,19 @@ public class LSMHarness implements ILSMHarness {
     @Override
     public void search(ILSMIndexOperationContext ctx, IIndexCursor cursor, ISearchPredicate pred)
             throws HyracksDataException {
+        int beforeSize = ((AbstractLSMIndex) lsmIndex).diskComponents.size();
         LSMOperationType opType = LSMOperationType.SEARCH;
         ctx.setSearchPredicate(pred);
+        long start = System.nanoTime();
         getAndEnterComponents(ctx, opType, false);
         try {
             ctx.getSearchOperationCallback().before(pred.getLowKey());
-            lsmIndex.search(ctx, cursor, pred);
+            lsmIndex.search(ctx, cursor, pred, start, beforeSize);
         } catch (Exception e) {
             exitComponents(ctx, opType, null, true);
             throw e;
         }
+
     }
 
     @Override
@@ -557,6 +566,8 @@ public class LSMHarness implements ILSMHarness {
 
     @Override
     public void flush(ILSMIndexOperationContext ctx, ILSMIOOperation operation) throws HyracksDataException {
+        long start = System.nanoTime();
+        Date startDate = new Date();
         if (LOGGER.isInfoEnabled()) {
             LOGGER.info("Started a flush operation for index: " + lsmIndex + " ...");
         }
@@ -586,8 +597,11 @@ public class LSMHarness implements ILSMHarness {
             opTracker.completeOperation(lsmIndex, LSMOperationType.FLUSH, ctx.getSearchOperationCallback(),
                     ctx.getModificationCallback());
         }
-        if (LOGGER.isInfoEnabled()) {
-            LOGGER.info("Finished the flush operation for index: " + lsmIndex);
+        long end = System.nanoTime();
+        long nonoSeconds = (end - start);
+        if (LOGGER.isFatalEnabled()) {
+            LOGGER.fatal("Merge Policy Experiment finished the flush operation after " + nonoSeconds + " " + startDate
+                    + " " + new Date() + " for index: " + lsmIndex);
         }
     }
 
@@ -618,6 +632,8 @@ public class LSMHarness implements ILSMHarness {
 
     @Override
     public void merge(ILSMIndexOperationContext ctx, ILSMIOOperation operation) throws HyracksDataException {
+        long start = System.nanoTime();
+        Date startDate = new Date();
         if (LOGGER.isInfoEnabled()) {
             LOGGER.info("Started a merge operation for index: " + lsmIndex + " ...");
         }
@@ -658,8 +674,11 @@ public class LSMHarness implements ILSMHarness {
             opTracker.completeOperation(lsmIndex, LSMOperationType.MERGE, ctx.getSearchOperationCallback(),
                     ctx.getModificationCallback());
         }
-        if (LOGGER.isInfoEnabled()) {
-            LOGGER.info("Finished the merge operation for index: " + lsmIndex);
+        long end = System.nanoTime();
+        long nonoSeconds = (end - start);
+        if (LOGGER.isFatalEnabled()) {
+            LOGGER.fatal("Merge Policy Experiment finished the merge operation after " + nonoSeconds + " " + startDate
+                    + " " + new Date() + " for index: " + lsmIndex);
         }
     }
 
@@ -673,7 +692,7 @@ public class LSMHarness implements ILSMHarness {
                 componentsToBeReplicated.add(c);
                 triggerReplication(componentsToBeReplicated, true, LSMOperationType.MERGE);
             }
-            mergePolicy.diskComponentAdded(lsmIndex, false);
+            mergePolicy.diskComponentAdded(lsmIndex, false, false);
         }
     }
 
@@ -927,6 +946,12 @@ public class LSMHarness implements ILSMHarness {
     @Override
     public String toString() {
         return getClass().getSimpleName() + ":" + lsmIndex;
+    }
+
+    @Override
+    public ILSMMergePolicy getMergePolicy() {
+
+        return mergePolicy;
     }
 
     @Override

@@ -430,6 +430,11 @@ public class OnDiskInvertedIndex implements IInPlaceInvertedIndex {
         protected IInvertedIndexSearcher searcher;
         private boolean destroyed = false;
 
+        @Override
+        public int getComponentCount() {
+            return -1;
+        }
+
         public OnDiskInvertedIndexAccessor(OnDiskInvertedIndex index, IHyracksTaskContext ctx)
                 throws HyracksDataException {
             this.index = index;

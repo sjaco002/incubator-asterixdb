@@ -22,6 +22,7 @@ package org.apache.asterix.common.context;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import org.apache.asterix.common.api.IDatasetLifecycleManager;
@@ -48,7 +49,8 @@ public class CorrelatedPrefixMergePolicy extends PrefixMergePolicy {
     }
 
     @Override
-    public void diskComponentAdded(final ILSMIndex index, boolean fullMergeIsRequested) throws HyracksDataException {
+    public void diskComponentAdded(final ILSMIndex index, boolean fullMergeIsRequested, boolean isMergeOp)
+            throws HyracksDataException {
         // This merge policy will only look at primary indexes in order to evaluate if a merge operation is needed. If it decides that
         // a merge operation is needed, then it will merge *all* the indexes that belong to the dataset. The criteria to decide if a merge
         // is needed is the same as the one that is used in the prefix merge policy:
@@ -58,7 +60,7 @@ public class CorrelatedPrefixMergePolicy extends PrefixMergePolicy {
         // a merge all of the current candidates into a new single component.
 
         if (fullMergeIsRequested || index.isPrimaryIndex()) {
-            super.diskComponentAdded(index, fullMergeIsRequested);
+            super.diskComponentAdded(index, fullMergeIsRequested, isMergeOp);
         }
     }
 
@@ -127,5 +129,38 @@ public class CorrelatedPrefixMergePolicy extends PrefixMergePolicy {
             ILSMIndexAccessor accessor = lsmIndex.createAccessor(NoOpIndexAccessParameters.INSTANCE);
             accessor.scheduleMerge(lsmIndex.getIOOperationCallback(), mergableComponents);
         }
+    }
+
+    @Override
+    public void configure(Map<String, String> properties) {
+        maxMergableComponentSize = Long.parseLong(properties.get("max-mergable-component-size"));
+        maxToleranceComponentCount = Integer.parseInt(properties.get("max-tolerance-component-count"));
+    }
+
+    private int getIndexPartition(ILSMIndex index, Set<IndexInfo> indexInfos) {
+        for (IndexInfo info : indexInfos) {
+            if (info.getIndex() == index) {
+                return info.getPartition();
+            }
+        }
+        return -1;
+    }
+
+    @Override
+    public long getNumberOfFlushes() {
+
+        return 0;
+    }
+
+    @Override
+    public long getNumberOfMerges() {
+
+        return 0;
+    }
+
+    @Override
+    public double getMergeCost() {
+        // TODO Auto-generated method stub
+        return 0;
     }
 }

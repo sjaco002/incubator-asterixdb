@@ -24,7 +24,8 @@ import java.util.Map;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
 
 public interface ILSMMergePolicy {
-    void diskComponentAdded(ILSMIndex index, boolean fullMergeIsRequested) throws HyracksDataException;
+    void diskComponentAdded(ILSMIndex index, boolean fullMergeIsRequested, boolean isMergeOp)
+            throws HyracksDataException;
 
     void configure(Map<String, String> properties);
 
@@ -53,5 +54,12 @@ public interface ILSMMergePolicy {
      * @throws HyracksDataException
      * @throws IndexException
      */
-    boolean isMergeLagging(ILSMIndex index) throws HyracksDataException;
+    public boolean isMergeLagging(ILSMIndex index) throws HyracksDataException;
+
+    public long getNumberOfFlushes();
+
+    public long getNumberOfMerges();
+
+    public double getMergeCost();
+
 }

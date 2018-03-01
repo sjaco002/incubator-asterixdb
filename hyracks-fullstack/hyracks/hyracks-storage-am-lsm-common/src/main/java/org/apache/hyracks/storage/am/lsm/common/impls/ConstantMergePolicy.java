@@ -19,8 +19,11 @@
 
 package org.apache.hyracks.storage.am.lsm.common.impls;
 
+import java.util.Date;
 import java.util.List;
 import java.util.Map;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.apache.hyracks.storage.am.common.impls.IndexAccessParameters;
@@ -36,11 +39,18 @@ import org.apache.hyracks.storage.common.IIndexAccessParameters;
 
 public class ConstantMergePolicy implements ILSMMergePolicy {
     private int numComponents;
+    private long numFlushes = 0;
+    private long numMerges = 0;
+    private double mergeCost = 0.0;
+    private static final Logger LOGGER = Logger.getLogger(ConstantMergePolicy.class.getName());
 
     @Override
-    public void diskComponentAdded(final ILSMIndex index, boolean fullMergeIsRequested) throws HyracksDataException {
+    public void diskComponentAdded(final ILSMIndex index, boolean fullMergeIsRequested, boolean isMergeOp)
+            throws HyracksDataException {
+        if (!isMergeOp) {
+            numFlushes++;
+        }
         List<ILSMDiskComponent> immutableComponents = index.getDiskComponents();
-
         if (!areComponentsMergable(immutableComponents)) {
             return;
         }
@@ -50,9 +60,19 @@ public class ConstantMergePolicy implements ILSMMergePolicy {
                     new IndexAccessParameters(NoOpOperationCallback.INSTANCE, NoOpOperationCallback.INSTANCE);
             ILSMIndexAccessor accessor = index.createAccessor(iap);
             accessor.scheduleFullMerge(index.getIOOperationCallback());
+            long mergeSize = getMergeSize(immutableComponents);
+            logDiskComponentsSnapshot(immutableComponents);
+            logMergeInfo(mergeSize, true, immutableComponents.size(), immutableComponents.size());
+            numMerges++;
+            mergeCost = mergeCost + ((double) mergeSize) / (1024 * 1024 * 1024);
         } else if (immutableComponents.size() >= numComponents) {
             ILSMIndexAccessor accessor = index.createAccessor(NoOpIndexAccessParameters.INSTANCE);
             accessor.scheduleMerge(index.getIOOperationCallback(), immutableComponents);
+            long mergeSize = getMergeSize(immutableComponents);
+            logDiskComponentsSnapshot(immutableComponents);
+            logMergeInfo(mergeSize, false, immutableComponents.size(), immutableComponents.size());
+            numMerges++;
+            mergeCost = mergeCost + ((double) mergeSize) / (1024 * 1024 * 1024);
         }
     }
 
@@ -109,6 +129,11 @@ public class ConstantMergePolicy implements ILSMMergePolicy {
             }
             ILSMIndexAccessor accessor = index.createAccessor(NoOpIndexAccessParameters.INSTANCE);
             accessor.scheduleMerge(index.getIOOperationCallback(), immutableComponents);
+            long mergeSize = getMergeSize(immutableComponents);
+            logDiskComponentsSnapshot(immutableComponents);
+            logMergeInfo(mergeSize, false, immutableComponents.size(), immutableComponents.size());
+            numMerges++;
+            mergeCost = mergeCost + ((double) mergeSize) / (1024 * 1024 * 1024);
             return true;
         }
     }
@@ -142,5 +167,57 @@ public class ConstantMergePolicy implements ILSMMergePolicy {
             }
         }
         return false;
+    }
+
+    private void logMergeInfo(long size, boolean isFullMerge, int mergedComponents, int totalComponents) {
+        if (LOGGER.isLoggable(Level.SEVERE)) {
+            if (isFullMerge) {
+                LOGGER.severe(
+                        "Full Merged: " + size + ", " + mergedComponents + ", " + totalComponents + ", " + new Date());
+            } else {
+                LOGGER.severe("Merged: " + size + ", " + mergedComponents + ", " + totalComponents + ", " + new Date());
+            }
+        }
+    }
+
+    private long getMergeSize(List<ILSMDiskComponent> immutableComponents) {
+        long mergeSize = 0;
+        for (int j = 0; j < immutableComponents.size(); j++) {
+            mergeSize = mergeSize + immutableComponents.get(j).getComponentSize();
+        }
+        return mergeSize;
+    }
+
+    private void logDiskComponentsSnapshot(List<ILSMDiskComponent> immutableComponents) {
+
+        if (LOGGER.isLoggable(Level.SEVERE)) {
+            String snapshotStr = "";
+            for (int j = 0; j < immutableComponents.size(); j++) {
+
+                snapshotStr = snapshotStr + "," + immutableComponents.get(j).getComponentSize();
+            }
+            if (snapshotStr.length() > 1) {
+                snapshotStr = snapshotStr.substring(1);
+            }
+            LOGGER.severe("Merge Snapshot: " + snapshotStr);
+        }
+    }
+
+    @Override
+    public long getNumberOfFlushes() {
+
+        return numFlushes;
+    }
+
+    @Override
+    public long getNumberOfMerges() {
+
+        return numMerges;
+    }
+
+    @Override
+    public double getMergeCost() {
+
+        return mergeCost;
     }
 }

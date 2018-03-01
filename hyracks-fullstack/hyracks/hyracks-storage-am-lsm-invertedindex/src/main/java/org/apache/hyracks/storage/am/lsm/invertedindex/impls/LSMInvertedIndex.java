@@ -189,8 +189,8 @@ public class LSMInvertedIndex extends AbstractLSMIndex implements IInvertedIndex
     }
 
     @Override
-    public void search(ILSMIndexOperationContext ictx, IIndexCursor cursor, ISearchPredicate pred)
-            throws HyracksDataException {
+    public void search(ILSMIndexOperationContext ictx, IIndexCursor cursor, ISearchPredicate pred, long start,
+            int stackSize) throws HyracksDataException {
         LSMInvertedIndexOpContext ctx = (LSMInvertedIndexOpContext) ictx;
         List<ILSMComponent> operationalComponents = ictx.getComponentHolder();
         int numComponents = operationalComponents.size();
@@ -377,7 +377,7 @@ public class LSMInvertedIndex extends AbstractLSMIndex implements IInvertedIndex
             } else {
                 componentBulkLoader = component.createBulkLoader(1.0f, false, 0L, false, false, false);
             }
-            search(opCtx, cursor, mergePred);
+            search(opCtx, cursor, mergePred, 0, 0);
             try {
                 while (cursor.hasNext()) {
                     cursor.next();
@@ -412,7 +412,7 @@ public class LSMInvertedIndex extends AbstractLSMIndex implements IInvertedIndex
     private void loadDeleteTuples(ILSMIndexOperationContext opCtx,
             LSMInvertedIndexDeletedKeysBTreeMergeCursor btreeCursor, RangePredicate mergePred,
             ILSMDiskComponentBulkLoader componentBulkLoader) throws HyracksDataException {
-        search(opCtx, btreeCursor, mergePred);
+        search(opCtx, btreeCursor, mergePred, 0, 0);
         try {
             while (btreeCursor.hasNext()) {
                 btreeCursor.next();

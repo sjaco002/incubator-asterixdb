@@ -43,6 +43,8 @@ public interface ILSMHarness {
      */
     void forceModify(ILSMIndexOperationContext ctx, ITupleReference tuple) throws HyracksDataException;
 
+    ILSMIndex getLsmIndex();
+
     /**
      * Modify the index if the memory component is not full, wait for a new memory component if the current one is full
      *
@@ -179,6 +181,8 @@ public interface ILSMHarness {
      */
     void scheduleReplication(ILSMIndexOperationContext ctx, List<ILSMDiskComponent> diskComponents, boolean bulkload,
             LSMOperationType opType) throws HyracksDataException;
+
+    public ILSMMergePolicy getMergePolicy();
 
     /**
      * End a replication operation

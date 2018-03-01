@@ -61,7 +61,8 @@ public interface ILSMIndex extends IIndex {
 
     void modify(IIndexOperationContext ictx, ITupleReference tuple) throws HyracksDataException;
 
-    void search(ILSMIndexOperationContext ictx, IIndexCursor cursor, ISearchPredicate pred) throws HyracksDataException;
+    void search(ILSMIndexOperationContext ictx, IIndexCursor cursor, ISearchPredicate pred, long start, int stackSize)
+            throws HyracksDataException;
 
     public void scanDiskComponents(ILSMIndexOperationContext ctx, IIndexCursor cursor) throws HyracksDataException;
 

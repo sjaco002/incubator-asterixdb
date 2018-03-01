@@ -46,6 +46,11 @@ public class InMemoryInvertedIndexAccessor implements IInvertedIndexAccessor {
     protected BTreeAccessor btreeAccessor;
     private boolean destroyed = false;
 
+    @Override
+    public int getComponentCount() {
+        return -1;
+    }
+
     public InMemoryInvertedIndexAccessor(InMemoryInvertedIndex index, IIndexOperationContext opCtx,
             IHyracksTaskContext ctx) throws HyracksDataException {
         this.ctx = ctx;

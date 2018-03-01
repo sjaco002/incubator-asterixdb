@@ -30,6 +30,8 @@ import org.apache.hyracks.dataflow.common.data.accessors.ITupleReference;
  * concurrent operations).
  */
 public interface IIndexAccessor extends IDestroyable {
+
+    int getComponentCount();
     /**
      * Inserts the given tuple.
      *

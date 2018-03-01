@@ -313,7 +313,7 @@ public class LSMRTree extends AbstractLSMRTree {
         boolean abort = true;
         ISearchPredicate rtreeSearchPred = new SearchPredicate(null, null);
         ILSMIndexOperationContext opCtx = ((LSMRTreeSortedCursor) cursor).getOpCtx();
-        search(opCtx, cursor, rtreeSearchPred);
+        search(opCtx, cursor, rtreeSearchPred, 0, 0);
         try {
             try {
                 // In case we must keep the deleted-keys BTrees, then they must be merged
@@ -357,7 +357,7 @@ public class LSMRTree extends AbstractLSMRTree {
             ILSMDiskComponentBulkLoader componentBulkLoader) throws HyracksDataException {
         LSMRTreeDeletedKeysBTreeMergeCursor btreeCursor = new LSMRTreeDeletedKeysBTreeMergeCursor(opCtx);
         try {
-            search(opCtx, btreeCursor, rtreeSearchPred);
+            search(opCtx, btreeCursor, rtreeSearchPred, 0, 0);
             try {
                 while (btreeCursor.hasNext()) {
                     btreeCursor.next();

@@ -541,6 +541,7 @@ public class BufferCache implements IBufferCacheInternal, ILifeCycleComponent {
     }
 
     private void read(CachedPage cPage) throws HyracksDataException {
+        //If we want to count the cache misses we should look here
         BufferedFileHandle fInfo = getFileInfo(cPage);
         cPage.buffer.clear();
         BufferCacheHeaderHelper header = checkoutHeaderHelper();

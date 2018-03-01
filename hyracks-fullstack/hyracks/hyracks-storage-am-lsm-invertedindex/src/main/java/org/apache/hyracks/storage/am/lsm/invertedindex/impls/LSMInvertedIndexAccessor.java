@@ -45,6 +45,11 @@ public class LSMInvertedIndexAccessor implements ILSMIndexAccessor, IInvertedInd
     protected final ILSMIndexOperationContext ctx;
     private boolean destroyed = false;
 
+    @Override
+    public int getComponentCount() {
+        return -1;
+    }
+
     public LSMInvertedIndexAccessor(ILSMHarness lsmHarness, ILSMIndexOperationContext ctx) {
         this.lsmHarness = lsmHarness;
         this.ctx = ctx;

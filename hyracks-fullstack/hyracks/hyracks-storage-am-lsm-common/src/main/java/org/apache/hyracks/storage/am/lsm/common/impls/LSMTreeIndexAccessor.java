@@ -58,6 +58,11 @@ public class LSMTreeIndexAccessor implements ILSMIndexAccessor {
         this.cursorFactory = cursorFactory;
     }
 
+    @Override
+    public int getComponentCount() {
+        return ((LSMHarness) lsmHarness).lsmIndex.getDiskComponents().size();
+    }
+
     public ILSMIndexOperationContext getCtx() {
         return ctx;
     }
