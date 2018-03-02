@@ -68,11 +68,12 @@ public class PartitionedOnDiskInvertedIndex extends OnDiskInvertedIndex implemen
         }
 
         @Override
-        public void search(IIndexCursor cursor, ISearchPredicate searchPred) throws HyracksDataException {
+        public int search(IIndexCursor cursor, ISearchPredicate searchPred) throws HyracksDataException {
             if (searcher == null) {
                 searcher = new PartitionedTOccurrenceSearcher(index, ctx);
             }
             searcher.search(cursor, (InvertedIndexSearchPredicate) searchPred, opCtx);
+            return -1;
         }
     }
 

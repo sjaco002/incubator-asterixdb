@@ -21,6 +21,7 @@ package org.apache.hyracks.storage.am.common.dataflow;
 import java.io.DataOutput;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.Date;
 
 import org.apache.hyracks.api.comm.VSizeFrame;
 import org.apache.hyracks.api.context.IHyracksTaskContext;
@@ -198,7 +199,7 @@ public abstract class IndexSearchOperatorNodePushable extends AbstractUnaryInput
         }
     }
 
-    protected void writeSearchResults(int tupleIndex) throws Exception {
+    protected long writeSearchResults(int tupleIndex) throws Exception {
         long matchingTupleCount = 0;
         while (cursor.hasNext()) {
             matchingTupleCount++;
@@ -230,6 +231,7 @@ public abstract class IndexSearchOperatorNodePushable extends AbstractUnaryInput
                     nonMatchTupleBuild.getFieldEndOffsets(), nonMatchTupleBuild.getByteArray(), 0,
                     nonMatchTupleBuild.getSize());
         }
+        return matchingTupleCount;
     }
 
     @Override
@@ -239,9 +241,27 @@ public abstract class IndexSearchOperatorNodePushable extends AbstractUnaryInput
         try {
             for (int i = 0; i < tupleCount; i++) {
                 resetSearchPredicate(i);
+
+                long start = System.nanoTime();
+                int startSize = indexAccessor.getComponentCount();
                 cursor.close();
+                //this does the actual work of the search (for range or key queries)
                 indexAccessor.search(cursor, searchPred);
-                writeSearchResults(i);
+
+                long smallEnd = System.nanoTime();
+                //This goes through writing, all the way to the tail (e.g. aggregation after search will be part of this time)
+                long matchingTupleCount = writeSearchResults(i);
+
+                long end = System.nanoTime();
+                long microseconds = (smallEnd - start);
+                long longerMicroseconds = (end - start);
+                int endSize = indexAccessor.getComponentCount();
+
+                if (LOGGER.isFatalEnabled()) {
+                    LOGGER.fatal("Merge Policy Experiment Read Search micro: " + matchingTupleCount + " " + startSize
+                            + " " + endSize + " " + longerMicroseconds + " " + microseconds + " " + new Date());
+                }
+
             }
         } catch (Exception e) {
             throw HyracksDataException.create(e);

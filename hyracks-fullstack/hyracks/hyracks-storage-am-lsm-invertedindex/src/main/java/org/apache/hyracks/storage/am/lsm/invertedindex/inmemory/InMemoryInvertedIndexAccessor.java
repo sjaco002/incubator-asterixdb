@@ -46,6 +46,11 @@ public class InMemoryInvertedIndexAccessor implements IInvertedIndexAccessor {
     protected BTreeAccessor btreeAccessor;
     private boolean destroyed = false;
 
+    @Override
+    public int getComponentCount() {
+        return -1;
+    }
+
     public InMemoryInvertedIndexAccessor(InMemoryInvertedIndex index, IIndexOperationContext opCtx,
             IHyracksTaskContext ctx) throws HyracksDataException {
         this.ctx = ctx;
@@ -87,11 +92,12 @@ public class InMemoryInvertedIndexAccessor implements IInvertedIndexAccessor {
     }
 
     @Override
-    public void search(IIndexCursor cursor, ISearchPredicate searchPred) throws HyracksDataException {
+    public int search(IIndexCursor cursor, ISearchPredicate searchPred) throws HyracksDataException {
         if (searcher == null) {
             searcher = createSearcher();
         }
         searcher.search(cursor, (InvertedIndexSearchPredicate) searchPred, opCtx);
+        return -1;
     }
 
     @Override

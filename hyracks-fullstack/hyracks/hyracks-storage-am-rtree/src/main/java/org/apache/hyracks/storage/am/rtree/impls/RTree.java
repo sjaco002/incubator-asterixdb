@@ -86,7 +86,6 @@ public class RTree extends AbstractTreeIndex {
         return globalNsn.incrementAndGet();
     }
 
-    @SuppressWarnings("rawtypes")
     public String printTree(IRTreeLeafFrame leafFrame, IRTreeInteriorFrame interiorFrame,
             ISerializerDeserializer[] keySerdes) throws Exception {
         MultiComparator cmp = MultiComparator.create(cmpFactories);
@@ -96,7 +95,6 @@ public class RTree extends AbstractTreeIndex {
         return strBuilder.toString();
     }
 
-    @SuppressWarnings("rawtypes")
     public void printTree(int pageId, ICachedPage parent, boolean unpin, IRTreeLeafFrame leafFrame,
             IRTreeInteriorFrame interiorFrame, byte treeHeight, ISerializerDeserializer[] keySerdes,
             StringBuilder strBuilder, MultiComparator cmp) throws Exception {
@@ -771,6 +769,11 @@ public class RTree extends AbstractTreeIndex {
         private RTreeOpContext ctx;
         private boolean destroyed = false;
 
+        @Override
+        public int getComponentCount() {
+            return -1;
+        }
+
         public RTreeAccessor(RTree rtree, IModificationOperationCallback modificationCallback,
                 ISearchOperationCallback searchCallback) {
             this.rtree = rtree;
@@ -814,9 +817,10 @@ public class RTree extends AbstractTreeIndex {
         }
 
         @Override
-        public void search(IIndexCursor cursor, ISearchPredicate searchPred) throws HyracksDataException {
+        public int search(IIndexCursor cursor, ISearchPredicate searchPred) throws HyracksDataException {
             ctx.setOperation(IndexOperation.SEARCH);
             rtree.search((ITreeIndexCursor) cursor, searchPred, ctx);
+            return -1;
         }
 
         @Override

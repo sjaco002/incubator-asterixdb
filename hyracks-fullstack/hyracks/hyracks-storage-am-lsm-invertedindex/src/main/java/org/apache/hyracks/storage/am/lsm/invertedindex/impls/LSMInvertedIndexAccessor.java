@@ -45,6 +45,11 @@ public class LSMInvertedIndexAccessor implements ILSMIndexAccessor, IInvertedInd
     protected final ILSMIndexOperationContext ctx;
     private boolean destroyed = false;
 
+    @Override
+    public int getComponentCount() {
+        return -1;
+    }
+
     public LSMInvertedIndexAccessor(ILSMHarness lsmHarness, ILSMIndexOperationContext ctx) {
         this.lsmHarness = lsmHarness;
         this.ctx = ctx;
@@ -75,9 +80,10 @@ public class LSMInvertedIndexAccessor implements ILSMIndexAccessor, IInvertedInd
     }
 
     @Override
-    public void search(IIndexCursor cursor, ISearchPredicate searchPred) throws HyracksDataException {
+    public int search(IIndexCursor cursor, ISearchPredicate searchPred) throws HyracksDataException {
         ctx.setOperation(IndexOperation.SEARCH);
         lsmHarness.search(ctx, cursor, searchPred);
+        return -1;
     }
 
     @Override

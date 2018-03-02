@@ -56,7 +56,7 @@ public class PrefixMergePolicyTest extends TestCase {
             List<Long> resultSizes = new ArrayList<>();
             ILSMIndex index = mockIndex(sizes, resultSizes);
             ILSMMergePolicy policy = mockMergePolicy();
-            policy.diskComponentAdded(index, false);
+            policy.diskComponentAdded(index, false, false);
             assertEquals(3, resultSizes.size());
             assertEquals(Arrays.asList(1L, 2L, 3L), resultSizes);
         } catch (HyracksDataException e) {
@@ -71,7 +71,7 @@ public class PrefixMergePolicyTest extends TestCase {
             List<Long> resultSizes = new ArrayList<>();
             ILSMIndex index = mockIndex(sizes, resultSizes);
             ILSMMergePolicy policy = mockMergePolicy();
-            policy.diskComponentAdded(index, false);
+            policy.diskComponentAdded(index, false, false);
             assertEquals(5, resultSizes.size());
             assertEquals(Arrays.asList(1L, 2L, 3L, 4L, 5L), resultSizes);
         } catch (HyracksDataException e) {
@@ -86,7 +86,7 @@ public class PrefixMergePolicyTest extends TestCase {
             List<Long> resultSizes = new ArrayList<>();
             ILSMIndex index = mockIndex(sizes, resultSizes);
             ILSMMergePolicy policy = mockMergePolicy();
-            policy.diskComponentAdded(index, false);
+            policy.diskComponentAdded(index, false, false);
             assertEquals(4, resultSizes.size());
             assertEquals(Arrays.asList(1L, 2L, 3L, 4L), resultSizes);
         } catch (HyracksDataException e) {
@@ -101,7 +101,7 @@ public class PrefixMergePolicyTest extends TestCase {
             List<Long> resultSizes = new ArrayList<>();
             ILSMIndex index = mockIndex(sizes, resultSizes);
             ILSMMergePolicy policy = mockMergePolicy();
-            policy.diskComponentAdded(index, false);
+            policy.diskComponentAdded(index, false, false);
             assertEquals(4, resultSizes.size());
             assertEquals(Arrays.asList(1L, 2L, 3L, 4L), resultSizes);
         } catch (HyracksDataException e) {
@@ -116,7 +116,7 @@ public class PrefixMergePolicyTest extends TestCase {
             List<Long> resultSizes = new ArrayList<>();
             ILSMIndex index = mockIndex(sizes, resultSizes);
             ILSMMergePolicy policy = mockMergePolicy();
-            policy.diskComponentAdded(index, false);
+            policy.diskComponentAdded(index, false, false);
             assertEquals(4, resultSizes.size());
             assertEquals(Arrays.asList(3L, 3L, 45L, 50L), resultSizes);
         } catch (HyracksDataException e) {
@@ -132,7 +132,7 @@ public class PrefixMergePolicyTest extends TestCase {
             List<Long> resultSizes = new ArrayList<>();
             ILSMIndex index = mockIndex(sizes, resultSizes);
             ILSMMergePolicy policy = mockMergePolicy();
-            policy.diskComponentAdded(index, false);
+            policy.diskComponentAdded(index, false, false);
             //assertEquals(3, resultSizes.size());
             assertEquals(Arrays.asList(28L, 29L, 30L, 90L), resultSizes);
         } catch (HyracksDataException e) {
@@ -153,7 +153,7 @@ public class PrefixMergePolicyTest extends TestCase {
                 pass++;
                 sizes.add(0, 1L);
                 ILSMIndex index = mockIndex(sizes, null);
-                policy.diskComponentAdded(index, false);
+                policy.diskComponentAdded(index, false, false);
                 int length = sizes.size();
                 maxNumComponents = maxNumComponents >= length ? maxNumComponents : length;
                 sumComponents += length;

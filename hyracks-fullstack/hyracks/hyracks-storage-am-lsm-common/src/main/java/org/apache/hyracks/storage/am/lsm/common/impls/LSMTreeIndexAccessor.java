@@ -58,6 +58,11 @@ public class LSMTreeIndexAccessor implements ILSMIndexAccessor {
         this.cursorFactory = cursorFactory;
     }
 
+    @Override
+    public int getComponentCount() {
+        return ((LSMHarness) lsmHarness).lsmIndex.getDiskComponents().size();
+    }
+
     public ILSMIndexOperationContext getCtx() {
         return ctx;
     }
@@ -113,9 +118,10 @@ public class LSMTreeIndexAccessor implements ILSMIndexAccessor {
     }
 
     @Override
-    public void search(IIndexCursor cursor, ISearchPredicate searchPred) throws HyracksDataException {
+    public int search(IIndexCursor cursor, ISearchPredicate searchPred) throws HyracksDataException {
         ctx.setOperation(IndexOperation.SEARCH);
         lsmHarness.search(ctx, cursor, searchPred);
+        return -1;
     }
 
     @Override

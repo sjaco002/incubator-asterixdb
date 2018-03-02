@@ -19,8 +19,12 @@
 
 package org.apache.hyracks.storage.am.lsm.btree.impls;
 
+import java.time.Duration;
+import java.time.ZonedDateTime;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
+import java.util.logging.Logger;
 
 import org.apache.hyracks.api.dataflow.value.IBinaryComparatorFactory;
 import org.apache.hyracks.api.exceptions.ErrorCode;
@@ -73,6 +77,14 @@ import org.apache.hyracks.util.trace.ITracer;
 public class LSMBTree extends AbstractLSMIndex implements ITreeIndex {
 
     private static final ICursorFactory cursorFactory = opCtx -> new LSMBTreeSearchCursor(opCtx);
+    private static final Logger LOGGER = Logger.getLogger(LSMBTree.class.getName());
+    private long writeCount = 0;
+    private long experimentDuplCheckTime = 0;
+    private long writeLogInterval = 50000;
+    private long readLogInterval = 1;
+    private long totalDiskComponents = 0;
+    private long readCount = 0;
+
     // Common for in-memory and on-disk components.
     protected final ITreeIndexFrameFactory insertLeafFrameFactory;
     protected final ITreeIndexFrameFactory deleteLeafFrameFactory;
@@ -171,11 +183,13 @@ public class LSMBTree extends AbstractLSMIndex implements ITreeIndex {
     }
 
     private boolean insert(ITupleReference tuple, LSMBTreeOpContext ctx) throws HyracksDataException {
+        writeCount++;
         LSMBTreePointSearchCursor searchCursor = ctx.getInsertSearchCursor();
         IIndexCursor memCursor = ctx.getMemCursor();
         RangePredicate predicate = (RangePredicate) ctx.getSearchPredicate();
         predicate.setHighKey(tuple);
         predicate.setLowKey(tuple);
+        Date checkStartTime = new Date();
         if (needKeyDupCheck) {
             // first check the inmemory component
             boolean found;
@@ -217,14 +231,21 @@ public class LSMBTree extends AbstractLSMIndex implements ITreeIndex {
                 // Add the current active mutable component back
                 ctx.getComponentHolder().add(0, firstComponent);
             }
+
         }
+
+        Date checkEndTime = new Date();
+        experimentDuplCheckTime = experimentDuplCheckTime + (checkEndTime.getTime() - checkStartTime.getTime());
+        ZonedDateTime startTime = ZonedDateTime.now();
         ctx.getCurrentMutableBTreeAccessor().upsertIfConditionElseInsert(tuple, AntimatterAwareTupleAcceptor.INSTANCE);
+        Duration readTime = Duration.between(startTime, ZonedDateTime.now());
         return true;
     }
 
     @Override
     public void search(ILSMIndexOperationContext ictx, IIndexCursor cursor, ISearchPredicate pred)
             throws HyracksDataException {
+
         LSMBTreeOpContext ctx = (LSMBTreeOpContext) ictx;
         List<ILSMComponent> operationalComponents = ctx.getComponentHolder();
         ctx.getSearchInitialState().reset(pred, operationalComponents);
@@ -252,9 +273,9 @@ public class LSMBTree extends AbstractLSMIndex implements ITreeIndex {
         IIndexAccessor accessor = flushingComponent.getIndex().createAccessor(NoOpIndexAccessParameters.INSTANCE);
         ILSMDiskComponent component;
         ILSMDiskComponentBulkLoader componentBulkLoader;
+        long numElements = 0L;
         try {
             RangePredicate nullPred = new RangePredicate(null, null, true, true, null, null);
-            long numElements = 0L;
             if (hasBloomFilter) {
                 //count elements in btree for creating Bloomfilter
                 IIndexCursor countingCursor = ((BTreeAccessor) accessor).createCountingSearchCursor();
@@ -316,10 +337,13 @@ public class LSMBTree extends AbstractLSMIndex implements ITreeIndex {
 
         componentBulkLoader.end();
 
+        LOGGER.severe("Merge Policy Experiment Write Count: " + numElements + " " + new Date());
+
         return component;
     }
 
     @Override
+
     public ILSMDiskComponent doMerge(ILSMIOOperation operation) throws HyracksDataException {
         LSMBTreeMergeOperation mergeOp = (LSMBTreeMergeOperation) operation;
         IIndexCursor cursor = mergeOp.getCursor();

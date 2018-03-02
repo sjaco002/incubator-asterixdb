@@ -22,6 +22,7 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.InputStream;
 import java.rmi.RemoteException;
+import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -2352,6 +2353,8 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
     protected void handleQuery(MetadataProvider metadataProvider, Query query, IHyracksClientConnection hcc,
             IHyracksDataset hdc, ResultDelivery resultDelivery, ResultMetadata outMetadata, Stats stats,
             String clientContextId, IStatementExecutorContext ctx) throws Exception {
+        Date checkStartTime = new Date();
+        ZonedDateTime startTime = ZonedDateTime.now();
         final IMetadataLocker locker = new IMetadataLocker() {
             @Override
             public void lock() {
@@ -2383,6 +2386,11 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
         };
         deliverResult(hcc, hdc, compiler, metadataProvider, locker, resultDelivery, outMetadata, stats, clientContextId,
                 ctx);
+        Date checkEndTime = new Date();
+        long experimentDuplCheckTime = (checkEndTime.getTime() - checkStartTime.getTime());
+        if (LOGGER.isFatalEnabled()) {
+            LOGGER.fatal("Merge Policy Experiment Total Read Time: " + experimentDuplCheckTime + " " + new Date());
+        }
     }
 
     private void deliverResult(IHyracksClientConnection hcc, IHyracksDataset hdc, IStatementCompiler compiler,

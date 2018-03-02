@@ -249,9 +249,10 @@ public class DiskBTree extends BTree {
         }
 
         @Override
-        public void search(IIndexCursor cursor, ISearchPredicate searchPred) throws HyracksDataException {
+        public int search(IIndexCursor cursor, ISearchPredicate searchPred) throws HyracksDataException {
             ctx.setOperation(IndexOperation.SEARCH);
             ((DiskBTree) btree).search((ITreeIndexCursor) cursor, searchPred, ctx);
+            return -1;
         }
 
         @Override

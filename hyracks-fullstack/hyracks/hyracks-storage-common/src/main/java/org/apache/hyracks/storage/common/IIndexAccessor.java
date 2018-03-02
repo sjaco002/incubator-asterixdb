@@ -30,6 +30,9 @@ import org.apache.hyracks.dataflow.common.data.accessors.ITupleReference;
  * concurrent operations).
  */
 public interface IIndexAccessor extends IDestroyable {
+
+    int getComponentCount();
+
     /**
      * Inserts the given tuple.
      *
@@ -101,5 +104,5 @@ public interface IIndexAccessor extends IDestroyable {
      * @throws HyracksDataException
      *             If the BufferCache throws while un/pinning or un/latching.
      */
-    void search(IIndexCursor cursor, ISearchPredicate searchPred) throws HyracksDataException;
+    int search(IIndexCursor cursor, ISearchPredicate searchPred) throws HyracksDataException;
 }
