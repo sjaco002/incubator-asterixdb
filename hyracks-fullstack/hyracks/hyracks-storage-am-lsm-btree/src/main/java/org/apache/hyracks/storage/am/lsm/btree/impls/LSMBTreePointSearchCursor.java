@@ -110,6 +110,9 @@ public class LSMBTreePointSearchCursor extends EnforcedIndexCursor implements IL
             }
             int depth = btreeAccessors[i].search(btreeCursors[i], predicate);
             depthString = depthString + ":" + depth;
+            if (depth == -1) {
+                int x = 5;
+            }
 
             if (btreeCursors[i].hasNext()) {
                 btreeCursors[i].next();

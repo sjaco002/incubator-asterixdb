@@ -71,7 +71,7 @@ public class DiskBTree extends BTree {
         }
     }
 
-    private void search(ITreeIndexCursor cursor, ISearchPredicate searchPred, BTreeOpContext ctx)
+    private int search(ITreeIndexCursor cursor, ISearchPredicate searchPred, BTreeOpContext ctx)
             throws HyracksDataException {
         ctx.reset();
         ctx.setPred((RangePredicate) searchPred);
@@ -85,6 +85,7 @@ public class DiskBTree extends BTree {
         }
         cursor.setBufferCache(bufferCache);
         cursor.setFileId(getFileId());
+        int depth = 0;
 
         DiskBTreeRangeSearchCursor diskCursor = (DiskBTreeRangeSearchCursor) cursor;
 
@@ -92,7 +93,7 @@ public class DiskBTree extends BTree {
             // we have to search from root to leaf
             ICachedPage rootNode = bufferCache.pin(BufferedFileHandle.getDiskPageId(getFileId(), rootPage), false);
             diskCursor.addSearchPage(rootPage);
-            searchDown(rootNode, rootPage, ctx, diskCursor);
+            depth = searchDown(rootNode, rootPage, ctx, diskCursor);
         } else {
             // we first check whether the leaf page matches because page may be shifted during cursor.hasNext
             if (ctx.getLeafFrame().getPage() != diskCursor.getPage()) {
@@ -112,9 +113,10 @@ public class DiskBTree extends BTree {
                 ICachedPage page = searchUp(ctx, diskCursor);
                 int pageId = diskCursor.getLastSearchPage();
 
-                searchDown(page, pageId, ctx, diskCursor);
+                depth = searchDown(page, pageId, ctx, diskCursor);
             }
         }
+        return depth;
     }
 
     private ICachedPage searchUp(BTreeOpContext ctx, DiskBTreeRangeSearchCursor cursor) throws HyracksDataException {
@@ -153,10 +155,11 @@ public class DiskBTree extends BTree {
         return comparator.compare(key, leftmostTuple) >= 0;
     }
 
-    private void searchDown(ICachedPage page, int pageId, BTreeOpContext ctx, DiskBTreeRangeSearchCursor cursor)
+    private int searchDown(ICachedPage page, int pageId, BTreeOpContext ctx, DiskBTreeRangeSearchCursor cursor)
             throws HyracksDataException {
         ICachedPage currentPage = page;
         ctx.getInteriorFrame().setPage(currentPage);
+        int depth = 1;
 
         try {
             int childPageId = pageId;
@@ -169,6 +172,7 @@ public class DiskBTree extends BTree {
                 bufferCache.unpin(currentPage);
                 currentPage = bufferCache.pin(BufferedFileHandle.getDiskPageId(getFileId(), childPageId), false);
                 ctx.getInteriorFrame().setPage(currentPage);
+                depth++;
             }
 
             ctx.getCursorInitialState().setSearchOperationCallback(ctx.getSearchCallback());
@@ -191,6 +195,7 @@ public class DiskBTree extends BTree {
             ctx.setExceptionHandled(true);
             throw wrappedException;
         }
+        return depth;
     }
 
     @Override
@@ -251,8 +256,8 @@ public class DiskBTree extends BTree {
         @Override
         public int search(IIndexCursor cursor, ISearchPredicate searchPred) throws HyracksDataException {
             ctx.setOperation(IndexOperation.SEARCH);
-            ((DiskBTree) btree).search((ITreeIndexCursor) cursor, searchPred, ctx);
-            return -1;
+            int result = ((DiskBTree) btree).search((ITreeIndexCursor) cursor, searchPred, ctx);
+            return result;
         }
 
         @Override
