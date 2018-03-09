@@ -19,6 +19,9 @@
 
 package org.apache.hyracks.storage.am.lsm.invertedindex.inmemory;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import org.apache.hyracks.api.context.IHyracksTaskContext;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.apache.hyracks.dataflow.common.data.accessors.ITupleReference;
@@ -92,12 +95,14 @@ public class InMemoryInvertedIndexAccessor implements IInvertedIndexAccessor {
     }
 
     @Override
-    public int search(IIndexCursor cursor, ISearchPredicate searchPred) throws HyracksDataException {
+    public List<Integer> search(IIndexCursor cursor, ISearchPredicate searchPred) throws HyracksDataException {
         if (searcher == null) {
             searcher = createSearcher();
         }
         searcher.search(cursor, (InvertedIndexSearchPredicate) searchPred, opCtx);
-        return -1;
+        List<Integer> result = new ArrayList<>();
+        result.add(-1);
+        return result;
     }
 
     @Override

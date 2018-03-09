@@ -19,6 +19,8 @@
 
 package org.apache.hyracks.storage.common;
 
+import java.util.List;
+
 import org.apache.hyracks.api.dataflow.IDestroyable;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.apache.hyracks.dataflow.common.data.accessors.ITupleReference;
@@ -104,5 +106,5 @@ public interface IIndexAccessor extends IDestroyable {
      * @throws HyracksDataException
      *             If the BufferCache throws while un/pinning or un/latching.
      */
-    int search(IIndexCursor cursor, ISearchPredicate searchPred) throws HyracksDataException;
+    List<Integer> search(IIndexCursor cursor, ISearchPredicate searchPred) throws HyracksDataException;
 }

@@ -19,6 +19,9 @@
 
 package org.apache.hyracks.storage.am.lsm.invertedindex.ondisk;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import org.apache.hyracks.api.context.IHyracksTaskContext;
 import org.apache.hyracks.api.dataflow.value.IBinaryComparatorFactory;
 import org.apache.hyracks.api.dataflow.value.ITypeTraits;
@@ -68,12 +71,14 @@ public class PartitionedOnDiskInvertedIndex extends OnDiskInvertedIndex implemen
         }
 
         @Override
-        public int search(IIndexCursor cursor, ISearchPredicate searchPred) throws HyracksDataException {
+        public List<Integer> search(IIndexCursor cursor, ISearchPredicate searchPred) throws HyracksDataException {
             if (searcher == null) {
                 searcher = new PartitionedTOccurrenceSearcher(index, ctx);
             }
             searcher.search(cursor, (InvertedIndexSearchPredicate) searchPred, opCtx);
-            return -1;
+            List<Integer> result = new ArrayList<>();
+            result.add(-1);
+            return result;
         }
     }
 

@@ -18,6 +18,7 @@
  */
 package org.apache.hyracks.storage.am.lsm.invertedindex.impls;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Predicate;
 
@@ -80,10 +81,12 @@ public class LSMInvertedIndexAccessor implements ILSMIndexAccessor, IInvertedInd
     }
 
     @Override
-    public int search(IIndexCursor cursor, ISearchPredicate searchPred) throws HyracksDataException {
+    public List<Integer> search(IIndexCursor cursor, ISearchPredicate searchPred) throws HyracksDataException {
         ctx.setOperation(IndexOperation.SEARCH);
         lsmHarness.search(ctx, cursor, searchPred);
-        return -1;
+        List<Integer> result = new ArrayList<>();
+        result.add(-1);
+        return result;
     }
 
     @Override

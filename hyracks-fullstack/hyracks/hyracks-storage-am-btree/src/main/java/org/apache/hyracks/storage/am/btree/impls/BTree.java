@@ -910,9 +910,11 @@ public class BTree extends AbstractTreeIndex {
         }
 
         @Override
-        public int search(IIndexCursor cursor, ISearchPredicate searchPred) throws HyracksDataException {
+        public List<Integer> search(IIndexCursor cursor, ISearchPredicate searchPred) throws HyracksDataException {
             ctx.setOperation(IndexOperation.SEARCH);
-            int result = btree.search((ITreeIndexCursor) cursor, searchPred, ctx);
+            int depth = btree.search((ITreeIndexCursor) cursor, searchPred, ctx);
+            List<Integer> result = new ArrayList<>();
+            result.add(depth);
             return result;
         }
 

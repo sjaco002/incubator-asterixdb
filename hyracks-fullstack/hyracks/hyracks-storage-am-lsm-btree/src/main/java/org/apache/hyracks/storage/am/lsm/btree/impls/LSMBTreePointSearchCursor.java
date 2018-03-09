@@ -81,6 +81,7 @@ public class LSMBTreePointSearchCursor extends EnforcedIndexCursor implements IL
         String searchTimeString = "";
         String componentSizeString = "";
         String depthString = "";
+        String nodeTimes = "";
 
         for (ILSMComponent component : operationalComponents) {
             if (component instanceof ILSMDiskComponent) {
@@ -95,6 +96,7 @@ public class LSMBTreePointSearchCursor extends EnforcedIndexCursor implements IL
         boolean reconciled = false;
         int i = 0;
         for (; i < numBTrees; ++i) {
+            nodeTimes = nodeTimes + "|";
             long start = System.nanoTime();
             if (bloomFilters[i] != null && !bloomFilters[i].contains(predicate.getLowKey(), hashes)) {
                 long end = System.nanoTime();
@@ -108,9 +110,12 @@ public class LSMBTreePointSearchCursor extends EnforcedIndexCursor implements IL
             } else {
                 bloomFilterString = bloomFilterString + ":" + 1;
             }
-            int depth = btreeAccessors[i].search(btreeCursors[i], predicate);
-            depthString = depthString + ":" + depth;
-            if (depth == -1) {
+            List<Integer> depth = btreeAccessors[i].search(btreeCursors[i], predicate);
+            depthString = depthString + ":" + depth.get(0);
+            for (int n = 1; n < depth.size(); n++) {
+                nodeTimes = nodeTimes + ":" + depth.get(n);
+            }
+            if (depth.get(0) == -1) {
                 int x = 5;
             }
 
@@ -142,7 +147,7 @@ public class LSMBTreePointSearchCursor extends EnforcedIndexCursor implements IL
                         if (lsmHarness.getLsmIndex().toString().contains("Tweets1")) {
                             LOGGER.severe("ReadTrace: " + bloomFilterString + " " + (i - 1) + " " + true + " "
                                     + new Date() + " Merg" + " " + searchTimeString + " " + componentSizeString + " "
-                                    + depthString);
+                                    + depthString + " " + nodeTimes);
                         }
                         return true;
                     }
@@ -201,7 +206,7 @@ public class LSMBTreePointSearchCursor extends EnforcedIndexCursor implements IL
         }
         if (lsmHarness.getLsmIndex().toString().contains("Tweets1")) {
             LOGGER.severe("ReadTrace: " + bloomFilterString + " " + (i - 1) + " " + false + " " + new Date() + " Merg"
-                    + " " + searchTimeString + " " + componentSizeString + " " + depthString);
+                    + " " + searchTimeString + " " + componentSizeString + " " + depthString + " " + nodeTimes);
         }
         return false;
     }

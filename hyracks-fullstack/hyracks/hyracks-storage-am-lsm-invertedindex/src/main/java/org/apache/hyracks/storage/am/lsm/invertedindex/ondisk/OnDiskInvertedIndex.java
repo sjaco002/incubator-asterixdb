@@ -21,6 +21,8 @@ package org.apache.hyracks.storage.am.lsm.invertedindex.ondisk;
 
 import java.io.DataOutput;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 
 import org.apache.hyracks.api.context.IHyracksTaskContext;
 import org.apache.hyracks.api.dataflow.value.IBinaryComparatorFactory;
@@ -451,12 +453,14 @@ public class OnDiskInvertedIndex implements IInPlaceInvertedIndex {
         }
 
         @Override
-        public int search(IIndexCursor cursor, ISearchPredicate searchPred) throws HyracksDataException {
+        public List<Integer> search(IIndexCursor cursor, ISearchPredicate searchPred) throws HyracksDataException {
             if (searcher == null) {
                 searcher = new TOccurrenceSearcher(index, ctx);
             }
             searcher.search(cursor, (InvertedIndexSearchPredicate) searchPred, opCtx);
-            return -1;
+            List<Integer> result = new ArrayList<>();
+            result.add(-1);
+            return result;
         }
 
         @Override
