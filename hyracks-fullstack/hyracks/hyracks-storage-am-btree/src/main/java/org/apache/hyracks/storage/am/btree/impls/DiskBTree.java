@@ -97,9 +97,13 @@ public class DiskBTree extends BTree {
 
         if (diskCursor.numSearchPages() == 0) {
             // we have to search from root to leaf
+            long start = System.nanoTime();
             ICachedPage rootNode = bufferCache.pin(BufferedFileHandle.getDiskPageId(getFileId(), rootPage), false);
             diskCursor.addSearchPage(rootPage);
+            long end = System.nanoTime();
             result = searchDown(rootNode, rootPage, ctx, diskCursor);
+
+            result.add(1, (int) (end - start));
         } else {
             // we first check whether the leaf page matches because page may be shifted during cursor.hasNext
             if (ctx.getLeafFrame().getPage() != diskCursor.getPage()) {

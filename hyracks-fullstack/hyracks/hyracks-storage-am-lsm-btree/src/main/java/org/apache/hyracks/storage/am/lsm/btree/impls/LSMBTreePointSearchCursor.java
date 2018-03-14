@@ -115,9 +115,6 @@ public class LSMBTreePointSearchCursor extends EnforcedIndexCursor implements IL
             for (int n = 1; n < depth.size(); n++) {
                 nodeTimes = nodeTimes + ":" + depth.get(n);
             }
-            if (depth.get(0) == -1) {
-                int x = 5;
-            }
 
             if (btreeCursors[i].hasNext()) {
                 btreeCursors[i].next();
