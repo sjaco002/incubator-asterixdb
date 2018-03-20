@@ -19,4 +19,5 @@
 
 use test;
 
-select l.userName from UserLocations l;
+select l.userName from UserLocations l
+where l.userName = "c1121u1";
