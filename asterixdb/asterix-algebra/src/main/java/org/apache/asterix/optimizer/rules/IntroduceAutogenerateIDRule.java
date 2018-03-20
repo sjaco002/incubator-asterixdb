@@ -120,9 +120,10 @@ public class IntroduceAutogenerateIDRule implements IAlgebraicRewriteRule {
         AssignOperator assignOp = (AssignOperator) parentOp;
         LogicalVariable inputRecord;
 
-        //TODO: bug here. will not work for internal datasets with filters since the pattern becomes 
-        //[project-assign-assign-insert]
+        boolean hasFilter = false;
         AbstractLogicalOperator grandparentOp = (AbstractLogicalOperator) parentOp.getInputs().get(0).getValue();
+        AbstractLogicalOperator newAssignParentOp = grandparentOp;
+        AbstractLogicalOperator newAssignChildOp = assignOp;
         if (grandparentOp.getOperatorTag() == LogicalOperatorTag.PROJECT) {
             ProjectOperator projectOp = (ProjectOperator) grandparentOp;
             inputRecord = projectOp.getVariables().get(0);
@@ -130,7 +131,19 @@ public class IntroduceAutogenerateIDRule implements IAlgebraicRewriteRule {
             DataSourceScanOperator dssOp = (DataSourceScanOperator) grandparentOp;
             inputRecord = dssOp.getVariables().get(0);
         } else {
-            return false;
+            AbstractLogicalOperator greatgrandparentOp =
+                    (AbstractLogicalOperator) grandparentOp.getInputs().get(0).getValue();
+            if (grandparentOp.getOperatorTag() == LogicalOperatorTag.ASSIGN
+                    && greatgrandparentOp.getOperatorTag() == LogicalOperatorTag.PROJECT) {
+                //filter case
+                ProjectOperator projectOp = (ProjectOperator) greatgrandparentOp;
+                inputRecord = projectOp.getVariables().get(0);
+                newAssignParentOp = greatgrandparentOp;
+                newAssignChildOp = grandparentOp;
+                hasFilter = true;
+            } else {
+                return false;
+            }
         }
 
         List<String> pkFieldName =
@@ -142,13 +155,19 @@ public class IntroduceAutogenerateIDRule implements IAlgebraicRewriteRule {
 
         LogicalVariable v = context.newVar();
         AssignOperator newAssign = new AssignOperator(v, new MutableObject<ILogicalExpression>(nonNullMergedRec));
-        newAssign.getInputs().add(new MutableObject<ILogicalOperator>(grandparentOp));
-        assignOp.getInputs().set(0, new MutableObject<ILogicalOperator>(newAssign));
+        newAssign.getInputs().add(new MutableObject<ILogicalOperator>(newAssignParentOp));
+        newAssignChildOp.getInputs().set(0, new MutableObject<ILogicalOperator>(newAssign));
+        if (hasFilter) {
+            VariableUtilities.substituteVariables(newAssignChildOp, inputRecord, v, context);
+        }
         VariableUtilities.substituteVariables(assignOp, inputRecord, v, context);
         VariableUtilities.substituteVariables(insertOp, inputRecord, v, context);
         context.computeAndSetTypeEnvironmentForOperator(newAssign);
+        if (hasFilter) {
+            context.computeAndSetTypeEnvironmentForOperator(newAssignChildOp);
+        }
         context.computeAndSetTypeEnvironmentForOperator(assignOp);
-        context.computeAndSetTypeEnvironmentForOperator(insertOp);;
+        context.computeAndSetTypeEnvironmentForOperator(insertOp);
         for (AbstractLogicalOperator op : opStack) {
             VariableUtilities.substituteVariables(op, inputRecord, v, context);
             context.computeAndSetTypeEnvironmentForOperator(op);
