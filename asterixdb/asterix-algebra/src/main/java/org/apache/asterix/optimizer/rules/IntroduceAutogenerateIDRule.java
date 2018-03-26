@@ -133,20 +133,20 @@ public class IntroduceAutogenerateIDRule implements IAlgebraicRewriteRule {
         } else if (grandparentOp.getOperatorTag() == LogicalOperatorTag.DATASOURCESCAN) {
             DataSourceScanOperator dssOp = (DataSourceScanOperator) grandparentOp;
             inputRecord = dssOp.getVariables().get(0);
-        } else {
+        } else if (grandparentOp.getOperatorTag() == LogicalOperatorTag.ASSIGN) {
             AbstractLogicalOperator greatgrandparentOp =
                     (AbstractLogicalOperator) grandparentOp.getInputs().get(0).getValue();
-            if (grandparentOp.getOperatorTag() == LogicalOperatorTag.ASSIGN
-                    && greatgrandparentOp.getOperatorTag() == LogicalOperatorTag.PROJECT) {
-                //filter case
-                ProjectOperator projectOp = (ProjectOperator) greatgrandparentOp;
-                inputRecord = projectOp.getVariables().get(0);
-                newAssignParentOp = greatgrandparentOp;
-                newAssignChildOp = grandparentOp;
-                hasFilter = true;
-            } else {
+            if (greatgrandparentOp.getOperatorTag() != LogicalOperatorTag.PROJECT) {
                 return false;
             }
+            //filter case
+            ProjectOperator projectOp = (ProjectOperator) greatgrandparentOp;
+            inputRecord = projectOp.getVariables().get(0);
+            newAssignParentOp = greatgrandparentOp;
+            newAssignChildOp = grandparentOp;
+            hasFilter = true;
+        } else {
+            return false;
         }
 
         List<String> pkFieldName =
