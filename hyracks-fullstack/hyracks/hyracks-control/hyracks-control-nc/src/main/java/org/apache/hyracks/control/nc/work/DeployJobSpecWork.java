@@ -37,19 +37,23 @@ public class DeployJobSpecWork extends AbstractWork {
     private final byte[] acgBytes;
     private final CcId ccId;
     private final DeployedJobSpecId deployedJobSpecId;
+    private final boolean checkForDuplicate;
 
     public DeployJobSpecWork(NodeControllerService ncs, DeployedJobSpecId deployedJobSpecId, byte[] acgBytes,
-            CcId ccId) {
+            boolean checkForDuplicate, CcId ccId) {
         this.ncs = ncs;
         this.deployedJobSpecId = deployedJobSpecId;
         this.acgBytes = acgBytes;
         this.ccId = ccId;
+        this.checkForDuplicate = checkForDuplicate;
     }
 
     @Override
     public void run() {
         try {
-            ncs.checkForDuplicateDeployedJobSpec(deployedJobSpecId);
+            if (checkForDuplicate) {
+                ncs.checkForDuplicateDeployedJobSpec(deployedJobSpecId);
+            }
             ActivityClusterGraph acg =
                     (ActivityClusterGraph) DeploymentUtils.deserialize(acgBytes, null, ncs.getContext());
             ncs.storeActivityClusterGraph(deployedJobSpecId, acg);

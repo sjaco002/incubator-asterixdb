@@ -103,8 +103,8 @@ public class CCNCFunctions {
         SHUTDOWN_REQUEST,
         SHUTDOWN_RESPONSE,
 
-        DISTRIBUTE_JOB,
-        DESTROY_JOB,
+        DEPLOY_JOB,
+        UNDEPLOY_JOB,
         DEPLOYED_JOB_FAILURE,
 
         STATE_DUMP_REQUEST,
@@ -713,15 +713,19 @@ public class CCNCFunctions {
 
         private final byte[] acgBytes;
 
-        public DeployJobSpecFunction(DeployedJobSpecId deployedJobSpecId, byte[] acgBytes, CcId ccId) {
+        private final boolean checkForDuplicate;
+
+        public DeployJobSpecFunction(DeployedJobSpecId deployedJobSpecId, byte[] acgBytes, boolean checkForDuplicate,
+                CcId ccId) {
             super(ccId);
             this.deployedJobSpecId = deployedJobSpecId;
             this.acgBytes = acgBytes;
+            this.checkForDuplicate = checkForDuplicate;
         }
 
         @Override
         public FunctionId getFunctionId() {
-            return FunctionId.DISTRIBUTE_JOB;
+            return FunctionId.DEPLOY_JOB;
         }
 
         public DeployedJobSpecId getDeployedJobSpecId() {
@@ -730,6 +734,10 @@ public class CCNCFunctions {
 
         public byte[] getacgBytes() {
             return acgBytes;
+        }
+
+        public boolean getCheckForDuplicate() {
+            return checkForDuplicate;
         }
     }
 
@@ -745,7 +753,7 @@ public class CCNCFunctions {
 
         @Override
         public FunctionId getFunctionId() {
-            return FunctionId.DESTROY_JOB;
+            return FunctionId.UNDEPLOY_JOB;
         }
 
         public DeployedJobSpecId getDeployedJobSpecId() {
