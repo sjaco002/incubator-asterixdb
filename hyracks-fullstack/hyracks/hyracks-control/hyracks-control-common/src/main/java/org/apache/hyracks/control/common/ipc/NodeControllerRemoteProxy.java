@@ -101,8 +101,9 @@ public class NodeControllerRemoteProxy implements INodeController {
     }
 
     @Override
-    public void deployJobSpec(DeployedJobSpecId deployedJobSpecId, byte[] planBytes) throws Exception {
-        DeployJobSpecFunction fn = new DeployJobSpecFunction(deployedJobSpecId, planBytes, ccId);
+    public void deployJobSpec(DeployedJobSpecId deployedJobSpecId, byte[] planBytes, boolean checkForDuplicate)
+            throws Exception {
+        DeployJobSpecFunction fn = new DeployJobSpecFunction(deployedJobSpecId, planBytes, checkForDuplicate, ccId);
         ipcHandle.send(-1, fn, null);
     }
 
