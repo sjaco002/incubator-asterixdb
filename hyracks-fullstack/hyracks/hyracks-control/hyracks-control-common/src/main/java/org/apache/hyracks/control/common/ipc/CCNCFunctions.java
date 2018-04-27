@@ -713,14 +713,14 @@ public class CCNCFunctions {
 
         private final byte[] acgBytes;
 
-        private final boolean checkForDuplicate;
+        private final boolean upsert;
 
-        public DeployJobSpecFunction(DeployedJobSpecId deployedJobSpecId, byte[] acgBytes, boolean checkForDuplicate,
+        public DeployJobSpecFunction(DeployedJobSpecId deployedJobSpecId, byte[] acgBytes, boolean upsert,
                 CcId ccId) {
             super(ccId);
             this.deployedJobSpecId = deployedJobSpecId;
             this.acgBytes = acgBytes;
-            this.checkForDuplicate = checkForDuplicate;
+            this.upsert = upsert;
         }
 
         @Override
@@ -736,8 +736,8 @@ public class CCNCFunctions {
             return acgBytes;
         }
 
-        public boolean getCheckForDuplicate() {
-            return checkForDuplicate;
+        public boolean getUpsert() {
+            return upsert;
         }
     }
 
