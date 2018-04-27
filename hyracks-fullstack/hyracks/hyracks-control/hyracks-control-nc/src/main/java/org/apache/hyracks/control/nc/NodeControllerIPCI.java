@@ -110,7 +110,7 @@ final class NodeControllerIPCI implements IIPCI {
             case DEPLOY_JOB:
                 CCNCFunctions.DeployJobSpecFunction djf = (CCNCFunctions.DeployJobSpecFunction) fn;
                 ncs.getWorkQueue().schedule(new DeployJobSpecWork(ncs, djf.getDeployedJobSpecId(), djf.getacgBytes(),
-                        djf.getCheckForDuplicate(), djf.getCcId()));
+                        djf.getUpsert(), djf.getCcId()));
                 return;
 
             case UNDEPLOY_JOB:
