@@ -89,13 +89,13 @@ class ClientInterfaceIPCI implements IIPCI {
                 HyracksClientInterfaceFunctions.DeployJobSpecFunction djf =
                         (HyracksClientInterfaceFunctions.DeployJobSpecFunction) fn;
                 ccs.getWorkQueue().schedule(new DeployJobSpecWork(ccs, djf.getACGGFBytes(),
-                        deployedJobSpecIdFactory.create(), true, new IPCResponder<>(handle, mid)));
+                        deployedJobSpecIdFactory.create(), false, new IPCResponder<>(handle, mid)));
                 break;
             case UPSERT_DEPLOYED_JOB:
                 HyracksClientInterfaceFunctions.UpsertDeployedJobSpecFunction udjsf =
                         (HyracksClientInterfaceFunctions.UpsertDeployedJobSpecFunction) fn;
                 ccs.getWorkQueue().schedule(new DeployJobSpecWork(ccs, udjsf.getACGGFBytes(),
-                        udjsf.getDeployedJobSpecId(), false, new IPCResponder<>(handle, mid)));
+                        udjsf.getDeployedJobSpecId(), true, new IPCResponder<>(handle, mid)));
                 break;
             case UNDEPLOY_JOB:
                 HyracksClientInterfaceFunctions.UndeployJobSpecFunction dsjf =
