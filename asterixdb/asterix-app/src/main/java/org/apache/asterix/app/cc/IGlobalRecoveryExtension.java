@@ -16,23 +16,21 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package org.apache.hyracks.api.job;
+package org.apache.asterix.app.cc;
 
-import java.util.concurrent.atomic.AtomicLong;
+import org.apache.asterix.common.api.IExtension;
+import org.apache.asterix.common.cluster.IGlobalRecoveryManager;
 
-public class DeployedJobSpecIdFactory {
-    private final AtomicLong id = new AtomicLong(0);
+/**
+ * An interface for extensions of {@code IGlobalRecoveryManager}
+ */
+public interface IGlobalRecoveryExtension extends IExtension {
 
-    public DeployedJobSpecId create() {
-        return new DeployedJobSpecId(id.getAndIncrement());
+    @Override
+    default ExtensionKind getExtensionKind() {
+        return ExtensionKind.RECOVERY;
     }
 
-    public long maxDeployedJobSpecId() {
-        return id.get();
-    }
-
-    public void reset(long nextDeployedJobSpecId) {
-        id.set(nextDeployedJobSpecId);
-    }
+    public IGlobalRecoveryManager getGlobalRecoveryManager();
 
 }

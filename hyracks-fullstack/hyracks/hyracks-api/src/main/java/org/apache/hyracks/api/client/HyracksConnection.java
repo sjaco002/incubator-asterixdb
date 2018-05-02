@@ -119,6 +119,12 @@ public final class HyracksConnection implements IHyracksClientConnection {
     }
 
     @Override
+    public void resetDeployedJobIdFactory(long nextDeployedJobSpecId) throws Exception {
+        hci.resetDeployedJobIdFactory(nextDeployedJobSpecId);
+
+    }
+
+    @Override
     public DeployedJobSpecId deployJobSpec(JobSpecification jobSpec) throws Exception {
         JobSpecificationActivityClusterGraphGeneratorFactory jsacggf =
                 new JobSpecificationActivityClusterGraphGeneratorFactory(jobSpec);

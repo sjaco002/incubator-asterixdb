@@ -55,6 +55,7 @@ import org.apache.asterix.app.replication.NcLifecycleCoordinator;
 import org.apache.asterix.common.api.AsterixThreadFactory;
 import org.apache.asterix.common.api.INodeJobTracker;
 import org.apache.asterix.common.config.AsterixExtension;
+import org.apache.asterix.common.config.ExtensionProperties;
 import org.apache.asterix.common.config.ExternalProperties;
 import org.apache.asterix.common.config.GlobalConfig;
 import org.apache.asterix.common.config.MetadataProperties;
@@ -62,6 +63,7 @@ import org.apache.asterix.common.config.PropertiesAccessor;
 import org.apache.asterix.common.config.ReplicationProperties;
 import org.apache.asterix.common.context.IStorageComponentProvider;
 import org.apache.asterix.common.dataflow.ICcApplicationContext;
+import org.apache.asterix.common.exceptions.AsterixException;
 import org.apache.asterix.common.library.ILibraryManager;
 import org.apache.asterix.common.replication.INcLifecycleCoordinator;
 import org.apache.asterix.common.utils.Servlets;
@@ -139,12 +141,13 @@ public class CCApplication extends BaseCCApplication {
         INcLifecycleCoordinator lifecycleCoordinator = createNcLifeCycleCoordinator(repProp.isReplicationEnabled());
         ExternalLibraryUtils.setUpExternaLibraries(libraryManager, false);
         componentProvider = new StorageComponentProvider();
-        GlobalRecoveryManager globalRecoveryManager = createGlobalRecoveryManager();
+
+        List<AsterixExtension> extensions = new ArrayList<>();
+        extensions.addAll(getExtensions());
+        ccExtensionManager = new CCExtensionManager(extensions);
+        GlobalRecoveryManager globalRecoveryManager = createGlobalRecoveryManager(ccExtensionManager);
         statementExecutorCtx = new StatementExecutorContext();
         appCtx = createApplicationContext(libraryManager, globalRecoveryManager, lifecycleCoordinator);
-        List<AsterixExtension> extensions = new ArrayList<>();
-        extensions.addAll(this.getExtensions());
-        ccExtensionManager = new CCExtensionManager(extensions);
         appCtx.setExtensionManager(ccExtensionManager);
         final CCConfig ccConfig = controllerService.getCCConfig();
         if (System.getProperty("java.rmi.server.hostname") == null) {
@@ -177,8 +180,12 @@ public class CCApplication extends BaseCCApplication {
                 new MetadataLockManager());
     }
 
-    protected GlobalRecoveryManager createGlobalRecoveryManager() throws Exception {
-        return new GlobalRecoveryManager(ccServiceCtx, getHcc(), componentProvider);
+    protected GlobalRecoveryManager createGlobalRecoveryManager(CCExtensionManager ccExtensionManager)
+            throws Exception {
+        GlobalRecoveryManager globalRecoveryManager =
+                (GlobalRecoveryManager) ccExtensionManager.getGlobalRecoveryManager();
+        globalRecoveryManager.create(ccServiceCtx, getHcc(), componentProvider);
+        return globalRecoveryManager;
     }
 
     protected INcLifecycleCoordinator createNcLifeCycleCoordinator(boolean replicationEnabled) {
@@ -191,8 +198,8 @@ public class CCApplication extends BaseCCApplication {
         LoggingConfigUtil.defaultIfMissing(GlobalConfig.ASTERIX_LOGGER_NAME, level);
     }
 
-    protected List<AsterixExtension> getExtensions() {
-        return appCtx.getExtensionProperties().getExtensions();
+    protected List<AsterixExtension> getExtensions() throws IOException, AsterixException {
+        return new ExtensionProperties(PropertiesAccessor.getInstance(ccServiceCtx.getAppConfig())).getExtensions();
     }
 
     protected void configureServers() throws Exception {
