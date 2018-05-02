@@ -97,6 +97,15 @@ class ClientInterfaceIPCI implements IIPCI {
                 ccs.getWorkQueue().schedule(new DeployJobSpecWork(ccs, udjsf.getACGGFBytes(),
                         udjsf.getDeployedJobSpecId(), true, new IPCResponder<>(handle, mid)));
                 break;
+            case RESET_DEPLOYED_JOB_ID_FACTORY:
+                deployedJobSpecIdFactory.reset(((HyracksClientInterfaceFunctions.ResetDeployedJobIdFactoryFunction) fn)
+                        .getNextDeployedJobSpecId());
+                try {
+                    handle.send(mid, deployedJobSpecIdFactory.maxDeployedJobSpecId(), null);
+                } catch (IPCException e) {
+                    LOGGER.log(Level.WARN, "Error sending response to RESET_DEPLOYED_JOB_ID_FACTORY request", e);
+                }
+                break;
             case UNDEPLOY_JOB:
                 HyracksClientInterfaceFunctions.UndeployJobSpecFunction dsjf =
                         (HyracksClientInterfaceFunctions.UndeployJobSpecFunction) fn;

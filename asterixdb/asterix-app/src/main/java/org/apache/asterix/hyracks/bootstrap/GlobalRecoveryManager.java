@@ -54,17 +54,19 @@ import org.apache.logging.log4j.Logger;
 public class GlobalRecoveryManager implements IGlobalRecoveryManager {
 
     private static final Logger LOGGER = LogManager.getLogger();
-    protected final IStorageComponentProvider componentProvider;
-    protected final ICCServiceContext serviceCtx;
+    protected IStorageComponentProvider componentProvider;
+    protected ICCServiceContext serviceCtx;
     protected IHyracksClientConnection hcc;
     protected volatile boolean recoveryCompleted;
     protected volatile boolean recovering;
 
-    public GlobalRecoveryManager(ICCServiceContext serviceCtx, IHyracksClientConnection hcc,
+    @Override
+    public void create(ICCServiceContext serviceCtx, IHyracksClientConnection hcc,
             IStorageComponentProvider componentProvider) {
         this.serviceCtx = serviceCtx;
         this.hcc = hcc;
         this.componentProvider = componentProvider;
+
     }
 
     @Override
@@ -126,7 +128,8 @@ public class GlobalRecoveryManager implements IGlobalRecoveryManager {
             throws Exception {
         // Loop over datasets
         for (Dataverse dataverse : MetadataManager.INSTANCE.getDataverses(mdTxnCtx)) {
-            mdTxnCtx = recoverDataset(appCtx, mdTxnCtx, dataverse);
+            mdTxnCtx = recoverDatasets(appCtx, mdTxnCtx, dataverse);
+            MetadataManager.INSTANCE.getDataverse(mdTxnCtx, dataverse.getDataverseName());
         }
         return mdTxnCtx;
     }
@@ -138,8 +141,8 @@ public class GlobalRecoveryManager implements IGlobalRecoveryManager {
         }
     }
 
-    private MetadataTransactionContext recoverDataset(ICcApplicationContext appCtx, MetadataTransactionContext mdTxnCtx,
-            Dataverse dataverse) throws Exception {
+    protected MetadataTransactionContext recoverDatasets(ICcApplicationContext appCtx,
+            MetadataTransactionContext mdTxnCtx, Dataverse dataverse) throws Exception {
         if (!dataverse.getDataverseName().equals(MetadataConstants.METADATA_DATAVERSE_NAME)) {
             MetadataProvider metadataProvider = new MetadataProvider(appCtx, dataverse);
             try {
