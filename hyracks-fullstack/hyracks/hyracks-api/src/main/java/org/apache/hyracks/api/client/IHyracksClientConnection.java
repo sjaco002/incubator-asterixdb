@@ -111,15 +111,6 @@ public interface IHyracksClientConnection extends IClusterInfoCollector {
             throws Exception;
 
     /**
-     * Update the next id to use for deployed jobs.
-     *
-     * @param nextDeployedJobSpecId
-     *            The id that should be used for the next deployed job
-     * @throws Exception
-     */
-    void resetDeployedJobIdFactory(long nextDeployedJobSpecId) throws Exception;
-
-    /**
      * Remove the deployed Job Spec
      *
      * @param deployedJobSpecId

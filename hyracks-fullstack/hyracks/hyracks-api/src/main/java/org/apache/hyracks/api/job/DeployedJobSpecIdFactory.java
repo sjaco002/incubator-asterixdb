@@ -31,8 +31,4 @@ public class DeployedJobSpecIdFactory {
         return id.get();
     }
 
-    public void reset(long nextDeployedJobSpecId) {
-        id.set(nextDeployedJobSpecId);
-    }
-
 }

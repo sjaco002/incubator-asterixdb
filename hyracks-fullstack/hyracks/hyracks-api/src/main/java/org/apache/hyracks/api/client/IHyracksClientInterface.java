@@ -48,8 +48,6 @@ public interface IHyracksClientInterface {
     public DeployedJobSpecId upsertDeployedJobSpec(DeployedJobSpecId deployedJobSpecId, byte[] acggfBytes)
             throws Exception;
 
-    public void resetDeployedJobIdFactory(long nextDeployedJobSpecId) throws Exception;
-
     public DeployedJobSpecId undeployJobSpec(DeployedJobSpecId deployedJobSpecId) throws Exception;
 
     public NetworkAddress getDatasetDirectoryServiceInfo() throws Exception;

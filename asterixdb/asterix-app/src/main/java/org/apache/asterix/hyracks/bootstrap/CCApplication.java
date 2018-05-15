@@ -54,6 +54,7 @@ import org.apache.asterix.app.external.ExternalLibraryUtils;
 import org.apache.asterix.app.replication.NcLifecycleCoordinator;
 import org.apache.asterix.common.api.AsterixThreadFactory;
 import org.apache.asterix.common.api.INodeJobTracker;
+import org.apache.asterix.common.cluster.IGlobalRecoveryManager;
 import org.apache.asterix.common.config.AsterixExtension;
 import org.apache.asterix.common.config.ExtensionProperties;
 import org.apache.asterix.common.config.ExternalProperties;
@@ -145,7 +146,7 @@ public class CCApplication extends BaseCCApplication {
         List<AsterixExtension> extensions = new ArrayList<>();
         extensions.addAll(getExtensions());
         ccExtensionManager = new CCExtensionManager(extensions);
-        GlobalRecoveryManager globalRecoveryManager = createGlobalRecoveryManager(ccExtensionManager);
+        IGlobalRecoveryManager globalRecoveryManager = getGlobalRecoveryManager();
         statementExecutorCtx = new StatementExecutorContext();
         appCtx = createApplicationContext(libraryManager, globalRecoveryManager, lifecycleCoordinator);
         appCtx.setExtensionManager(ccExtensionManager);
@@ -173,17 +174,16 @@ public class CCApplication extends BaseCCApplication {
     }
 
     protected ICcApplicationContext createApplicationContext(ILibraryManager libraryManager,
-            GlobalRecoveryManager globalRecoveryManager, INcLifecycleCoordinator lifecycleCoordinator)
+            IGlobalRecoveryManager globalRecoveryManager, INcLifecycleCoordinator lifecycleCoordinator)
             throws AlgebricksException, IOException {
         return new CcApplicationContext(ccServiceCtx, getHcc(), libraryManager, () -> MetadataManager.INSTANCE,
                 globalRecoveryManager, lifecycleCoordinator, new ActiveNotificationHandler(), componentProvider,
                 new MetadataLockManager());
     }
 
-    protected GlobalRecoveryManager createGlobalRecoveryManager(CCExtensionManager ccExtensionManager)
+    protected IGlobalRecoveryManager getGlobalRecoveryManager()
             throws Exception {
-        GlobalRecoveryManager globalRecoveryManager =
-                (GlobalRecoveryManager) ccExtensionManager.getGlobalRecoveryManager();
+        IGlobalRecoveryManager globalRecoveryManager = ccExtensionManager.getGlobalRecoveryManager();
         globalRecoveryManager.create(ccServiceCtx, getHcc(), componentProvider);
         return globalRecoveryManager;
     }

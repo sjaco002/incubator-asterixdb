@@ -106,13 +106,6 @@ public class HyracksClientInterfaceRemoteProxy implements IHyracksClientInterfac
     }
 
     @Override
-    public void resetDeployedJobIdFactory(long nextDeployedJobSpecId) throws Exception {
-        HyracksClientInterfaceFunctions.ResetDeployedJobIdFactoryFunction rdjiff =
-                new HyracksClientInterfaceFunctions.ResetDeployedJobIdFactoryFunction(nextDeployedJobSpecId);
-        rpci.call(ipcHandle, rdjiff);
-    }
-
-    @Override
     public DeployedJobSpecId undeployJobSpec(DeployedJobSpecId deployedJobSpecId) throws Exception {
         HyracksClientInterfaceFunctions.UndeployJobSpecFunction sjf =
                 new HyracksClientInterfaceFunctions.UndeployJobSpecFunction(deployedJobSpecId);

@@ -42,7 +42,6 @@ public class HyracksClientInterfaceFunctions {
         DEPLOY_JOB,
         UNDEPLOY_JOB,
         UPSERT_DEPLOYED_JOB,
-        RESET_DEPLOYED_JOB_ID_FACTORY,
         CANCEL_JOB,
         GET_DATASET_DIRECTORY_SERIVICE_INFO,
         GET_DATASET_RESULT_STATUS,
@@ -132,25 +131,6 @@ public class HyracksClientInterfaceFunctions {
 
         public DeployedJobSpecId getDeployedJobSpecId() {
             return deployedJobSpecId;
-        }
-    }
-
-    public static class ResetDeployedJobIdFactoryFunction extends Function {
-        private static final long serialVersionUID = 1L;
-
-        private final long nextDeployedJobSpecId;
-
-        public ResetDeployedJobIdFactoryFunction(long nextDeployedJobSpecId) {
-            this.nextDeployedJobSpecId = nextDeployedJobSpecId;
-        }
-
-        @Override
-        public FunctionId getFunctionId() {
-            return FunctionId.RESET_DEPLOYED_JOB_ID_FACTORY;
-        }
-
-        public long getNextDeployedJobSpecId() {
-            return nextDeployedJobSpecId;
         }
     }
 
