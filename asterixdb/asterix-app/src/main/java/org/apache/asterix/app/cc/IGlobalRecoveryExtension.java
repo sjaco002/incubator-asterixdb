@@ -20,6 +20,9 @@ package org.apache.asterix.app.cc;
 
 import org.apache.asterix.common.api.IExtension;
 import org.apache.asterix.common.cluster.IGlobalRecoveryManager;
+import org.apache.asterix.common.context.IStorageComponentProvider;
+import org.apache.hyracks.api.application.ICCServiceContext;
+import org.apache.hyracks.api.client.IHyracksClientConnection;
 
 /**
  * An interface for extensions of {@code IGlobalRecoveryManager}
@@ -31,6 +34,7 @@ public interface IGlobalRecoveryExtension extends IExtension {
         return ExtensionKind.RECOVERY;
     }
 
-    public IGlobalRecoveryManager getGlobalRecoveryManager();
+    IGlobalRecoveryManager getGlobalRecoveryManager(ICCServiceContext serviceCtx, IHyracksClientConnection hcc,
+            IStorageComponentProvider componentProvider);
 
 }

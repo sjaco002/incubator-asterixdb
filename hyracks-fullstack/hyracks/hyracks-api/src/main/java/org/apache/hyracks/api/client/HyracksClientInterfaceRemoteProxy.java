@@ -98,18 +98,17 @@ public class HyracksClientInterfaceRemoteProxy implements IHyracksClientInterfac
     }
 
     @Override
-    public DeployedJobSpecId upsertDeployedJobSpec(DeployedJobSpecId deployedJobSpecId, byte[] acggfBytes)
-            throws Exception {
+    public void upsertDeployedJobSpec(DeployedJobSpecId deployedJobSpecId, byte[] acggfBytes) throws Exception {
         HyracksClientInterfaceFunctions.UpsertDeployedJobSpecFunction udjsf =
                 new HyracksClientInterfaceFunctions.UpsertDeployedJobSpecFunction(deployedJobSpecId, acggfBytes);
-        return (DeployedJobSpecId) rpci.call(ipcHandle, udjsf);
+        rpci.call(ipcHandle, udjsf);
     }
 
     @Override
-    public DeployedJobSpecId undeployJobSpec(DeployedJobSpecId deployedJobSpecId) throws Exception {
+    public void undeployJobSpec(DeployedJobSpecId deployedJobSpecId) throws Exception {
         HyracksClientInterfaceFunctions.UndeployJobSpecFunction sjf =
                 new HyracksClientInterfaceFunctions.UndeployJobSpecFunction(deployedJobSpecId);
-        return (DeployedJobSpecId) rpci.call(ipcHandle, sjf);
+        rpci.call(ipcHandle, sjf);
     }
 
     @Override

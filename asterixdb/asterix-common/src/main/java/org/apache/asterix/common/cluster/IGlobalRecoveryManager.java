@@ -19,18 +19,9 @@
 package org.apache.asterix.common.cluster;
 
 import org.apache.asterix.common.api.IClusterEventsSubscriber;
-import org.apache.asterix.common.context.IStorageComponentProvider;
 import org.apache.asterix.common.dataflow.ICcApplicationContext;
-import org.apache.hyracks.api.application.ICCServiceContext;
-import org.apache.hyracks.api.client.IHyracksClientConnection;
 
 public interface IGlobalRecoveryManager extends IClusterEventsSubscriber {
-
-    /**
-     * Sets up the Global Recovery Manager
-     */
-    void create(ICCServiceContext serviceCtx, IHyracksClientConnection hcc,
-            IStorageComponentProvider componentProvider);
 
     /**
      * Starts the global recovery process after the cluster state has changed to ACTIVE.

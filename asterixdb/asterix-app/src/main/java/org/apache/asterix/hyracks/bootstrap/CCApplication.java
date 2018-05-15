@@ -146,7 +146,7 @@ public class CCApplication extends BaseCCApplication {
         List<AsterixExtension> extensions = new ArrayList<>();
         extensions.addAll(getExtensions());
         ccExtensionManager = new CCExtensionManager(extensions);
-        IGlobalRecoveryManager globalRecoveryManager = getGlobalRecoveryManager();
+        IGlobalRecoveryManager globalRecoveryManager = createGlobalRecoveryManager();
         statementExecutorCtx = new StatementExecutorContext();
         appCtx = createApplicationContext(libraryManager, globalRecoveryManager, lifecycleCoordinator);
         appCtx.setExtensionManager(ccExtensionManager);
@@ -181,11 +181,8 @@ public class CCApplication extends BaseCCApplication {
                 new MetadataLockManager());
     }
 
-    protected IGlobalRecoveryManager getGlobalRecoveryManager()
-            throws Exception {
-        IGlobalRecoveryManager globalRecoveryManager = ccExtensionManager.getGlobalRecoveryManager();
-        globalRecoveryManager.create(ccServiceCtx, getHcc(), componentProvider);
-        return globalRecoveryManager;
+    protected IGlobalRecoveryManager createGlobalRecoveryManager() throws Exception {
+        return ccExtensionManager.getGlobalRecoveryManager(ccServiceCtx, getHcc(), componentProvider);
     }
 
     protected INcLifecycleCoordinator createNcLifeCycleCoordinator(boolean replicationEnabled) {

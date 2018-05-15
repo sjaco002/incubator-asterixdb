@@ -60,8 +60,7 @@ public class GlobalRecoveryManager implements IGlobalRecoveryManager {
     protected volatile boolean recoveryCompleted;
     protected volatile boolean recovering;
 
-    @Override
-    public void create(ICCServiceContext serviceCtx, IHyracksClientConnection hcc,
+    public GlobalRecoveryManager(ICCServiceContext serviceCtx, IHyracksClientConnection hcc,
             IStorageComponentProvider componentProvider) {
         this.serviceCtx = serviceCtx;
         this.hcc = hcc;
