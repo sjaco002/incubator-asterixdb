@@ -620,7 +620,8 @@ class LangExpressionToPlanTranslator
         // Adds an assign operator for the returning expression.
         LogicalVariable resultVar = context.newVar();
         AssignOperator assignOperator = new AssignOperator(resultVar, new MutableObject<>(p.first));
-        assignOperator.getInputs().add(p.second);
+        assignOperator.getInputs().add(insertOp.getInputs().get(0));
+        insertOp.getInputs().set(0, new MutableObject<>(assignOperator));
         assignOperator.setSourceLocation(sourceLoc);
 
         // Adds a distribute result operator.
@@ -629,7 +630,7 @@ class LangExpressionToPlanTranslator
         ResultSetSinkId rssId = new ResultSetSinkId(metadataProvider.getResultSetId());
         ResultSetDataSink sink = new ResultSetDataSink(rssId, null);
         DistributeResultOperator distResultOperator = new DistributeResultOperator(expressions, sink);
-        distResultOperator.getInputs().add(new MutableObject<>(assignOperator));
+        distResultOperator.getInputs().add(new MutableObject<>(inputOperator));
 
         distResultOperator.setSourceLocation(sourceLoc);
         return distResultOperator;
