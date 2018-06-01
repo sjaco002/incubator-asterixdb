@@ -79,9 +79,15 @@ import org.apache.hyracks.api.exceptions.SourceLocation;
  */
 public class IntroduceDynamicTypeCastRule implements IAlgebraicRewriteRule {
 
+    private boolean planHasDistributeResult = false;
+
     @Override
     public boolean rewritePre(Mutable<ILogicalOperator> opRef, IOptimizationContext context)
             throws AlgebricksException {
+        AbstractLogicalOperator op = (AbstractLogicalOperator) opRef.getValue();
+        if (op.getOperatorTag() == LogicalOperatorTag.DISTRIBUTE_RESULT) {
+            planHasDistributeResult = true;
+        }
         return false;
     }
 
@@ -89,69 +95,75 @@ public class IntroduceDynamicTypeCastRule implements IAlgebraicRewriteRule {
     public boolean rewritePost(Mutable<ILogicalOperator> opRef, IOptimizationContext context)
             throws AlgebricksException {
         // Depending on the operator type, we need to extract the following pieces of information.
-        AbstractLogicalOperator op;
-        ARecordType requiredRecordType;
-        LogicalVariable recordVar;
+        AbstractLogicalOperator op = null;
+        AbstractLogicalOperator topOp = null;
+        ARecordType requiredRecordType = null;
+        LogicalVariable recordVar = null;
 
         // We identify INSERT and DISTRIBUTE_RESULT operators.
         AbstractLogicalOperator op1 = (AbstractLogicalOperator) opRef.getValue();
-        switch (op1.getOperatorTag()) {
-            case SINK:
-            case DELEGATE_OPERATOR: {
-                /**
-                 * pattern match: commit insert assign
-                 * resulting plan: commit-insert-project-assign
-                 */
-                if (op1.getOperatorTag() == LogicalOperatorTag.DELEGATE_OPERATOR) {
-                    DelegateOperator eOp = (DelegateOperator) op1;
-                    if (!(eOp.getDelegate() instanceof CommitOperator)) {
-                        return false;
-                    }
-                }
 
-                AbstractLogicalOperator op2 = (AbstractLogicalOperator) op1.getInputs().get(0).getValue();
-                if (op2.getOperatorTag() == LogicalOperatorTag.INSERT_DELETE_UPSERT) {
-                    InsertDeleteUpsertOperator insertDeleteOp = (InsertDeleteUpsertOperator) op2;
-                    if (insertDeleteOp.getOperation() == InsertDeleteUpsertOperator.Kind.DELETE) {
-                        return false;
-                    }
+        if (op1.getOperatorTag() == LogicalOperatorTag.DISTRIBUTE_RESULT) {
+            requiredRecordType = (ARecordType) op1.getAnnotations().get("output-record-type");
+            topOp = op1;
 
-                    // Remember this is the operator we need to modify
-                    op = insertDeleteOp;
-
-                    // Derive the required ARecordType based on the schema of the DataSource
-                    InsertDeleteUpsertOperator insertDeleteOperator = (InsertDeleteUpsertOperator) op2;
-                    DataSource dataSource = (DataSource) insertDeleteOperator.getDataSource();
-                    requiredRecordType = (ARecordType) dataSource.getItemType();
-
-                    // Derive the Variable which we will potentially wrap with cast/null functions
-                    ILogicalExpression expr = insertDeleteOperator.getPayloadExpression().getValue();
-                    List<LogicalVariable> payloadVars = new ArrayList<>();
-                    expr.getUsedVariables(payloadVars);
-                    recordVar = payloadVars.get(0);
-                } else {
-                    return false;
-                }
-
-                break;
+            if (requiredRecordType != null) {
+                // Remember this is the operator we need to modify
+                op = op1;
+                recordVar = ((VariableReferenceExpression) ((DistributeResultOperator) op).getExpressions().get(0)
+                        .getValue()).getVariableReference();
             }
-            case DISTRIBUTE_RESULT: {
-                // First, see if there was an output-record-type specified
-                requiredRecordType = (ARecordType) op1.getAnnotations().get("output-record-type");
-                if (requiredRecordType == null) {
+
+        } else if (planHasDistributeResult) {
+            return false;
+        }
+
+        if (requiredRecordType == null) {
+            /**
+             * pattern match: commit insert assign
+             * resulting plan: commit-insert-project-assign
+             */
+            while (op1.getOperatorTag() != LogicalOperatorTag.DELEGATE_OPERATOR && op1.getInputs().size() == 1) {
+                op1 = (AbstractLogicalOperator) op1.getInputs().get(0).getValue();
+            }
+            if (op1.getOperatorTag() != LogicalOperatorTag.DELEGATE_OPERATOR) {
+                return false;
+            }
+
+            DelegateOperator eOp = (DelegateOperator) op1;
+            if (!(eOp.getDelegate() instanceof CommitOperator)) {
+                return false;
+            }
+
+            AbstractLogicalOperator op2 = (AbstractLogicalOperator) op1.getInputs().get(0).getValue();
+            if (op2.getOperatorTag() == LogicalOperatorTag.INSERT_DELETE_UPSERT) {
+                InsertDeleteUpsertOperator insertDeleteOp = (InsertDeleteUpsertOperator) op2;
+                if (insertDeleteOp.getOperation() == InsertDeleteUpsertOperator.Kind.DELETE) {
                     return false;
                 }
 
                 // Remember this is the operator we need to modify
-                op = op1;
+                op = insertDeleteOp;
+                if (topOp == null) {
+                    topOp = op;
+                }
 
-                recordVar = ((VariableReferenceExpression) ((DistributeResultOperator) op).getExpressions().get(0)
-                        .getValue()).getVariableReference();
-                break;
-            }
-            default: {
+                // Derive the required ARecordType based on the schema of the DataSource
+                InsertDeleteUpsertOperator insertDeleteOperator = (InsertDeleteUpsertOperator) op2;
+                DataSource dataSource = (DataSource) insertDeleteOperator.getDataSource();
+                requiredRecordType = (ARecordType) dataSource.getItemType();
+
+                // Derive the Variable which we will potentially wrap with cast/null functions
+                ILogicalExpression expr = insertDeleteOperator.getPayloadExpression().getValue();
+                List<LogicalVariable> payloadVars = new ArrayList<>();
+                expr.getUsedVariables(payloadVars);
+                recordVar = payloadVars.get(0);
+            } else {
                 return false;
             }
+        }
+        if (recordVar == null) {
+            return false;
         }
 
         // Derive the statically-computed type of the record
@@ -170,10 +182,11 @@ public class IntroduceDynamicTypeCastRule implements IAlgebraicRewriteRule {
         boolean cast = !compatible(requiredRecordType, inputRecordType, op.getSourceLocation());
 
         if (checkUnknown) {
-            recordVar = addWrapperFunction(requiredRecordType, recordVar, op, context, BuiltinFunctions.CHECK_UNKNOWN);
+            recordVar =
+                    addWrapperFunction(requiredRecordType, recordVar, topOp, context, BuiltinFunctions.CHECK_UNKNOWN);
         }
         if (cast) {
-            addWrapperFunction(requiredRecordType, recordVar, op, context, BuiltinFunctions.CAST_TYPE);
+            addWrapperFunction(requiredRecordType, recordVar, topOp, context, BuiltinFunctions.CAST_TYPE);
         }
         return cast || checkUnknown;
     }
