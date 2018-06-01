@@ -120,18 +120,21 @@ public class IntroduceDynamicTypeCastRule implements IAlgebraicRewriteRule {
 
         if (requiredRecordType == null) {
             /**
-             * pattern match: commit insert assign
-             * resulting plan: commit-insert-project-assign
+             * pattern match: commit insert assign OR sink insert assign
+             * resulting plan: commit-insert-project-assign or sink-insert-project-assign
              */
-            while (op1.getOperatorTag() != LogicalOperatorTag.DELEGATE_OPERATOR && op1.getInputs().size() == 1) {
+            while (op1.getOperatorTag() != LogicalOperatorTag.DELEGATE_OPERATOR
+                    && op1.getOperatorTag() != LogicalOperatorTag.SINK && op1.getInputs().size() == 1) {
                 op1 = (AbstractLogicalOperator) op1.getInputs().get(0).getValue();
             }
-            if (op1.getOperatorTag() != LogicalOperatorTag.DELEGATE_OPERATOR) {
-                return false;
-            }
 
-            DelegateOperator eOp = (DelegateOperator) op1;
-            if (!(eOp.getDelegate() instanceof CommitOperator)) {
+            if (op1.getOperatorTag() == LogicalOperatorTag.DELEGATE_OPERATOR) {
+                DelegateOperator eOp = (DelegateOperator) op1;
+                if (!(eOp.getDelegate() instanceof CommitOperator)) {
+                    return false;
+                }
+            }
+            else if (op1.getOperatorTag() != LogicalOperatorTag.SINK) {
                 return false;
             }
 
