@@ -131,20 +131,6 @@
         </executions>
       </plugin>
       <plugin>
-        <groupId>org.apache.maven.plugins</groupId>
-        <artifactId>maven-dependency-plugin</artifactId>
-        <configuration>
-          <ignoredUsedUndeclaredDependencies>
-            <ignoredUsedUndeclaredDependency>org.json:json:*</ignoredUsedUndeclaredDependency>
-            <ignoredUsedUndeclaredDependency>stax:stax-api:*</ignoredUsedUndeclaredDependency>
-            <ignoredUsedUndeclaredDependency>javax.xml.bind:jaxb-api:*</ignoredUsedUndeclaredDependency>
-          </ignoredUsedUndeclaredDependencies>
-          <ignoredUnusedDeclaredDependencies>
-            <ignoredUnusedDeclaredDependency>xml-apis:xml-apis:*</ignoredUnusedDeclaredDependency>
-          </ignoredUnusedDeclaredDependencies>
-        </configuration>
-      </plugin>
-      <plugin>
         <groupId>org.apache.rat</groupId>
         <artifactId>apache-rat-plugin</artifactId>
         <configuration>
@@ -395,11 +381,6 @@
       <artifactId>hyracks-api</artifactId>
     </dependency>
     <dependency>
-      <groupId>xml-apis</groupId>
-      <artifactId>xml-apis</artifactId>
-      <version>1.4.01</version>
-    </dependency>
-    <dependency>
       <groupId>com.fasterxml.jackson.core</groupId>
       <artifactId>jackson-databind</artifactId>
     </dependency>
@@ -416,5 +397,10 @@
       <groupId>org.apache.logging.log4j</groupId>
       <artifactId>log4j-api</artifactId>
     </dependency>
+	<dependency>
+	  <groupId>com.esri.geometry</groupId>
+	  <artifactId>esri-geometry-api</artifactId>
+	  <version>2.0.0</version>
+	</dependency>
   </dependencies>
 </project>

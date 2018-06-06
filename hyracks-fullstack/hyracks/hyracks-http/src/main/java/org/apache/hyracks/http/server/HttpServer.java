@@ -30,6 +30,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import org.apache.hyracks.http.api.IChannelClosedHandler;
 import org.apache.hyracks.http.api.IServlet;
+import org.apache.hyracks.util.MXHelper;
 import org.apache.hyracks.util.ThreadDumpUtil;
 import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;
@@ -38,10 +39,12 @@ import org.apache.logging.log4j.Logger;
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.buffer.PooledByteBufAllocator;
 import io.netty.channel.Channel;
+import io.netty.channel.ChannelInitializer;
 import io.netty.channel.ChannelOption;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.FixedRecvByteBufAllocator;
 import io.netty.channel.WriteBufferWaterMark;
+import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
 import io.netty.handler.codec.http.FullHttpRequest;
 import io.netty.handler.logging.LogLevel;
@@ -241,7 +244,7 @@ public class HttpServer {
                 .childOption(ChannelOption.AUTO_READ, Boolean.FALSE)
                 .childOption(ChannelOption.ALLOCATOR, PooledByteBufAllocator.DEFAULT)
                 .childOption(ChannelOption.WRITE_BUFFER_WATER_MARK, WRITE_BUFFER_WATER_MARK)
-                .handler(new LoggingHandler(LogLevel.DEBUG)).childHandler(new HttpServerInitializer(this));
+                .handler(new LoggingHandler(LogLevel.DEBUG)).childHandler(getChannelInitializer());
         Channel newChannel = b.bind(port).sync().channel();
         newChannel.closeFuture().addListener(f -> {
             // This listener is invoked from within a netty IO thread. Hence, we can never block it
@@ -251,6 +254,7 @@ public class HttpServer {
                     return;
                 }
                 LOGGER.log(Level.WARN, "{} has stopped unexpectedly. Starting server recovery", this);
+                MXHelper.logFileDescriptors();
                 triggerRecovery();
             }
         });
@@ -377,6 +381,10 @@ public class HttpServer {
 
     protected HttpServerHandler<? extends HttpServer> createHttpHandler(int chunkSize) {
         return new HttpServerHandler<>(this, chunkSize);
+    }
+
+    protected ChannelInitializer<SocketChannel> getChannelInitializer() {
+        return new HttpServerInitializer(this);
     }
 
     public ThreadPoolExecutor getExecutor(HttpRequestHandler handler) {

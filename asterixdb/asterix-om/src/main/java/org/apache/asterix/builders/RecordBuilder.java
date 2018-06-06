@@ -69,7 +69,7 @@ public class RecordBuilder implements IARecordBuilder {
     private int[] openFieldNameLengths;
 
     private int numberOfOpenFields;
-    private RuntimeRecordTypeInfo recTypeInfo;
+    private final RuntimeRecordTypeInfo recTypeInfo;
 
     public RecordBuilder() {
         this.closedPartOutputStream = new ByteArrayAccessibleOutputStream();
@@ -296,18 +296,13 @@ public class RecordBuilder implements IARecordBuilder {
                 out.write(openPartOutputStream.getByteArray(), 0, openPartOutputStream.getLength());
             }
         } catch (IOException e) {
-            throw new HyracksDataException(e);
+            throw HyracksDataException.create(e);
         }
     }
 
     @Override
     public int getFieldId(String fieldName) {
-        for (int i = 0; i < recType.getFieldNames().length; i++) {
-            if (recType.getFieldNames()[i].equals(fieldName)) {
-                return i;
-            }
-        }
-        return -1;
+        return recType.getFieldIndex(fieldName);
     }
 
     public IBinaryHashFunction getFieldNameHashFunction() {

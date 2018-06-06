@@ -23,16 +23,14 @@ import java.net.InetSocketAddress;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 
-import junit.framework.Assert;
-
-import org.junit.Test;
-
 import org.apache.hyracks.ipc.api.IIPCHandle;
 import org.apache.hyracks.ipc.api.IIPCI;
 import org.apache.hyracks.ipc.api.RPCInterface;
 import org.apache.hyracks.ipc.exceptions.IPCException;
 import org.apache.hyracks.ipc.impl.IPCSystem;
 import org.apache.hyracks.ipc.impl.JavaSerializationBasedPayloadSerializerDeserializer;
+import org.junit.Assert;
+import org.junit.Test;
 
 public class IPCTest {
     @Test
@@ -45,7 +43,7 @@ public class IPCTest {
         IPCSystem client = createClientIPCSystem(rpci);
         client.start();
 
-        IIPCHandle handle = client.getHandle(serverAddr);
+        IIPCHandle handle = client.getHandle(serverAddr, 0);
 
         for (int i = 0; i < 100; ++i) {
             Assert.assertEquals(rpci.call(handle, Integer.valueOf(i)), Integer.valueOf(2 * i));

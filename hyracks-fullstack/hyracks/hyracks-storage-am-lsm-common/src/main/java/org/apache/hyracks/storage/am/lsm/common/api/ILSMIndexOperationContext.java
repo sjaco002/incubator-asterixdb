@@ -19,10 +19,11 @@
 package org.apache.hyracks.storage.am.lsm.common.api;
 
 import java.util.List;
+import java.util.Map;
 
+import org.apache.hyracks.storage.am.common.api.IExtendedModificationOperationCallback;
 import org.apache.hyracks.storage.am.common.api.IIndexOperationContext;
 import org.apache.hyracks.storage.am.common.tuples.PermutingTupleReference;
-import org.apache.hyracks.storage.common.IModificationOperationCallback;
 import org.apache.hyracks.storage.common.ISearchOperationCallback;
 import org.apache.hyracks.storage.common.ISearchPredicate;
 import org.apache.hyracks.storage.common.MultiComparator;
@@ -34,7 +35,7 @@ public interface ILSMIndexOperationContext extends IIndexOperationContext {
 
     ISearchOperationCallback getSearchOperationCallback();
 
-    IModificationOperationCallback getModificationCallback();
+    IExtendedModificationOperationCallback getModificationCallback();
 
     void setCurrentMutableComponentId(int currentMutableComponentId);
 
@@ -82,4 +83,36 @@ public interface ILSMIndexOperationContext extends IIndexOperationContext {
      * @return true if performance tracing is enabled, false otherwise
      */
     boolean isTracingEnabled();
+
+    boolean isFilterSkipped();
+
+    void setFilterSkip(boolean skip);
+
+    boolean isRecovery();
+
+    void setRecovery(boolean recovery);
+
+    /**
+     * @return the IO operation associated with this context
+     */
+    ILSMIOOperation getIoOperation();
+
+    /**
+     * Set the IO operation associated with this context
+     *
+     * @param ioOperation
+     */
+    void setIoOperation(ILSMIOOperation ioOperation);
+
+    /**
+     * Set a map in the context to pass pairs of keys and values
+     *
+     * @param map
+     */
+    void setParameters(Map<String, Object> map);
+
+    /**
+     * @return the key value map of the context
+     */
+    Map<String, Object> getParameters();
 }

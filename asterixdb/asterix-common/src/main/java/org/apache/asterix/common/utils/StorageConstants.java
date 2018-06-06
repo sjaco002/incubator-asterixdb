@@ -37,22 +37,16 @@ public class StorageConstants {
     public static final String METADATA_FILE_NAME = ".metadata";
     public static final String MASK_FILE_PREFIX = ".mask_";
     public static final String COMPONENT_MASK_FILE_PREFIX = MASK_FILE_PREFIX + "C_";
-    public static final String LEGACY_DATASET_INDEX_NAME_SEPARATOR = "_idx_";
 
     /**
      * The storage version of AsterixDB related artifacts (e.g. log files, checkpoint files, etc..).
      */
-    private static final int LOCAL_STORAGE_VERSION = 2;
+    private static final int LOCAL_STORAGE_VERSION = 3;
 
     /**
      * The storage version of AsterixDB stack.
      */
     public static final int VERSION = LOCAL_STORAGE_VERSION + ITreeIndexFrame.Constants.VERSION;
-
-    /**
-     * The storage version in which the rebalance storage structure was introduced
-     */
-    public static final int REBALANCE_STORAGE_VERSION = 8;
 
     private StorageConstants() {
     }

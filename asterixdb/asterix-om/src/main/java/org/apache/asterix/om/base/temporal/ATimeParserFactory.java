@@ -47,7 +47,7 @@ public class ATimeParserFactory implements IValueParserFactory {
                 try {
                     out.writeInt(parseTimePart(buffer, start, length));
                 } catch (IOException ex) {
-                    throw new HyracksDataException(ex);
+                    throw HyracksDataException.create(ex);
                 }
             }
         };
@@ -63,7 +63,6 @@ public class ATimeParserFactory implements IValueParserFactory {
      * @throws HyracksDataException
      */
     public static int parseTimePart(String timeString, int start, int length) throws HyracksDataException {
-
         int offset = 0;
 
         int hour = 0, min = 0, sec = 0, millis = 0;

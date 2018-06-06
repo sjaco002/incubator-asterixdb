@@ -66,7 +66,7 @@ public class PrintBinaryDescriptor extends AbstractScalarFunctionDynamicDescript
 
             @Override
             public IScalarEvaluator createScalarEvaluator(final IHyracksTaskContext ctx) throws HyracksDataException {
-                return new AbstractBinaryScalarEvaluator(ctx, args) {
+                return new AbstractBinaryScalarEvaluator(ctx, args, sourceLoc) {
 
                     private StringBuilder stringBuilder = new StringBuilder();
                     private final ByteArrayPointable byteArrayPtr = new ByteArrayPointable();
@@ -101,12 +101,12 @@ public class PrintBinaryDescriptor extends AbstractScalarFunctionDynamicDescript
                                 Base64Printer.printBase64Binary(byteArrayPtr.getByteArray(),
                                         byteArrayPtr.getContentStartOffset(), lengthBinary, stringBuilder);
                             } else {
-                                throw new UnsupportedItemTypeException(getIdentifier(), arg1Tag.serialize());
+                                throw new UnsupportedItemTypeException(sourceLoc, getIdentifier(), arg1Tag.serialize());
                             }
                             dataOutput.writeByte(ATypeTag.SERIALIZED_STRING_TYPE_TAG);
                             writer.writeUTF8(stringBuilder.toString(), dataOutput);
                         } catch (IOException e) {
-                            throw new HyracksDataException(e);
+                            throw HyracksDataException.create(e);
                         }
                         result.set(resultStorage);
                     }

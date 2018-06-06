@@ -280,6 +280,7 @@ public class ClusterStateManager implements IClusterStateManager {
                 clusterActiveLocations.add(p.getActiveNodeId());
             }
         }
+        clusterActiveLocations.removeAll(pendingRemoval);
         clusterPartitionConstraint =
                 new AlgebricksAbsolutePartitionConstraint(clusterActiveLocations.toArray(new String[] {}));
     }
@@ -459,10 +460,6 @@ public class ClusterStateManager implements IClusterStateManager {
                 configManager.set(nodeId, key, value);
             }
         });
-    }
-
-    public String getStoragePathPrefix() {
-        return appCtx.getNodeProperties().getStorageSubdir();
     }
 
 }

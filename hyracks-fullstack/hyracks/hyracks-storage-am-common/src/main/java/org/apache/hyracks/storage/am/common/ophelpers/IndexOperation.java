@@ -26,6 +26,7 @@ public enum IndexOperation {
     UPDATE,
     UPSERT,
     SEARCH,
+    FILTER_MOD,
     DISKORDERSCAN,
     PHYSICALDELETE,
     NOOP,
@@ -34,6 +35,5 @@ public enum IndexOperation {
     FLUSH,
     REPLICATE,
     DISK_COMPONENT_SCAN,
-    DELETE_MEMORY_COMPONENT,
-    DELETE_DISK_COMPONENTS
+    DELETE_COMPONENTS
 }

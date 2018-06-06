@@ -18,26 +18,32 @@
  */
 package org.apache.hyracks.storage.am.lsm.common.impls;
 
-import java.util.LinkedList;
+import java.util.ArrayList;
 import java.util.List;
 
 import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.apache.hyracks.dataflow.common.data.accessors.ITupleReference;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMDiskComponent;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMDiskComponentBulkLoader;
+import org.apache.hyracks.storage.am.lsm.common.api.ILSMIOOperation;
+import org.apache.hyracks.storage.am.lsm.common.api.ILSMIOOperation.LSMIOOperationStatus;
+import org.apache.hyracks.util.annotations.CriticalPath;
 
 /**
  * Class encapsulates a chain of operations, happening during an LSM disk component bulkload
  */
 public class ChainedLSMDiskComponentBulkLoader implements ILSMDiskComponentBulkLoader {
 
-    private List<IChainedComponentBulkLoader> bulkloaderChain = new LinkedList<>();
-    private boolean isEmptyComponent = true;
-    private boolean cleanedUpArtifacts = false;
+    private List<IChainedComponentBulkLoader> bulkloaderChain = new ArrayList<>();
+    private final ILSMIOOperation operation;
     private final ILSMDiskComponent diskComponent;
     private final boolean cleanupEmptyComponent;
+    private boolean isEmptyComponent = true;
+    private boolean cleanedUpArtifacts = false;
 
-    public ChainedLSMDiskComponentBulkLoader(ILSMDiskComponent diskComponent, boolean cleanupEmptyComponent) {
+    public ChainedLSMDiskComponentBulkLoader(ILSMIOOperation operation, ILSMDiskComponent diskComponent,
+            boolean cleanupEmptyComponent) {
+        this.operation = operation;
         this.diskComponent = diskComponent;
         this.cleanupEmptyComponent = cleanupEmptyComponent;
     }
@@ -46,14 +52,18 @@ public class ChainedLSMDiskComponentBulkLoader implements ILSMDiskComponentBulkL
         bulkloaderChain.add(bulkloader);
     }
 
+    @SuppressWarnings("squid:S1181")
     @Override
+    @CriticalPath
     public void add(ITupleReference tuple) throws HyracksDataException {
         try {
             ITupleReference t = tuple;
-            for (IChainedComponentBulkLoader lsmBulkloader : bulkloaderChain) {
-                t = lsmBulkloader.add(t);
+            final int bulkloadersCount = bulkloaderChain.size();
+            for (int i = 0; i < bulkloadersCount; i++) {
+                t = bulkloaderChain.get(i).add(t);
             }
-        } catch (Exception e) {
+        } catch (Throwable e) {
+            operation.setFailure(e);
             cleanupArtifacts();
             throw e;
         }
@@ -62,14 +72,18 @@ public class ChainedLSMDiskComponentBulkLoader implements ILSMDiskComponentBulkL
         }
     }
 
+    @SuppressWarnings("squid:S1181")
     @Override
+    @CriticalPath
     public void delete(ITupleReference tuple) throws HyracksDataException {
         try {
             ITupleReference t = tuple;
-            for (IChainedComponentBulkLoader lsmOperation : bulkloaderChain) {
-                t = lsmOperation.delete(t);
+            final int bulkloadersCount = bulkloaderChain.size();
+            for (int i = 0; i < bulkloadersCount; i++) {
+                t = bulkloaderChain.get(i).delete(t);
             }
-        } catch (Exception e) {
+        } catch (Throwable e) {
+            operation.setFailure(e);
             cleanupArtifacts();
             throw e;
         }
@@ -103,8 +117,14 @@ public class ChainedLSMDiskComponentBulkLoader implements ILSMDiskComponentBulkL
 
     @Override
     public void abort() throws HyracksDataException {
+        operation.setStatus(LSMIOOperationStatus.FAILURE);
         for (IChainedComponentBulkLoader lsmOperation : bulkloaderChain) {
             lsmOperation.abort();
         }
+    }
+
+    @Override
+    public ILSMIOOperation getOperation() {
+        return operation;
     }
 }

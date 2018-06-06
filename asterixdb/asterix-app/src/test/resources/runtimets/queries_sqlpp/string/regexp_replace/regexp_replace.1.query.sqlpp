@@ -17,8 +17,6 @@
  * under the License.
  */
 
-
-
 {
   'result1':REGEXP_REPLACE('abracadabra','',null,null),
   'result2':REGEXP_REPLACE('abracadabra','bra','XXX',''),

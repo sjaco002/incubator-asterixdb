@@ -27,12 +27,14 @@ import org.apache.asterix.om.base.ADouble;
 import org.apache.asterix.om.base.AMutableDouble;
 import org.apache.asterix.om.types.ATypeTag;
 import org.apache.asterix.om.types.BuiltinType;
+import org.apache.asterix.runtime.evaluators.common.NumberUtils;
 import org.apache.asterix.runtime.exceptions.InvalidDataFormatException;
 import org.apache.asterix.runtime.exceptions.TypeMismatchException;
 import org.apache.hyracks.algebricks.core.algebra.functions.FunctionIdentifier;
 import org.apache.hyracks.algebricks.runtime.base.IScalarEvaluator;
 import org.apache.hyracks.api.dataflow.value.ISerializerDeserializer;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
+import org.apache.hyracks.api.exceptions.SourceLocation;
 import org.apache.hyracks.data.std.api.IPointable;
 import org.apache.hyracks.data.std.primitive.UTF8StringPointable;
 import org.apache.hyracks.data.std.primitive.VoidPointable;
@@ -44,19 +46,17 @@ public abstract class AbstractDoubleConstructorEvaluator implements IScalarEvalu
     protected static final ISerializerDeserializer<ADouble> DOUBLE_SERDE =
             SerializerDeserializerProvider.INSTANCE.getSerializerDeserializer(BuiltinType.ADOUBLE);
 
-    protected static final UTF8StringPointable POSITIVE_INF = UTF8StringPointable.generateUTF8Pointable("INF");
-    protected static final UTF8StringPointable NEGATIVE_INF = UTF8StringPointable.generateUTF8Pointable("-INF");
-    protected static final UTF8StringPointable NAN = UTF8StringPointable.generateUTF8Pointable("NaN");
-
     protected final IScalarEvaluator inputEval;
+    protected final SourceLocation sourceLoc;
     protected final ArrayBackedValueStorage resultStorage;
     protected final DataOutput out;
     protected final IPointable inputArg;
     protected final AMutableDouble aDouble;
     protected final UTF8StringPointable utf8Ptr;
 
-    protected AbstractDoubleConstructorEvaluator(IScalarEvaluator inputEval) {
+    protected AbstractDoubleConstructorEvaluator(IScalarEvaluator inputEval, SourceLocation sourceLoc) {
         this.inputEval = inputEval;
+        this.sourceLoc = sourceLoc;
         resultStorage = new ArrayBackedValueStorage();
         out = resultStorage.getDataOutput();
         inputArg = new VoidPointable();
@@ -71,47 +71,31 @@ public abstract class AbstractDoubleConstructorEvaluator implements IScalarEvalu
             resultStorage.reset();
             evaluateImpl(result);
         } catch (IOException e) {
-            throw new InvalidDataFormatException(getIdentifier(), e, ATypeTag.SERIALIZED_DOUBLE_TYPE_TAG);
+            throw new InvalidDataFormatException(sourceLoc, getIdentifier(), e, ATypeTag.SERIALIZED_DOUBLE_TYPE_TAG);
         }
     }
 
     protected void evaluateImpl(IPointable result) throws IOException {
         byte[] bytes = inputArg.getByteArray();
-        int offset = inputArg.getStartOffset();
-        byte tt = bytes[offset];
+        int startOffset = inputArg.getStartOffset();
+        byte tt = bytes[startOffset];
         if (tt == ATypeTag.SERIALIZED_DOUBLE_TYPE_TAG) {
             result.set(inputArg);
         } else if (tt == ATypeTag.SERIALIZED_STRING_TYPE_TAG) {
-            int len = inputArg.getLength();
-            int utf8offset = offset + 1;
-            int utf8len = len - 1;
-            if (POSITIVE_INF.compareTo(bytes, utf8offset, utf8len) == 0) {
-                setDouble(result, Double.POSITIVE_INFINITY);
-            } else if (NEGATIVE_INF.compareTo(bytes, utf8offset, utf8len) == 0) {
-                setDouble(result, Double.NEGATIVE_INFINITY);
-            } else if (NAN.compareTo(bytes, utf8offset, utf8len) == 0) {
-                setDouble(result, Double.NaN);
+            utf8Ptr.set(bytes, startOffset + 1, inputArg.getLength() - 1);
+            if (NumberUtils.parseDouble(utf8Ptr, aDouble)) {
+                DOUBLE_SERDE.serialize(aDouble, out);
+                result.set(resultStorage);
             } else {
-                utf8Ptr.set(bytes, utf8offset, utf8len);
-                try {
-                    setDouble(result, Double.parseDouble(utf8Ptr.toString()));
-                } catch (NumberFormatException e) {
-                    handleUparseableString(result, e);
-                }
+                handleUparseableString(result);
             }
         } else {
-            throw new TypeMismatchException(getIdentifier(), 0, tt, ATypeTag.SERIALIZED_STRING_TYPE_TAG);
+            throw new TypeMismatchException(sourceLoc, getIdentifier(), 0, tt, ATypeTag.SERIALIZED_STRING_TYPE_TAG);
         }
     }
 
-    protected void handleUparseableString(IPointable result, NumberFormatException e) throws HyracksDataException {
-        throw new InvalidDataFormatException(getIdentifier(), e, ATypeTag.SERIALIZED_DOUBLE_TYPE_TAG);
-    }
-
-    protected void setDouble(IPointable result, double value) throws HyracksDataException {
-        aDouble.setValue(value);
-        DOUBLE_SERDE.serialize(aDouble, out);
-        result.set(resultStorage);
+    protected void handleUparseableString(IPointable result) throws HyracksDataException {
+        throw new InvalidDataFormatException(sourceLoc, getIdentifier(), ATypeTag.SERIALIZED_DOUBLE_TYPE_TAG);
     }
 
     protected abstract FunctionIdentifier getIdentifier();

@@ -125,7 +125,6 @@ public abstract class LSMIndexSearchCursor extends EnforcedIndexCursor implement
                     rangeCursors[i].close();
                 }
             }
-            rangeCursors = null;
         } finally {
             if (lsmHarness != null) {
                 lsmHarness.endSearch(opCtx);
@@ -247,9 +246,9 @@ public abstract class LSMIndexSearchCursor extends EnforcedIndexCursor implement
         }
     }
 
-    public class PriorityQueueElement {
+    public static class PriorityQueueElement {
         private ITupleReference tuple;
-        private int cursorIndex;
+        private final int cursorIndex;
 
         public PriorityQueueElement(int cursorIndex) {
             tuple = null;
@@ -269,7 +268,7 @@ public abstract class LSMIndexSearchCursor extends EnforcedIndexCursor implement
         }
     }
 
-    public class PriorityQueueComparator implements Comparator<PriorityQueueElement> {
+    public static class PriorityQueueComparator implements Comparator<PriorityQueueElement> {
 
         protected MultiComparator cmp;
 

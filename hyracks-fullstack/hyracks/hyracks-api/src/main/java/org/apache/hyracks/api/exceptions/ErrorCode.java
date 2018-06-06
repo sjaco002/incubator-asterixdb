@@ -121,7 +121,7 @@ public class ErrorCode {
     public static final int FOUND_MULTIPLE_TRANSACTIONS = 85;
     public static final int UNRECOGNIZED_INDEX_COMPONENT_FILE = 86;
     public static final int UNEQUAL_NUM_FILTERS_TREES = 87;
-    public static final int CANNOT_MODIFY_INDEX_DISK_IS_FULL = 88;
+    public static final int INDEX_NOT_MODIFIABLE = 88;
     public static final int GROUP_BY_MEMORY_BUDGET_EXCEEDS = 89;
     public static final int ILLEGAL_MEMORY_BUDGET = 90;
     public static final int TIMEOUT = 91;
@@ -147,9 +147,11 @@ public class ErrorCode {
     public static final int CANNOT_CONTINUE_TEXT_SEARCH_BUFFER_MANAGER_IS_NULL = 111;
     public static final int CANNOT_ADD_ELEMENT_TO_INVERTED_INDEX_SEARCH_RESULT = 112;
     public static final int UNDEFINED_INVERTED_LIST_MERGE_TYPE = 113;
+    public static final int NODE_IS_NOT_ACTIVE = 114;
 
     // Compilation error codes.
     public static final int RULECOLLECTION_NOT_INSTANCE_OF_LIST = 10000;
+    public static final int CANNOT_COMPOSE_PART_CONSTRAINTS = 10001;
 
     private static class Holder {
         private static final Map<Integer, String> errorMessageMap;

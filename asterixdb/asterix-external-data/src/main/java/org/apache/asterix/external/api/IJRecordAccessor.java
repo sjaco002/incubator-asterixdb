@@ -19,7 +19,7 @@
 package org.apache.asterix.external.api;
 
 import org.apache.asterix.external.library.java.JObjectPointableVisitor;
-import org.apache.asterix.external.library.java.JObjects.JRecord;
+import org.apache.asterix.external.library.java.base.JRecord;
 import org.apache.asterix.om.pointables.ARecordVisitablePointable;
 import org.apache.asterix.om.types.ARecordType;
 import org.apache.asterix.om.types.IAType;
@@ -28,7 +28,7 @@ import org.apache.hyracks.api.exceptions.HyracksDataException;
 
 public interface IJRecordAccessor {
 
-    public JRecord access(ARecordVisitablePointable pointable, IObjectPool<IJObject, IAType> objectPool,
+    JRecord access(ARecordVisitablePointable pointable, IObjectPool<IJObject, IAType> objectPool,
             ARecordType recordType, JObjectPointableVisitor pointableVisitor) throws HyracksDataException;
 
 }

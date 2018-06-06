@@ -29,11 +29,14 @@ import org.apache.asterix.algebra.base.ILangExtension;
 import org.apache.asterix.api.http.server.ResultUtil;
 import org.apache.asterix.app.cc.CCExtensionManager;
 import org.apache.asterix.app.translator.RequestParameters;
+import org.apache.asterix.common.api.Duration;
 import org.apache.asterix.common.api.IClusterManagementWork;
 import org.apache.asterix.common.cluster.IClusterStateManager;
 import org.apache.asterix.common.config.GlobalConfig;
 import org.apache.asterix.common.context.IStorageComponentProvider;
 import org.apache.asterix.common.dataflow.ICcApplicationContext;
+import org.apache.asterix.common.exceptions.ErrorCode;
+import org.apache.asterix.common.exceptions.RuntimeDataException;
 import org.apache.asterix.common.messaging.api.ICcAddressedMessage;
 import org.apache.asterix.compiler.provider.ILangCompilationProvider;
 import org.apache.asterix.hyracks.bootstrap.CCApplication;
@@ -62,7 +65,7 @@ public final class ExecuteStatementRequestMessage implements ICcAddressedMessage
     private static final long serialVersionUID = 1L;
     private static final Logger LOGGER = LogManager.getLogger();
     //TODO: Make configurable: https://issues.apache.org/jira/browse/ASTERIXDB-2062
-    public static final long DEFAULT_NC_TIMEOUT_MILLIS = TimeUnit.MINUTES.toMillis(5);
+    public static final long DEFAULT_NC_TIMEOUT_MILLIS = TimeUnit.MILLISECONDS.toMillis(Long.MAX_VALUE);
     //TODO: Make configurable: https://issues.apache.org/jira/browse/ASTERIXDB-2063
     public static final long DEFAULT_QUERY_CANCELLATION_WAIT_MILLIS = TimeUnit.MINUTES.toMillis(1);
     private final String requestNodeId;
@@ -95,7 +98,7 @@ public final class ExecuteStatementRequestMessage implements ICcAddressedMessage
         ClusterControllerService ccSrv = (ClusterControllerService) ccSrvContext.getControllerService();
         CCApplication ccApp = (CCApplication) ccSrv.getApplication();
         CCMessageBroker messageBroker = (CCMessageBroker) ccSrvContext.getMessageBroker();
-        final String rejectionReason = getRejectionReason(ccSrv);
+        final RuntimeDataException rejectionReason = getRejectionReason(ccSrv);
         if (rejectionReason != null) {
             sendRejection(rejectionReason, messageBroker);
             return;
@@ -129,6 +132,7 @@ public final class ExecuteStatementRequestMessage implements ICcAddressedMessage
             responseMsg.setResult(outWriter.toString());
             responseMsg.setMetadata(outMetadata);
             responseMsg.setStats(stats);
+            responseMsg.setExecutionPlans(translator.getExecutionPlans());
         } catch (AlgebricksException | HyracksException | TokenMgrError
                 | org.apache.asterix.aqlplus.parser.TokenMgrError pe) {
             // we trust that "our" exceptions are serializable and have a comprehensible error message
@@ -136,7 +140,7 @@ public final class ExecuteStatementRequestMessage implements ICcAddressedMessage
             responseMsg.setError(pe);
         } catch (Exception e) {
             GlobalConfig.ASTERIX_LOGGER.log(Level.ERROR, "Unexpected exception", e);
-            responseMsg.setError(new Exception(e.toString()));
+            responseMsg.setError(e);
         }
         try {
             messageBroker.sendApplicationMessageToNC(responseMsg, requestNodeId);
@@ -145,22 +149,22 @@ public final class ExecuteStatementRequestMessage implements ICcAddressedMessage
         }
     }
 
-    private String getRejectionReason(ClusterControllerService ccSrv) {
+    private RuntimeDataException getRejectionReason(ClusterControllerService ccSrv) {
         if (ccSrv.getNodeManager().getNodeControllerState(requestNodeId) == null) {
-            return "Node is not registerted with the CC";
+            return new RuntimeDataException(ErrorCode.REJECT_NODE_UNREGISTERED);
         }
         ICcApplicationContext appCtx = (ICcApplicationContext) ccSrv.getApplicationContext();
         IClusterStateManager csm = appCtx.getClusterStateManager();
         final IClusterManagementWork.ClusterState clusterState = csm.getState();
         if (clusterState != IClusterManagementWork.ClusterState.ACTIVE) {
-            return "Cannot execute request, cluster is " + clusterState;
+            return new RuntimeDataException(ErrorCode.REJECT_BAD_CLUSTER_STATE, clusterState);
         }
         return null;
     }
 
-    private void sendRejection(String reason, CCMessageBroker messageBroker) {
+    private void sendRejection(RuntimeDataException reason, CCMessageBroker messageBroker) {
         ExecuteStatementResponseMessage responseMsg = new ExecuteStatementResponseMessage(requestMessageId);
-        responseMsg.setError(new Exception(reason));
+        responseMsg.setError(reason);
         try {
             messageBroker.sendApplicationMessageToNC(responseMsg, requestNodeId);
         } catch (Exception e) {

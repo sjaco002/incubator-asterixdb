@@ -93,8 +93,7 @@ public class SubstringDescriptor extends AbstractStringOffsetConfigurableDescrip
 
                         byte[] bytes = argStart.getByteArray();
                         int offset = argStart.getStartOffset();
-                        int start = ATypeHierarchy.getIntegerValue(getIdentifier().getName(), 0, bytes, offset)
-                                - baseOffset;
+                        int start = ATypeHierarchy.getIntegerValue(getIdentifier().getName(), 0, bytes, offset);
 
                         bytes = argLen.getByteArray();
                         offset = argLen.getStartOffset();
@@ -104,24 +103,25 @@ public class SubstringDescriptor extends AbstractStringOffsetConfigurableDescrip
                         offset = argString.getStartOffset();
                         int length = argString.getLength();
                         if (bytes[offset] != ATypeTag.SERIALIZED_STRING_TYPE_TAG) {
-                            throw new TypeMismatchException(getIdentifier(), 0, bytes[offset],
+                            throw new TypeMismatchException(sourceLoc, getIdentifier(), 0, bytes[offset],
                                     ATypeTag.SERIALIZED_STRING_TYPE_TAG);
                         }
                         string.set(bytes, offset + 1, length - 1);
                         array.reset();
                         try {
-                            UTF8StringPointable.substr(string, start, len, builder, array);
+                            int actualStart = start >= 0 ? start - baseOffset : string.getStringLength() + start;
+                            UTF8StringPointable.substr(string, actualStart, len, builder, array);
                         } catch (StringIndexOutOfBoundsException e) {
                             throw new RuntimeDataException(ErrorCode.OUT_OF_BOUND, getIdentifier(), 1, start + len - 1);
                         } catch (IOException e) {
-                            throw new HyracksDataException(e);
+                            throw HyracksDataException.create(e);
                         }
 
                         try {
                             out.writeByte(ATypeTag.SERIALIZED_STRING_TYPE_TAG);
                             out.write(array.getByteArray(), 0, array.getLength());
                         } catch (IOException e) {
-                            throw new HyracksDataException(e);
+                            throw HyracksDataException.create(e);
                         }
                         result.set(resultStorage);
                     }

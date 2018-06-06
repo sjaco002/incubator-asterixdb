@@ -79,6 +79,8 @@ public class ReplicaFilesSynchronizer {
 
     private void replicateMissingFiles(List<String> files) {
         final FileSynchronizer sync = new FileSynchronizer(appCtx, replica);
+        // sort files to ensure index metadata files starting with "." are replicated first
+        files.sort(String::compareTo);
         files.forEach(sync::replicate);
     }
 

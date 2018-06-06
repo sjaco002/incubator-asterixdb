@@ -37,6 +37,10 @@ public class BufferedFileHandle {
         return fileId;
     }
 
+    public void setFileHandle(IFileHandle fileHandle) {
+        this.handle = fileHandle;
+    }
+
     public IFileHandle getFileHandle() {
         return handle;
     }

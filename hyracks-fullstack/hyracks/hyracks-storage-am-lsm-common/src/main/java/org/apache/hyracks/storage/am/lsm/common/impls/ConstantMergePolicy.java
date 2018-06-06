@@ -59,7 +59,7 @@ public class ConstantMergePolicy implements ILSMMergePolicy {
             IIndexAccessParameters iap =
                     new IndexAccessParameters(NoOpOperationCallback.INSTANCE, NoOpOperationCallback.INSTANCE);
             ILSMIndexAccessor accessor = index.createAccessor(iap);
-            accessor.scheduleFullMerge(index.getIOOperationCallback());
+            accessor.scheduleFullMerge();
             long mergeSize = getMergeSize(immutableComponents);
             logDiskComponentsSnapshot(immutableComponents);
             logMergeInfo(mergeSize, true, immutableComponents.size(), immutableComponents.size(), immutableComponents);
@@ -67,7 +67,7 @@ public class ConstantMergePolicy implements ILSMMergePolicy {
             mergeCost = mergeCost + ((double) mergeSize) / (1024 * 1024 * 1024);
         } else if (immutableComponents.size() >= numComponents) {
             ILSMIndexAccessor accessor = index.createAccessor(NoOpIndexAccessParameters.INSTANCE);
-            accessor.scheduleMerge(index.getIOOperationCallback(), immutableComponents);
+            accessor.scheduleMerge(immutableComponents);
             long mergeSize = getMergeSize(immutableComponents);
             logDiskComponentsSnapshot(immutableComponents);
             logMergeInfo(mergeSize, false, immutableComponents.size(), immutableComponents.size(), immutableComponents);
@@ -128,7 +128,7 @@ public class ConstantMergePolicy implements ILSMMergePolicy {
                 throw new IllegalStateException();
             }
             ILSMIndexAccessor accessor = index.createAccessor(NoOpIndexAccessParameters.INSTANCE);
-            accessor.scheduleMerge(index.getIOOperationCallback(), immutableComponents);
+            accessor.scheduleMerge(immutableComponents);
             long mergeSize = getMergeSize(immutableComponents);
             logDiskComponentsSnapshot(immutableComponents);
             logMergeInfo(mergeSize, false, immutableComponents.size(), immutableComponents.size(), immutableComponents);

@@ -20,6 +20,7 @@
 package org.apache.hyracks.storage.am.lsm.common.api;
 
 import java.util.List;
+import java.util.Map;
 
 import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.apache.hyracks.api.replication.IReplicationJob.ReplicationOperation;
@@ -28,6 +29,7 @@ import org.apache.hyracks.storage.am.common.api.IIndexOperationContext;
 import org.apache.hyracks.storage.am.lsm.common.impls.LSMHarness;
 import org.apache.hyracks.storage.common.IIndex;
 import org.apache.hyracks.storage.common.IIndexAccessParameters;
+import org.apache.hyracks.storage.common.IIndexBulkLoader;
 import org.apache.hyracks.storage.common.IIndexCursor;
 import org.apache.hyracks.storage.common.ISearchPredicate;
 
@@ -48,8 +50,6 @@ public interface ILSMIndex extends IIndex {
 
     ILSMOperationTracker getOperationTracker();
 
-    ILSMIOOperationScheduler getIOScheduler();
-
     ILSMIOOperationCallback getIOOperationCallback();
 
     /**
@@ -61,15 +61,46 @@ public interface ILSMIndex extends IIndex {
 
     void modify(IIndexOperationContext ictx, ITupleReference tuple) throws HyracksDataException;
 
+    /**
+     * If this method returns successfully, then the cursor has been opened, and need to be closed
+     * Otherwise, it has not been opened
+     *
+     * @param ictx
+     * @param cursor
+     * @param pred
+     * @throws HyracksDataException
+     */
     void search(ILSMIndexOperationContext ictx, IIndexCursor cursor, ISearchPredicate pred) throws HyracksDataException;
 
     public void scanDiskComponents(ILSMIndexOperationContext ctx, IIndexCursor cursor) throws HyracksDataException;
 
-    void scheduleFlush(ILSMIndexOperationContext ctx, ILSMIOOperationCallback callback) throws HyracksDataException;
+    /**
+     * Create a flush operation.
+     * This is an atomic operation. If an exception is thrown, no partial effect is left
+     *
+     * @return the flush operation
+     *
+     * @param ctx
+     *            the operation context
+     * @param callback
+     *            the IO callback
+     * @throws HyracksDataException
+     */
+    ILSMIOOperation createFlushOperation(ILSMIndexOperationContext ctx) throws HyracksDataException;
 
     ILSMDiskComponent flush(ILSMIOOperation operation) throws HyracksDataException;
 
-    void scheduleMerge(ILSMIndexOperationContext ctx, ILSMIOOperationCallback callback) throws HyracksDataException;
+    /**
+     * Create a merge operation.
+     * This is an atomic operation. If an exception is thrown, no partial effect is left
+     *
+     * @param ctx
+     *            the operation context
+     * @param callback
+     *            the IO callback
+     * @throws HyracksDataException
+     */
+    ILSMIOOperation createMergeOperation(ILSMIndexOperationContext ctx) throws HyracksDataException;
 
     ILSMDiskComponent merge(ILSMIOOperation operation) throws HyracksDataException;
 
@@ -99,7 +130,7 @@ public interface ILSMIndex extends IIndex {
 
     boolean isCurrentMutableComponentEmpty() throws HyracksDataException;
 
-    void scheduleReplication(ILSMIndexOperationContext ctx, List<ILSMDiskComponent> diskComponents, boolean bulkload,
+    void scheduleReplication(ILSMIndexOperationContext ctx, List<ILSMDiskComponent> diskComponents,
             ReplicationOperation operation, LSMOperationType opType) throws HyracksDataException;
 
     boolean isMemoryComponentsAllocated();
@@ -148,4 +179,36 @@ public interface ILSMIndex extends IIndex {
      * @return the {@link ILSMHarness} of the index
      */
     ILSMHarness getHarness();
+
+    /**
+     * Cleanup the files of the failed operation
+     *
+     * @param operation
+     */
+    void cleanUpFilesForFailedOperation(ILSMIOOperation operation);
+
+    /**
+     * @return the absolute path of the index
+     */
+    String getIndexIdentifier();
+
+    /**
+     * Create a bulk loader
+     *
+     * @param fillFactor
+     * @param verifyInput
+     * @param numElementsHint
+     * @param checkIfEmptyIndex
+     * @param parameters
+     * @return
+     * @throws HyracksDataException
+     */
+    IIndexBulkLoader createBulkLoader(float fillFactor, boolean verifyInput, long numElementsHint,
+            boolean checkIfEmptyIndex, Map<String, Object> parameters) throws HyracksDataException;
+
+    /**
+     * Reset the current memory component id to 0.
+     */
+    void resetCurrentComponentIndex();
+
 }

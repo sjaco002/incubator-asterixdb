@@ -88,11 +88,11 @@ public class CircleRadiusAccessor extends AbstractScalarFunctionDynamicDescripto
                                 aDouble.setValue(radius);
                                 doubleSerde.serialize(aDouble, out);
                             } else {
-                                throw new TypeMismatchException(getIdentifier(), 0, bytes[startOffset],
+                                throw new TypeMismatchException(sourceLoc, getIdentifier(), 0, bytes[startOffset],
                                         ATypeTag.SERIALIZED_CIRCLE_TYPE_TAG);
                             }
                         } catch (IOException e) {
-                            throw new HyracksDataException(e);
+                            throw HyracksDataException.create(e);
                         }
                         result.set(resultStorage);
                     }

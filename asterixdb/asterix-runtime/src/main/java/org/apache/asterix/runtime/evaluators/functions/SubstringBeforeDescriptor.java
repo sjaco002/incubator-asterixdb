@@ -83,11 +83,11 @@ public class SubstringBeforeDescriptor extends AbstractScalarFunctionDynamicDesc
                         int patternLen = array1.getLength();
 
                         if (src[srcOffset] != ATypeTag.SERIALIZED_STRING_TYPE_TAG) {
-                            throw new TypeMismatchException(getIdentifier(), 0, src[srcOffset],
+                            throw new TypeMismatchException(sourceLoc, getIdentifier(), 0, src[srcOffset],
                                     ATypeTag.SERIALIZED_STRING_TYPE_TAG);
                         }
                         if (pattern[patternOffset] != ATypeTag.SERIALIZED_STRING_TYPE_TAG) {
-                            throw new TypeMismatchException(getIdentifier(), 1, pattern[patternOffset],
+                            throw new TypeMismatchException(sourceLoc, getIdentifier(), 1, pattern[patternOffset],
                                     ATypeTag.SERIALIZED_STRING_TYPE_TAG);
                         }
 
@@ -99,7 +99,7 @@ public class SubstringBeforeDescriptor extends AbstractScalarFunctionDynamicDesc
                             out.writeByte(ATypeTag.SERIALIZED_STRING_TYPE_TAG);
                             out.write(array.getByteArray(), 0, array.getLength());
                         } catch (IOException e) {
-                            throw new HyracksDataException(e);
+                            throw HyracksDataException.create(e);
                         }
                         result.set(resultStorage);
                     }

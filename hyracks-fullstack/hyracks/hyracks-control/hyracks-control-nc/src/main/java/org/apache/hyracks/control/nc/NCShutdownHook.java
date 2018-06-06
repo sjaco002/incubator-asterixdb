@@ -30,35 +30,12 @@ import org.apache.logging.log4j.Logger;
  */
 public class NCShutdownHook extends Thread {
 
-    public static final int FAILED_TO_STARTUP_EXIT_CODE = 2;
-    public static final int FAILED_TO_RECOVER_EXIT_CODE = 3;
     private static final Logger LOGGER = LogManager.getLogger();
-    private static final long SHUTDOWN_WAIT_TIME = 10 * 60 * 1000L;
-    private final Thread watchDog;
     private final NodeControllerService nodeControllerService;
-    private volatile Thread shutdownHookThread;
 
-    public NCShutdownHook(NodeControllerService nodeControllerService) {
+    NCShutdownHook(NodeControllerService nodeControllerService) {
         super("ShutdownHook-" + nodeControllerService.getId());
         this.nodeControllerService = nodeControllerService;
-        watchDog = new Thread(watch(), "ShutdownHookWatchDog-" + nodeControllerService.getId());
-    }
-
-    private Runnable watch() {
-        return () -> {
-            try {
-                shutdownHookThread.join(SHUTDOWN_WAIT_TIME); // 10 min
-                if (shutdownHookThread.isAlive()) {
-                    try {
-                        LOGGER.info("Watchdog is angry. Killing shutdown hook");
-                    } finally {
-                        Runtime.getRuntime().halt(66); // NOSONAR last resort
-                    }
-                }
-            } catch (Throwable th) { // NOSONAR must catch them all
-                Runtime.getRuntime().halt(77); // NOSONAR last resort
-            }
-        };
     }
 
     @Override
@@ -68,8 +45,6 @@ public class NCShutdownHook extends Thread {
                 LOGGER.info("Shutdown hook called");
             } catch (Throwable th) {//NOSONAR
             }
-            shutdownHookThread = Thread.currentThread();
-            watchDog.start();
             LOGGER.log(Level.INFO, () -> "Thread dump at shutdown: " + ThreadDumpUtil.takeDumpString());
             nodeControllerService.stop();
         } catch (Throwable th) { // NOSONAR... This is fine since this is shutdown hook

@@ -22,9 +22,12 @@ package org.apache.asterix.runtime.functions;
 import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.ServiceLoader;
 
 import org.apache.asterix.common.utils.CodeGenHelper;
+import org.apache.asterix.om.functions.IFunctionCollection;
 import org.apache.asterix.om.functions.IFunctionDescriptorFactory;
+import org.apache.asterix.om.functions.IFunctionRegistrant;
 import org.apache.asterix.runtime.aggregates.collections.FirstElementAggregateDescriptor;
 import org.apache.asterix.runtime.aggregates.collections.ListifyAggregateDescriptor;
 import org.apache.asterix.runtime.aggregates.collections.LocalFirstElementAggregateDescriptor;
@@ -101,7 +104,12 @@ import org.apache.asterix.runtime.evaluators.comparisons.GreaterThanDescriptor;
 import org.apache.asterix.runtime.evaluators.comparisons.GreaterThanOrEqualsDescriptor;
 import org.apache.asterix.runtime.evaluators.comparisons.LessThanDescriptor;
 import org.apache.asterix.runtime.evaluators.comparisons.LessThanOrEqualsDescriptor;
+import org.apache.asterix.runtime.evaluators.comparisons.MissingIfEqualsDescriptor;
+import org.apache.asterix.runtime.evaluators.comparisons.NanIfEqualsDescriptor;
+import org.apache.asterix.runtime.evaluators.comparisons.NegInfIfEqualsDescriptor;
 import org.apache.asterix.runtime.evaluators.comparisons.NotEqualsDescriptor;
+import org.apache.asterix.runtime.evaluators.comparisons.NullIfEqualsDescriptor;
+import org.apache.asterix.runtime.evaluators.comparisons.PosInfIfEqualsDescriptor;
 import org.apache.asterix.runtime.evaluators.constructors.ABinaryBase64StringConstructorDescriptor;
 import org.apache.asterix.runtime.evaluators.constructors.ABinaryHexStringConstructorDescriptor;
 import org.apache.asterix.runtime.evaluators.constructors.ABooleanConstructorDescriptor;
@@ -139,8 +147,6 @@ import org.apache.asterix.runtime.evaluators.functions.CastTypeDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.CastTypeLaxDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.CheckUnknownDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.CodePointToStringDescriptor;
-import org.apache.asterix.runtime.evaluators.functions.CountHashedGramTokensDescriptor;
-import org.apache.asterix.runtime.evaluators.functions.CountHashedWordTokensDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.CreateCircleDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.CreateLineDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.CreateMBRDescriptor;
@@ -150,23 +156,15 @@ import org.apache.asterix.runtime.evaluators.functions.CreateQueryUIDDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.CreateRectangleDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.CreateUUIDDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.DeepEqualityDescriptor;
-import org.apache.asterix.runtime.evaluators.functions.EditDistanceCheckDescriptor;
-import org.apache.asterix.runtime.evaluators.functions.EditDistanceContainsDescriptor;
-import org.apache.asterix.runtime.evaluators.functions.EditDistanceDescriptor;
-import org.apache.asterix.runtime.evaluators.functions.EditDistanceListIsFilterableDescriptor;
-import org.apache.asterix.runtime.evaluators.functions.EditDistanceStringIsFilterableDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.FullTextContainsDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.FullTextContainsWithoutOptionDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.GetItemDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.GetJobParameterByNameDescriptor;
-import org.apache.asterix.runtime.evaluators.functions.GramTokensDescriptor;
-import org.apache.asterix.runtime.evaluators.functions.HashedGramTokensDescriptor;
-import org.apache.asterix.runtime.evaluators.functions.HashedWordTokensDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.IfInfDescriptor;
-import org.apache.asterix.runtime.evaluators.functions.IfNanOrInfDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.IfMissingDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.IfMissingOrNullDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.IfNanDescriptor;
+import org.apache.asterix.runtime.evaluators.functions.IfNanOrInfDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.IfNullDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.InjectFailureDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.IsArrayDescriptor;
@@ -187,9 +185,11 @@ import org.apache.asterix.runtime.evaluators.functions.NumericATan2Descriptor;
 import org.apache.asterix.runtime.evaluators.functions.NumericATanDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.NumericAbsDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.NumericAddDescriptor;
-import org.apache.asterix.runtime.evaluators.functions.NumericCaretDescriptor;
+import org.apache.asterix.runtime.evaluators.functions.NumericDivDescriptor;
+import org.apache.asterix.runtime.evaluators.functions.NumericPowerDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.NumericCeilingDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.NumericCosDescriptor;
+import org.apache.asterix.runtime.evaluators.functions.NumericDegreesDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.NumericDivideDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.NumericExpDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.NumericFloorDescriptor;
@@ -197,6 +197,7 @@ import org.apache.asterix.runtime.evaluators.functions.NumericLnDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.NumericLogDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.NumericModuloDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.NumericMultiplyDescriptor;
+import org.apache.asterix.runtime.evaluators.functions.NumericRadiansDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.NumericRoundDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.NumericRoundHalfToEven2Descriptor;
 import org.apache.asterix.runtime.evaluators.functions.NumericRoundHalfToEvenDescriptor;
@@ -208,18 +209,12 @@ import org.apache.asterix.runtime.evaluators.functions.NumericTanDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.NumericTruncDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.NumericUnaryMinusDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.OrDescriptor;
-import org.apache.asterix.runtime.evaluators.functions.PrefixLenJaccardDescriptor;
-import org.apache.asterix.runtime.evaluators.functions.SimilarityJaccardCheckDescriptor;
-import org.apache.asterix.runtime.evaluators.functions.SimilarityJaccardDescriptor;
-import org.apache.asterix.runtime.evaluators.functions.SimilarityJaccardPrefixCheckDescriptor;
-import org.apache.asterix.runtime.evaluators.functions.SimilarityJaccardPrefixDescriptor;
-import org.apache.asterix.runtime.evaluators.functions.SimilarityJaccardSortedCheckDescriptor;
-import org.apache.asterix.runtime.evaluators.functions.SimilarityJaccardSortedDescriptor;
+import org.apache.asterix.runtime.evaluators.functions.RandomDescriptor;
+import org.apache.asterix.runtime.evaluators.functions.RandomWithSeedDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.SleepDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.SpatialAreaDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.SpatialCellDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.SpatialDistanceDescriptor;
-import org.apache.asterix.runtime.evaluators.functions.SpatialIntersectDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.StringConcatDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.StringContainsDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.StringEndsWithDescriptor;
@@ -243,6 +238,9 @@ import org.apache.asterix.runtime.evaluators.functions.StringRegExpPositionWithF
 import org.apache.asterix.runtime.evaluators.functions.StringRegExpReplaceDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.StringRegExpReplaceWithFlagsDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.StringRepeatDescriptor;
+import org.apache.asterix.runtime.evaluators.functions.StringReplaceDescriptor;
+import org.apache.asterix.runtime.evaluators.functions.StringReplaceWithLimitDescriptor;
+import org.apache.asterix.runtime.evaluators.functions.StringReverseDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.StringSplitDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.StringStartsWithDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.StringToCodePointDescriptor;
@@ -254,12 +252,15 @@ import org.apache.asterix.runtime.evaluators.functions.SubstringAfterDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.SubstringBeforeDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.SubstringDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.SwitchCaseDescriptor;
+import org.apache.asterix.runtime.evaluators.functions.ToArrayDescriptor;
+import org.apache.asterix.runtime.evaluators.functions.ToAtomicDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.ToBigIntDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.ToBooleanDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.ToDoubleDescriptor;
+import org.apache.asterix.runtime.evaluators.functions.ToNumberDescriptor;
+import org.apache.asterix.runtime.evaluators.functions.ToObjectDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.ToStringDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.UUIDDescriptor;
-import org.apache.asterix.runtime.evaluators.functions.WordTokensDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.binary.BinaryConcatDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.binary.BinaryLengthDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.binary.FindBinaryDescriptor;
@@ -276,7 +277,9 @@ import org.apache.asterix.runtime.evaluators.functions.records.GetRecordFieldsDe
 import org.apache.asterix.runtime.evaluators.functions.records.RecordAddFieldsDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.records.RecordConcatDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.records.RecordConcatStrictDescriptor;
+import org.apache.asterix.runtime.evaluators.functions.records.RecordLengthDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.records.RecordMergeDescriptor;
+import org.apache.asterix.runtime.evaluators.functions.records.RecordNamesDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.records.RecordPairsDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.records.RecordRemoveFieldsDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.temporal.AdjustDateTimeForTimeZoneDescriptor;
@@ -340,16 +343,18 @@ import org.apache.asterix.runtime.unnestingfunctions.std.SubsetCollectionDescrip
 /**
  * This class holds a list of function descriptor factories.
  */
-public final class FunctionCollection {
+public final class FunctionCollection implements IFunctionCollection {
 
     private static final String FACTORY = "FACTORY";
 
-    private final List<IFunctionDescriptorFactory> descriptorFactories = new ArrayList<>();
+    private final ArrayList<IFunctionDescriptorFactory> descriptorFactories = new ArrayList<>();
 
+    @Override
     public void add(IFunctionDescriptorFactory descriptorFactory) {
         descriptorFactories.add(descriptorFactory);
     }
 
+    @Override
     public void addGenerated(IFunctionDescriptorFactory descriptorFactory) {
         add(getGeneratedFunctionDescriptorFactory(descriptorFactory.createFunctionDescriptor().getClass()));
     }
@@ -466,14 +471,10 @@ public final class FunctionCollection {
         fc.add(CreateUUIDDescriptor.FACTORY);
         fc.add(UUIDDescriptor.FACTORY);
         fc.add(CreateQueryUIDDescriptor.FACTORY);
+        fc.add(RandomDescriptor.FACTORY);
         fc.add(CurrentDateDescriptor.FACTORY);
         fc.add(CurrentTimeDescriptor.FACTORY);
         fc.add(CurrentDateTimeDescriptor.FACTORY);
-
-        // TODO: decide how should we deal these two weird functions as
-        // the number of arguments of the function depend on the first few arguments.
-        fc.add(SimilarityJaccardPrefixDescriptor.FACTORY);
-        fc.add(SimilarityJaccardPrefixCheckDescriptor.FACTORY);
 
         // functions that need generated class for null-handling.
 
@@ -492,10 +493,11 @@ public final class FunctionCollection {
         fc.addGenerated(NumericUnaryMinusDescriptor.FACTORY);
         fc.addGenerated(NumericAddDescriptor.FACTORY);
         fc.addGenerated(NumericDivideDescriptor.FACTORY);
+        fc.addGenerated(NumericDivDescriptor.FACTORY);
         fc.addGenerated(NumericMultiplyDescriptor.FACTORY);
         fc.addGenerated(NumericSubDescriptor.FACTORY);
         fc.addGenerated(NumericModuloDescriptor.FACTORY);
-        fc.addGenerated(NumericCaretDescriptor.FACTORY);
+        fc.addGenerated(NumericPowerDescriptor.FACTORY);
         fc.addGenerated(NotDescriptor.FACTORY);
         fc.addGenerated(LenDescriptor.FACTORY);
         fc.addGenerated(NumericAbsDescriptor.FACTORY);
@@ -507,6 +509,8 @@ public final class FunctionCollection {
         fc.addGenerated(NumericACosDescriptor.FACTORY);
         fc.addGenerated(NumericASinDescriptor.FACTORY);
         fc.addGenerated(NumericATanDescriptor.FACTORY);
+        fc.addGenerated(NumericDegreesDescriptor.FACTORY);
+        fc.addGenerated(NumericRadiansDescriptor.FACTORY);
         fc.addGenerated(NumericCosDescriptor.FACTORY);
         fc.addGenerated(NumericSinDescriptor.FACTORY);
         fc.addGenerated(NumericTanDescriptor.FACTORY);
@@ -525,6 +529,13 @@ public final class FunctionCollection {
         fc.addGenerated(LessThanDescriptor.FACTORY);
         fc.addGenerated(LessThanOrEqualsDescriptor.FACTORY);
         fc.addGenerated(NotEqualsDescriptor.FACTORY);
+
+        // If-Equals functions
+        fc.addGenerated(MissingIfEqualsDescriptor.FACTORY);
+        fc.addGenerated(NullIfEqualsDescriptor.FACTORY);
+        fc.addGenerated(NanIfEqualsDescriptor.FACTORY);
+        fc.addGenerated(PosInfIfEqualsDescriptor.FACTORY);
+        fc.addGenerated(NegInfIfEqualsDescriptor.FACTORY);
 
         // Binary functions
         fc.addGenerated(BinaryLengthDescriptor.FACTORY);
@@ -570,6 +581,9 @@ public final class FunctionCollection {
         fc.addGenerated(StringRTrim2Descriptor.FACTORY);
         fc.addGenerated(StringPositionDescriptor.FACTORY);
         fc.addGenerated(StringRepeatDescriptor.FACTORY);
+        fc.addGenerated(StringReplaceDescriptor.FACTORY);
+        fc.addGenerated(StringReplaceWithLimitDescriptor.FACTORY);
+        fc.addGenerated(StringReverseDescriptor.FACTORY);
         fc.addGenerated(StringSplitDescriptor.FACTORY);
 
         // Constructors
@@ -609,7 +623,6 @@ public final class FunctionCollection {
         fc.addGenerated(CreateRectangleDescriptor.FACTORY);
         fc.addGenerated(SpatialAreaDescriptor.FACTORY);
         fc.addGenerated(SpatialDistanceDescriptor.FACTORY);
-        fc.addGenerated(SpatialIntersectDescriptor.FACTORY);
         fc.addGenerated(CreateMBRDescriptor.FACTORY);
         fc.addGenerated(SpatialCellDescriptor.FACTORY);
         fc.addGenerated(PointXCoordinateAccessor.FACTORY);
@@ -617,24 +630,6 @@ public final class FunctionCollection {
         fc.addGenerated(CircleRadiusAccessor.FACTORY);
         fc.addGenerated(CircleCenterAccessor.FACTORY);
         fc.addGenerated(LineRectanglePolygonAccessor.FACTORY);
-
-        // fuzzyjoin function
-        fc.addGenerated(PrefixLenJaccardDescriptor.FACTORY);
-        fc.addGenerated(WordTokensDescriptor.FACTORY);
-        fc.addGenerated(HashedWordTokensDescriptor.FACTORY);
-        fc.addGenerated(CountHashedWordTokensDescriptor.FACTORY);
-        fc.addGenerated(GramTokensDescriptor.FACTORY);
-        fc.addGenerated(HashedGramTokensDescriptor.FACTORY);
-        fc.addGenerated(CountHashedGramTokensDescriptor.FACTORY);
-        fc.addGenerated(EditDistanceDescriptor.FACTORY);
-        fc.addGenerated(EditDistanceCheckDescriptor.FACTORY);
-        fc.addGenerated(EditDistanceStringIsFilterableDescriptor.FACTORY);
-        fc.addGenerated(EditDistanceListIsFilterableDescriptor.FACTORY);
-        fc.addGenerated(EditDistanceContainsDescriptor.FACTORY);
-        fc.addGenerated(SimilarityJaccardDescriptor.FACTORY);
-        fc.addGenerated(SimilarityJaccardCheckDescriptor.FACTORY);
-        fc.addGenerated(SimilarityJaccardSortedDescriptor.FACTORY);
-        fc.addGenerated(SimilarityJaccardSortedCheckDescriptor.FACTORY);
 
         // full-text function
         fc.addGenerated(FullTextContainsDescriptor.FACTORY);
@@ -647,6 +642,8 @@ public final class FunctionCollection {
         fc.addGenerated(RecordMergeDescriptor.FACTORY);
         fc.addGenerated(RecordAddFieldsDescriptor.FACTORY);
         fc.addGenerated(RecordRemoveFieldsDescriptor.FACTORY);
+        fc.addGenerated(RecordLengthDescriptor.FACTORY);
+        fc.addGenerated(RecordNamesDescriptor.FACTORY);
 
         // Spatial and temporal type accessors
         fc.addGenerated(TemporalYearAccessor.FACTORY);
@@ -718,16 +715,20 @@ public final class FunctionCollection {
         fc.addGenerated(DurationFromIntervalDescriptor.FACTORY);
 
         // Type functions.
+        fc.addGenerated(IsArrayDescriptor.FACTORY);
         fc.addGenerated(IsAtomicDescriptor.FACTORY);
         fc.addGenerated(IsBooleanDescriptor.FACTORY);
         fc.addGenerated(IsNumberDescriptor.FACTORY);
-        fc.addGenerated(IsStringDescriptor.FACTORY);
-        fc.addGenerated(IsArrayDescriptor.FACTORY);
         fc.addGenerated(IsObjectDescriptor.FACTORY);
-        fc.addGenerated(ToBooleanDescriptor.FACTORY);
-        fc.addGenerated(ToStringDescriptor.FACTORY);
-        fc.addGenerated(ToDoubleDescriptor.FACTORY);
+        fc.addGenerated(IsStringDescriptor.FACTORY);
+        fc.addGenerated(ToArrayDescriptor.FACTORY);
+        fc.addGenerated(ToAtomicDescriptor.FACTORY);
         fc.addGenerated(ToBigIntDescriptor.FACTORY);
+        fc.addGenerated(ToBooleanDescriptor.FACTORY);
+        fc.addGenerated(ToDoubleDescriptor.FACTORY);
+        fc.addGenerated(ToNumberDescriptor.FACTORY);
+        fc.addGenerated(ToObjectDescriptor.FACTORY);
+        fc.addGenerated(ToStringDescriptor.FACTORY);
 
         // Cast function
         fc.addGenerated(CastTypeDescriptor.FACTORY);
@@ -736,6 +737,10 @@ public final class FunctionCollection {
         // Record function
         fc.addGenerated(RecordPairsDescriptor.FACTORY);
 
+        // Other functions
+        fc.addGenerated(RandomWithSeedDescriptor.FACTORY);
+
+        ServiceLoader.load(IFunctionRegistrant.class).iterator().forEachRemaining(c -> c.register(fc));
         return fc;
     }
 

@@ -36,6 +36,7 @@ import org.apache.hyracks.storage.am.btree.impls.RangePredicate;
 import org.apache.hyracks.storage.am.common.api.IIndexOperationContext;
 import org.apache.hyracks.storage.am.common.api.ITreeIndexFrameFactory;
 import org.apache.hyracks.storage.am.common.impls.NoOpIndexAccessParameters;
+import org.apache.hyracks.storage.am.common.impls.NoOpOperationCallback;
 import org.apache.hyracks.storage.am.common.ophelpers.IndexOperation;
 import org.apache.hyracks.storage.am.common.tuples.DualTupleReference;
 import org.apache.hyracks.storage.am.lsm.common.api.IComponentFilterHelper;
@@ -133,8 +134,8 @@ public class LSMRTree extends AbstractLSMRTree {
                 rTreeTupleSorter.sort();
                 component = createDiskComponent(componentFactory, flushOp.getTarget(), flushOp.getBTreeTarget(),
                         flushOp.getBloomFilterTarget(), true);
-                componentBulkLoader =
-                        component.createBulkLoader(1.0f, false, numBTreeTuples.longValue(), false, false, false);
+                componentBulkLoader = component.createBulkLoader(operation, 1.0f, false, numBTreeTuples.longValue(),
+                        false, false, false);
                 flushLoadRTree(isEmpty, rTreeTupleSorter, componentBulkLoader);
                 // scan the memory BTree and bulk load delete tuples
                 flushLoadBtree(memBTreeAccessor, componentBulkLoader, btreeNullPredicate);
@@ -151,7 +152,8 @@ public class LSMRTree extends AbstractLSMRTree {
                 List<ITupleReference> filterTuples = new ArrayList<>();
                 filterTuples.add(flushingComponent.getLSMComponentFilter().getMinTuple());
                 filterTuples.add(flushingComponent.getLSMComponentFilter().getMaxTuple());
-                getFilterManager().updateFilter(component.getLSMComponentFilter(), filterTuples);
+                getFilterManager().updateFilter(component.getLSMComponentFilter(), filterTuples,
+                        NoOpOperationCallback.INSTANCE);
                 getFilterManager().writeFilter(component.getLSMComponentFilter(), component.getMetadataHolder());
             }
             // Note. If we change the filter to write to metadata object, we don't need the if block above
@@ -289,7 +291,8 @@ public class LSMRTree extends AbstractLSMRTree {
                     filterTuples.add(mergeOp.getMergingComponents().get(i).getLSMComponentFilter().getMinTuple());
                     filterTuples.add(mergeOp.getMergingComponents().get(i).getLSMComponentFilter().getMaxTuple());
                 }
-                getFilterManager().updateFilter(mergedComponent.getLSMComponentFilter(), filterTuples);
+                getFilterManager().updateFilter(mergedComponent.getLSMComponentFilter(), filterTuples,
+                        NoOpOperationCallback.INSTANCE);
                 getFilterManager().writeFilter(mergedComponent.getLSMComponentFilter(),
                         mergedComponent.getMetadataHolder());
             }
@@ -329,11 +332,12 @@ public class LSMRTree extends AbstractLSMRTree {
                                 .getNumElements();
                     }
                     componentBulkLoader =
-                            mergedComponent.createBulkLoader(1.0f, false, numElements, false, false, false);
+                            mergedComponent.createBulkLoader(mergeOp, 1.0f, false, numElements, false, false, false);
                     mergeLoadBTree(opCtx, rtreeSearchPred, componentBulkLoader);
                 } else {
                     //no buddy-btree needed
-                    componentBulkLoader = mergedComponent.createBulkLoader(1.0f, false, 0L, false, false, false);
+                    componentBulkLoader =
+                            mergedComponent.createBulkLoader(mergeOp, 1.0f, false, 0L, false, false, false);
                 }
                 //search old rtree components
                 while (cursor.hasNext()) {
@@ -389,7 +393,6 @@ public class LSMRTree extends AbstractLSMRTree {
         if (ctx.getIndexTuple() != null) {
             ctx.getIndexTuple().reset(tuple);
             indexTuple = ctx.getIndexTuple();
-            ctx.getCurrentMutableRTreeAccessor().getOpContext().resetNonIndexFieldsTuple(tuple);
         } else {
             indexTuple = tuple;
         }
@@ -421,7 +424,7 @@ public class LSMRTree extends AbstractLSMRTree {
         LSMRTreeAccessor accessor = new LSMRTreeAccessor(getHarness(), opCtx, buddyBTreeFields);
         return new LSMRTreeFlushOperation(accessor, componentFileRefs.getInsertIndexFileReference(),
                 componentFileRefs.getDeleteIndexFileReference(), componentFileRefs.getBloomFilterFileReference(),
-                callback, fileManager.getBaseDir().getAbsolutePath());
+                callback, getIndexIdentifier());
     }
 
     @Override
@@ -431,6 +434,6 @@ public class LSMRTree extends AbstractLSMRTree {
         ILSMIndexAccessor accessor = new LSMRTreeAccessor(getHarness(), opCtx, buddyBTreeFields);
         return new LSMRTreeMergeOperation(accessor, cursor, mergeFileRefs.getInsertIndexFileReference(),
                 mergeFileRefs.getDeleteIndexFileReference(), mergeFileRefs.getBloomFilterFileReference(), callback,
-                fileManager.getBaseDir().getAbsolutePath());
+                getIndexIdentifier());
     }
 }

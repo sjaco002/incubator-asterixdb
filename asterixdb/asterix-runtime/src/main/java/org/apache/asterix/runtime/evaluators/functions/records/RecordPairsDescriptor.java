@@ -59,7 +59,7 @@ public class RecordPairsDescriptor extends AbstractScalarFunctionDynamicDescript
 
         @Override
         public IFunctionTypeInferer createFunctionTypeInferer() {
-            return new FunctionTypeInferers.RecordPairsTypeInferer();
+            return FunctionTypeInferers.RecordAccessorTypeInferer.INSTANCE_STRICT;
         }
     };
 
@@ -102,7 +102,7 @@ public class RecordPairsDescriptor extends AbstractScalarFunctionDynamicDescript
                     serde.serialize(new AString("name"), nameStorage.getDataOutput());
                     serde.serialize(new AString("value"), valueStorage.getDataOutput());
                 } catch (IOException e) {
-                    throw new HyracksDataException(e);
+                    throw HyracksDataException.create(e);
                 }
 
                 return new IScalarEvaluator() {
@@ -120,7 +120,7 @@ public class RecordPairsDescriptor extends AbstractScalarFunctionDynamicDescript
                         argEvaluator.evaluate(tuple, argPtr);
                         byte inputTypeTag = argPtr.getByteArray()[argPtr.getStartOffset()];
                         if (inputTypeTag != ATypeTag.SERIALIZED_RECORD_TYPE_TAG) {
-                            throw new TypeMismatchException(getIdentifier(), 0, inputTypeTag,
+                            throw new TypeMismatchException(sourceLoc, getIdentifier(), 0, inputTypeTag,
                                     ATypeTag.SERIALIZED_RECORD_TYPE_TAG);
                         }
                         recordVisitablePointable.set(argPtr);

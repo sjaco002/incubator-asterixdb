@@ -19,11 +19,10 @@
 
 SQL++ is a highly composable expression language. Each SQL++ expression returns zero or more data model instances.
 There are three major kinds of expressions in SQL++. At the topmost level, a SQL++ expression can be an
-OperatorExpression (similar to a mathematical expression), an ConditionalExpression (to choose between
-alternative values), or a QuantifiedExpression (which yields a boolean value). Each will be detailed as we
-explore the full SQL++ grammar.
+OperatorExpression (similar to a mathematical expression), or a QuantifiedExpression (which yields a boolean value). 
+Each will be detailed as we explore the full SQL++ grammar.
 
-    Expression ::= OperatorExpression | CaseExpression | QuantifiedExpression
+    Expression ::= OperatorExpression | QuantifiedExpression
 
 Note that in the following text, words enclosed in angle brackets denote keywords that are not case-sensitive.
 
@@ -50,9 +49,9 @@ The following table summarizes the precedence order (from higher to lower) of th
 |-----------------------------------------------------------------------------|-----------|
 | EXISTS, NOT EXISTS                                                          |  Collection emptiness testing |
 | ^                                                                           |  Exponentiation  |
-| *, /, %                                                                     |  Multiplication, division, modulo |
+| *, /, DIV, MOD (%)                                                          |  Multiplication, division, modulo |
 | +, -                                                                        |  Addition, subtraction  |
-| &#124;&#124;                                                                          |  String concatenation |
+| &#124;&#124;                                                                |  String concatenation |
 | IS NULL, IS NOT NULL, IS MISSING, IS NOT MISSING, <br/>IS UNKNOWN, IS NOT UNKNOWN, IS VALUED, IS NOT VALUED | Unknown value comparison |
 | BETWEEN, NOT BETWEEN                                                        | Range comparison (inclusive on both sides) |
 | =, !=, <>, <, >, <=, >=, LIKE, NOT LIKE, IN, NOT IN                             | Comparison  |
@@ -72,7 +71,10 @@ Arithmetic operators are used to exponentiate, add, subtract, multiply, and divi
 |--------------|-------------------------------------------------------------------------|------------|
 | +, -         |  As unary operators, they denote a <br/>positive or negative expression | SELECT VALUE -1; |
 | +, -         |  As binary operators, they add or subtract                              | SELECT VALUE 1 + 2; |
-| *, /, %      |  Multiply, divide, modulo                                               | SELECT VALUE 4 / 2.0; |
+| *            |  Multiply                                                               | SELECT VALUE 4 * 2; |
+| /            |  Divide (returns a value of type `double` if both operands are integers)| SELECT VALUE 5 / 2; |
+| DIV          |  Divide (returns an integer value if both operands are integers)        | SELECT VALUE 5 DIV 2; |
+| MOD (%)      |  Modulo                                                                 | SELECT VALUE 5 % 2; |
 | ^            |  Exponentiation                                                         | SELECT VALUE 2^3;       |
 | &#124;&#124; |  String concatenation                                                   | SELECT VALUE "ab"&#124;&#124;"c"&#124;&#124;"d";       |
 
@@ -103,16 +105,16 @@ examples, Jake is friendless a la SQL, with a friend field that is NULL, while J
 
 The following table enumerates all of SQL++'s comparison operators.
 
-| Operator       |  Purpose                                   | Example    |
-|----------------|--------------------------------------------|------------|
+| Operator       |  Purpose                                       | Example    |
+|----------------|------------------------------------------------|------------|
 | IS NULL        |  Test if a value is NULL                       | SELECT * FROM ChirpMessages cm <br/>WHERE cm.user.name IS NULL; |
 | IS NOT NULL    |  Test if a value is not NULL                   | SELECT * FROM ChirpMessages cm <br/>WHERE cm.user.name IS NOT NULL; |
 | IS MISSING     |  Test if a value is MISSING                    | SELECT * FROM ChirpMessages cm <br/>WHERE cm.user.name IS MISSING; |
 | IS NOT MISSING |  Test if a value is not MISSING                | SELECT * FROM ChirpMessages cm <br/>WHERE cm.user.name IS NOT MISSING;|
 | IS UNKNOWN     |  Test if a value is NULL or MISSING            | SELECT * FROM ChirpMessages cm <br/>WHERE cm.user.name IS UNKNOWN; |
 | IS NOT UNKNOWN |  Test if a value is neither NULL nor MISSING   | SELECT * FROM ChirpMessages cm <br/>WHERE cm.user.name IS NOT UNKNOWN;|
-| IS VALUED      |  Test if a value is neither NULL nor MISSING   | SELECT * FROM ChirpMessages cm <br/>WHERE cm.user.name IS VALUED; |
-| IS NOT VALUED  |  Test if a value is NULL or MISSING            | SELECT * FROM ChirpMessages cm <br/>WHERE cm.user.name IS NOT VALUED;|
+| IS KNOWN (IS VALUED) |  Test if a value is neither NULL nor MISSING | SELECT * FROM ChirpMessages cm <br/>WHERE cm.user.name IS KNOWN; |
+| IS NOT KNOWN (IS NOT VALUED) |  Test if a value is NULL or MISSING | SELECT * FROM ChirpMessages cm <br/>WHERE cm.user.name IS NOT KNOWN; |
 | BETWEEN        |  Test if a value is between a start value and <br/>a end value. The comparison is inclusive <br/>to both start and end values. |  SELECT * FROM ChirpMessages cm <br/>WHERE cm.chirpId BETWEEN 10 AND 20;|
 | =              |  Equality test                                 | SELECT * FROM ChirpMessages cm <br/>WHERE cm.chirpId=10; |
 | !=             |  Inequality test                               | SELECT * FROM ChirpMessages cm <br/>WHERE cm.chirpId!=10;|
@@ -134,8 +136,8 @@ The following table summarizes how the missing value comparison operators work.
 | IS NOT MISSING | TRUE | TRUE | FALSE |
 | IS UNKNOWN | FALSE | TRUE | TRUE |
 | IS NOT UNKNOWN | TRUE | FALSE | FALSE|
-| IS VALUED | TRUE | FALSE | FALSE |
-| IS NOT VALUED | FALSE | TRUE | TRUE |
+| IS KNOWN (IS VALUED) | TRUE | FALSE | FALSE |
+| IS NOT KNOWN (IS NOT VALUED) | FALSE | TRUE | TRUE |
 
 ### <a id="Logical_operators">Logical Operators</a>
 Logical operators perform logical `NOT`, `AND`, and `OR` operations over Boolean values (`TRUE` and `FALSE`) plus `NULL` and `MISSING`.
@@ -170,20 +172,6 @@ The following table demonstrates the results of `NOT` on all possible inputs.
 | NULL | NULL |
 | MISSING | MISSING |
 
-## <a id="Case_expressions">Case Expressions</a>
-
-    CaseExpression ::= SimpleCaseExpression | SearchedCaseExpression
-    SimpleCaseExpression ::= <CASE> Expression ( <WHEN> Expression <THEN> Expression )+ ( <ELSE> Expression )? <END>
-    SearchedCaseExpression ::= <CASE> ( <WHEN> Expression <THEN> Expression )+ ( <ELSE> Expression )? <END>
-
-In a simple `CASE` expression, the query evaluator searches for the first `WHEN` ... `THEN` pair in which the `WHEN` expression is equal to the expression following `CASE` and returns the expression following `THEN`. If none of the `WHEN` ... `THEN` pairs meet this condition, and an `ELSE` branch exists, it returns the `ELSE` expression. Otherwise, `NULL` is returned.
-
-In a searched CASE expression, the query evaluator searches from left to right until it finds a `WHEN` expression that is evaluated to `TRUE`, and then returns its corresponding `THEN` expression. If no condition is found to be `TRUE`, and an `ELSE` branch exists, it returns the `ELSE` expression. Otherwise, it returns `NULL`.
-
-The following example illustrates the form of a case expression.
-##### Example
-
-    CASE (2 < 3) WHEN true THEN "yes" ELSE "no" END
 
 ## <a id="Quantified_expressions">Quantified Expressions</a>
 
@@ -241,11 +229,13 @@ composition thereof.
                   | VariableReference
                   | ParenthesizedExpression
                   | FunctionCallExpression
+                  | CaseExpression
                   | Constructor
 
 The most basic building block for any SQL++ expression is PrimaryExpression. This can be a simple literal (constant)
-value, a reference to a query variable that is in scope, a parenthesized expression, a function call, or a newly
-constructed instance of the data model (such as a newly constructed object, array, or multiset of data model instances).
+value, a reference to a query variable that is in scope, a parenthesized expression, a function call, a conditional 
+(case) expression, or a newly constructed instance of the data model (such as a newly constructed object, array, 
+or multiset of data model instances).
 
 ## <a id="Literals">Literals</a>
 
@@ -312,7 +302,7 @@ Different from standard SQL, double quotes play the same role as single quotes a
 ### <a id="Variable_references">Variable References</a>
 
     VariableReference     ::= <IDENTIFIER>|<DelimitedIdentifier>
-    <IDENTIFIER>          ::= <LETTER> (<LETTER> | <DIGIT> | "_" | "$")*
+    <IDENTIFIER>          ::= (<LETTER> | "_") (<LETTER> | <DIGIT> | "_" | "$")*
     <LETTER>              ::= ["A" - "Z", "a" - "z"]
     DelimitedIdentifier   ::= "`" (<EscapeQuot>
                                     | <EscapeBslash>
@@ -328,7 +318,7 @@ Different from standard SQL, double quotes play the same role as single quotes a
 A variable in SQL++ can be bound to any legal data model value. A variable reference refers to the value to which an in-scope variable is
 bound. (E.g., a variable binding may originate from one of the `FROM`, `WITH` or `LET` clauses of a `SELECT` statement or from an
 input parameter in the context of a function body.) Backticks, for example, \`id\`, are used for delimited identifiers. Delimiting is needed when
-a variable's desired name clashes with a SQL++ keyword or includes characters not allowed in regular identifiers.
+a variable's desired name clashes with a SQL++ keyword or includes characters not allowed in regular identifiers. More information on exactly how variable references are resolved can be found in the appendix section on Variable Resolution.
 
 ##### Examples
 
@@ -360,6 +350,22 @@ The following example is a (built-in) function call expression whose value is 8.
 ##### Example
 
     length('a string')
+
+## <a id="Case_expressions">Case Expressions</a>
+
+    CaseExpression ::= SimpleCaseExpression | SearchedCaseExpression
+    SimpleCaseExpression ::= <CASE> Expression ( <WHEN> Expression <THEN> Expression )+ ( <ELSE> Expression )? <END>
+    SearchedCaseExpression ::= <CASE> ( <WHEN> Expression <THEN> Expression )+ ( <ELSE> Expression )? <END>
+
+In a simple `CASE` expression, the query evaluator searches for the first `WHEN` ... `THEN` pair in which the `WHEN` expression is equal to the expression following `CASE` and returns the expression following `THEN`. If none of the `WHEN` ... `THEN` pairs meet this condition, and an `ELSE` branch exists, it returns the `ELSE` expression. Otherwise, `NULL` is returned.
+
+In a searched CASE expression, the query evaluator searches from left to right until it finds a `WHEN` expression that is evaluated to `TRUE`, and then returns its corresponding `THEN` expression. If no condition is found to be `TRUE`, and an `ELSE` branch exists, it returns the `ELSE` expression. Otherwise, it returns `NULL`.
+
+The following example illustrates the form of a case expression.
+
+##### Example
+
+    CASE (2 < 3) WHEN true THEN "yes" ELSE "no" END
 
 
 ### <a id="Constructors">Constructors</a>

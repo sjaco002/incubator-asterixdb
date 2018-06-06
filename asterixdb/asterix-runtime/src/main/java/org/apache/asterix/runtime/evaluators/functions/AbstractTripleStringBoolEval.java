@@ -18,8 +18,6 @@
  */
 package org.apache.asterix.runtime.evaluators.functions;
 
-import java.io.IOException;
-
 import org.apache.asterix.formats.nontagged.SerializerDeserializerProvider;
 import org.apache.asterix.om.base.ABoolean;
 import org.apache.asterix.om.types.BuiltinType;
@@ -28,6 +26,7 @@ import org.apache.hyracks.algebricks.runtime.base.IScalarEvaluatorFactory;
 import org.apache.hyracks.api.context.IHyracksTaskContext;
 import org.apache.hyracks.api.dataflow.value.ISerializerDeserializer;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
+import org.apache.hyracks.api.exceptions.SourceLocation;
 import org.apache.hyracks.data.std.api.IPointable;
 import org.apache.hyracks.data.std.primitive.UTF8StringPointable;
 
@@ -38,15 +37,15 @@ public abstract class AbstractTripleStringBoolEval extends AbstractTripleStringE
             SerializerDeserializerProvider.INSTANCE.getSerializerDeserializer(BuiltinType.ABOOLEAN);
 
     public AbstractTripleStringBoolEval(IHyracksTaskContext context, IScalarEvaluatorFactory eval0,
-            IScalarEvaluatorFactory eval1, IScalarEvaluatorFactory eval2, FunctionIdentifier funcID)
-            throws HyracksDataException {
-        super(context, eval0, eval1, eval2, funcID);
+            IScalarEvaluatorFactory eval1, IScalarEvaluatorFactory eval2, FunctionIdentifier funcID,
+            SourceLocation sourceLoc) throws HyracksDataException {
+        super(context, eval0, eval1, eval2, funcID, sourceLoc);
     }
 
     @SuppressWarnings("unchecked")
     @Override
     protected void process(UTF8StringPointable first, UTF8StringPointable second, UTF8StringPointable thrid,
-            IPointable result) throws IOException {
+            IPointable result) throws HyracksDataException {
         ABoolean res = compute(first, second, thrid) ? ABoolean.TRUE : ABoolean.FALSE;
         boolSerde.serialize(res, dout);
         result.set(resultStorage);
@@ -62,9 +61,8 @@ public abstract class AbstractTripleStringBoolEval extends AbstractTripleStringE
      * @param third
      *            , the second input argument.
      * @return a boolean value.
-     * @throws IOException
+     * @throws HyracksDataException
      */
     protected abstract boolean compute(UTF8StringPointable first, UTF8StringPointable second, UTF8StringPointable third)
-            throws IOException;
-
+            throws HyracksDataException;
 }

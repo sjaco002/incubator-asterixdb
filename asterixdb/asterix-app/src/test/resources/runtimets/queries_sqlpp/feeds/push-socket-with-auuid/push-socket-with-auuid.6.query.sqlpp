@@ -28,5 +28,3 @@
 use experiments;
 
 select value count(*) from DBLP0;
-select value count(*) from DBLP1;
-select value count(*) from DBLP2;

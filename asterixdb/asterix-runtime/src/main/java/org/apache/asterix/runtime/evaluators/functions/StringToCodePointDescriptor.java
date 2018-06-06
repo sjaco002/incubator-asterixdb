@@ -103,12 +103,12 @@ public class StringToCodePointDescriptor extends AbstractScalarFunctionDynamicDe
                                 }
                                 listBuilder.write(out, true);
                             } else {
-                                throw new TypeMismatchException(getIdentifier(), 0, serString[offset],
+                                throw new TypeMismatchException(sourceLoc, getIdentifier(), 0, serString[offset],
                                         ATypeTag.SERIALIZED_STRING_TYPE_TAG);
                             }
                             result.set(resultStorage);
                         } catch (IOException e1) {
-                            throw new HyracksDataException(e1);
+                            throw HyracksDataException.create(e1);
                         }
                     }
                 };

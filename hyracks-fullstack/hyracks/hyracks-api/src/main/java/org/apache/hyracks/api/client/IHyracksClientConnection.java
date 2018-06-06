@@ -99,13 +99,24 @@ public interface IHyracksClientConnection extends IClusterInfoCollector {
     DeployedJobSpecId deployJobSpec(JobSpecification jobSpec) throws Exception;
 
     /**
+     * Update the JobSpec for a deployed job.
+     *
+     * @param deployedJobSpecId
+     *            The id of the deployed job spec
+     * @param jobSpec
+     *            Job Specification
+     * @throws Exception
+     */
+    void redeployJobSpec(DeployedJobSpecId deployedJobSpecId, JobSpecification jobSpec) throws Exception;
+
+    /**
      * Remove the deployed Job Spec
      *
      * @param deployedJobSpecId
      *            The id of the deployed job spec
      * @throws Exception
      */
-    DeployedJobSpecId undeployJobSpec(DeployedJobSpecId deployedJobSpecId) throws Exception;
+    void undeployJobSpec(DeployedJobSpecId deployedJobSpecId) throws Exception;
 
     /**
      * Used to run a deployed Job Spec by id

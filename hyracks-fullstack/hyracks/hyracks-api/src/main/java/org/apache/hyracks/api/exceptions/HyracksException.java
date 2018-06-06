@@ -23,7 +23,7 @@ import java.io.Serializable;
 
 import org.apache.hyracks.api.util.ErrorMessageUtil;
 
-public class HyracksException extends IOException {
+public class HyracksException extends IOException implements IFormattedException {
     private static final long serialVersionUID = 1L;
 
     public static final int UNKNOWN = 0;
@@ -31,10 +31,22 @@ public class HyracksException extends IOException {
     private final int errorCode;
     private final Serializable[] params;
     private final String nodeId;
+    private final SourceLocation sourceLoc;
     private transient volatile String msgCache;
 
     public static HyracksException create(Throwable cause) {
         if (cause instanceof HyracksException) {
+            return (HyracksException) cause;
+        }
+        return new HyracksException(cause);
+    }
+
+    public static HyracksException wrapOrThrowUnchecked(Throwable cause) {
+        if (cause instanceof Error) {
+            throw (Error) cause;
+        } else if (cause instanceof RuntimeException) {
+            throw (RuntimeException) cause;
+        } else if (cause instanceof HyracksException) {
             return (HyracksException) cause;
         }
         return new HyracksException(cause);
@@ -48,9 +60,10 @@ public class HyracksException extends IOException {
         return new HyracksException(ErrorCode.HYRACKS, code, ErrorCode.getErrorMessage(code), cause, params);
     }
 
-    public HyracksException(String component, int errorCode, String message, Throwable cause, String nodeId,
-            Serializable... params) {
+    public HyracksException(String component, int errorCode, String message, Throwable cause, SourceLocation sourceLoc,
+            String nodeId, Serializable... params) {
         super(message, cause);
+        this.sourceLoc = sourceLoc;
         this.component = component;
         this.errorCode = errorCode;
         this.nodeId = nodeId;
@@ -62,38 +75,22 @@ public class HyracksException extends IOException {
      */
     @Deprecated
     public HyracksException(String message) {
-        this(ErrorMessageUtil.NONE, UNKNOWN, message, null, null);
+        this(ErrorMessageUtil.NONE, UNKNOWN, message, null, null, (Serializable[]) null);
     }
 
     /**
      * @deprecated Error code is needed.
      */
     @Deprecated
-    public HyracksException(Throwable cause) {
-        this(ErrorMessageUtil.NONE, UNKNOWN, String.valueOf(cause), cause, null);
+    protected HyracksException(Throwable cause) {
+        this(ErrorMessageUtil.NONE, UNKNOWN, String.valueOf(cause), cause, (Serializable[]) null);
     }
 
     /**
      * @deprecated Error code is needed.
      */
     @Deprecated
-    public HyracksException(Throwable cause, String nodeId) {
-        this(ErrorMessageUtil.NONE, UNKNOWN, String.valueOf(cause), cause, nodeId);
-    }
-
-    /**
-     * @deprecated Error code is needed.
-     */
-    @Deprecated
-    public HyracksException(String message, Throwable cause, String nodeId) {
-        this(ErrorMessageUtil.NONE, UNKNOWN, message, cause, nodeId);
-    }
-
-    /**
-     * @deprecated Error code is needed.
-     */
-    @Deprecated
-    public HyracksException(String message, Throwable cause) {
+    protected HyracksException(String message, Throwable cause) {
         this(ErrorMessageUtil.NONE, UNKNOWN, message, cause, (String) null);
     }
 
@@ -117,10 +114,17 @@ public class HyracksException extends IOException {
         this(component, errorCode, message, cause, null, params);
     }
 
+    public HyracksException(String component, int errorCode, String message, Throwable cause, String nodeId,
+            Serializable... params) {
+        this(component, errorCode, message, cause, null, nodeId, params);
+    }
+
+    @Override
     public String getComponent() {
         return component;
     }
 
+    @Override
     public int getErrorCode() {
         return errorCode;
     }
@@ -133,12 +137,14 @@ public class HyracksException extends IOException {
         return nodeId;
     }
 
+    public SourceLocation getSourceLocation() {
+        return sourceLoc;
+    }
+
     @Override
     public String getMessage() {
         if (msgCache == null) {
-            synchronized (this) {
-                msgCache = ErrorMessageUtil.formatMessage(component, errorCode, super.getMessage(), params);
-            }
+            msgCache = ErrorMessageUtil.formatMessage(component, errorCode, super.getMessage(), sourceLoc, params);
         }
         return msgCache;
     }

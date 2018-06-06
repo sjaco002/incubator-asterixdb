@@ -40,14 +40,17 @@ public class LogManagerWithReplication extends LogManager {
         super(txnSubsystem);
     }
 
+    @SuppressWarnings("squid:S2445")
     @Override
     public void log(ILogRecord logRecord) {
-        boolean shouldReplicate = logRecord.getLogSource() == LogSource.LOCAL && logRecord.getLogType() != LogType.WAIT;
+        boolean shouldReplicate = logRecord.getLogSource() == LogSource.LOCAL && logRecord.getLogType() != LogType.WAIT
+                && logRecord.getLogType() != LogType.WAIT_FOR_FLUSHES;
         if (shouldReplicate) {
             switch (logRecord.getLogType()) {
                 case LogType.ENTITY_COMMIT:
                 case LogType.UPDATE:
                 case LogType.FLUSH:
+                case LogType.FILTER:
                     shouldReplicate = replicationStrategy.isMatch(logRecord.getDatasetId());
                     if (shouldReplicate && !replicatedTxn.contains(logRecord.getTxnId())) {
                         replicatedTxn.add(logRecord.getTxnId());
@@ -62,16 +65,12 @@ public class LogManagerWithReplication extends LogManager {
             }
         }
         logRecord.setReplicate(shouldReplicate);
-
-        //Remote flush logs do not need to be flushed separately since they may not trigger local flush
-        if (logRecord.getLogType() == LogType.FLUSH && logRecord.getLogSource() == LogSource.LOCAL) {
-            flushLogsQ.add(logRecord);
-            return;
+        if (!logToFlushQueue(logRecord)) {
+            appendToLogTail(logRecord);
         }
-
-        appendToLogTail(logRecord);
     }
 
+    @SuppressWarnings("squid:S2445")
     @Override
     protected void appendToLogTail(ILogRecord logRecord) {
         syncAppendToLogTail(logRecord);

@@ -72,6 +72,9 @@ public class ErrorCode {
     public static final int UNKNOWN_DURATION_UNIT = 29;
     public static final int QUERY_TIMEOUT = 30;
     public static final int INVALID_TYPE_CASTING_MATH_FUNCTION = 31;
+    public static final int REJECT_BAD_CLUSTER_STATE = 32;
+    public static final int REJECT_NODE_UNREGISTERED = 33;
+    public static final int DIVISION_BY_ZERO = 34;
 
     public static final int INSTANTIATION_ERROR = 100;
 
@@ -127,7 +130,7 @@ public class ErrorCode {
     public static final int UPGRADE_FAILED_LOCK_WAS_NOT_ACQUIRED = 1047;
     public static final int DOWNGRADE_FAILED_LOCK_WAS_NOT_ACQUIRED = 1048;
     public static final int LOCK_WAS_ACQUIRED_DIFFERENT_OPERATION = 1049;
-    public static final int NO_DATASET_WITH_NAME = 1050;
+    public static final int UNKNOWN_DATASET_IN_DATAVERSE = 1050;
     public static final int INDEX_ILLEGAL_ENFORCED_ON_CLOSED_FIELD = 1051;
     public static final int INDEX_ILLEGAL_REPETITIVE_FIELD = 1052;
     public static final int CANNOT_CREATE_SEC_PRIMARY_IDX_ON_EXT_DATASET = 1053;
@@ -140,12 +143,29 @@ public class ErrorCode {
     public static final int WITH_FIELD_MUST_BE_OF_TYPE = 1060;
     public static final int WITH_FIELD_MUST_CONTAIN_SUB_FIELD = 1061;
     public static final int MERGE_POLICY_PARAMETER_INVALID_TYPE = 1062;
-    public static final int NO_DATAVERSE_WITH_NAME = 1063;
+    public static final int UNKNOWN_DATAVERSE = 1063;
     public static final int ERROR_OCCURRED_BETWEEN_TWO_TYPES_CONVERSION = 1064;
     public static final int CHOSEN_INDEX_COUNT_SHOULD_BE_GREATER_THAN_ONE = 1065;
     public static final int CANNOT_SERIALIZE_A_VALUE = 1066;
     public static final int CANNOT_FIND_NON_MISSING_SELECT_OPERATOR = 1067;
     public static final int CANNOT_GET_CONDITIONAL_SPLIT_KEY_VARIABLE = 1068;
+    public static final int CANNOT_DROP_INDEX = 1069;
+    public static final int METADATA_ERROR = 1070;
+    public static final int DATAVERSE_EXISTS = 1071;
+    public static final int DATASET_EXISTS = 1072;
+    public static final int UNDEFINED_IDENTIFIER = 1073;
+    public static final int AMBIGUOUS_IDENTIFIER = 1074;
+    public static final int FORBIDDEN_SCOPE = 1075;
+    public static final int NAME_RESOLVE_UNKNOWN_DATASET = 1076;
+    public static final int NAME_RESOLVE_UNKNOWN_DATASET_IN_DATAVERSE = 1077;
+    public static final int COMPILATION_UNEXPECTED_OPERATOR = 1078;
+    public static final int COMPILATION_ERROR = 1079;
+    public static final int UNKNOWN_NODEGROUP = 1080;
+    public static final int UNKNOWN_FUNCTION = 1081;
+    public static final int UNKNOWN_TYPE = 1082;
+    public static final int UNKNOWN_INDEX = 1083;
+    public static final int INDEX_EXISTS = 1084;
+    public static final int TYPE_EXISTS = 1085;
 
     // Feed errors
     public static final int DATAFLOW_ILLEGAL_STATE = 3001;

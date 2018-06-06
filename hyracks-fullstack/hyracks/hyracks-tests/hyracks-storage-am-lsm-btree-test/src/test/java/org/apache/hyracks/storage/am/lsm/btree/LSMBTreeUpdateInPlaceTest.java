@@ -29,14 +29,15 @@ import org.apache.hyracks.dataflow.common.utils.SerdeUtils;
 import org.apache.hyracks.dataflow.common.utils.TupleUtils;
 import org.apache.hyracks.storage.am.btree.AbstractOperationCallbackTest;
 import org.apache.hyracks.storage.am.common.api.IBTreeIndexTupleReference;
+import org.apache.hyracks.storage.am.common.api.IExtendedModificationOperationCallback;
 import org.apache.hyracks.storage.am.common.impls.IndexAccessParameters;
 import org.apache.hyracks.storage.am.common.impls.NoOpOperationCallback;
 import org.apache.hyracks.storage.am.config.AccessMethodTestsConfig;
 import org.apache.hyracks.storage.am.lsm.btree.util.LSMBTreeTestHarness;
 import org.apache.hyracks.storage.am.lsm.btree.utils.LSMBTreeUtil;
-import org.apache.hyracks.storage.am.lsm.common.api.ILSMIndex;
+import org.apache.hyracks.storage.am.lsm.common.api.ILSMIOOperation;
+import org.apache.hyracks.storage.am.lsm.common.api.ILSMIOOperation.LSMIOOperationStatus;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMIndexAccessor;
-import org.apache.hyracks.storage.am.lsm.common.impls.BlockingIOOperationCallbackWrapper;
 import org.apache.hyracks.storage.am.lsm.common.impls.NoOpOperationTrackerFactory;
 import org.apache.hyracks.storage.common.IIndexAccessor;
 import org.apache.hyracks.storage.common.IModificationOperationCallback;
@@ -98,8 +99,6 @@ public class LSMBTreeUpdateInPlaceTest extends AbstractOperationCallbackTest {
 
     private void test(IndexModification op1, IndexModification op2) throws Exception {
         ILSMIndexAccessor lsmAccessor = (ILSMIndexAccessor) accessor;
-        BlockingIOOperationCallbackWrapper ioOpCallback =
-                new BlockingIOOperationCallbackWrapper(((ILSMIndex) index).getIOOperationCallback());
         for (int j = 0; j < 2; j++) {
             index.clear();
             isFoundNull = true;
@@ -110,8 +109,11 @@ public class LSMBTreeUpdateInPlaceTest extends AbstractOperationCallbackTest {
             }
 
             if (j == 1) {
-                lsmAccessor.scheduleFlush(ioOpCallback);
-                ioOpCallback.waitForIO();
+                ILSMIOOperation flush = lsmAccessor.scheduleFlush();
+                flush.sync();
+                if (flush.getStatus() == LSMIOOperationStatus.FAILURE) {
+                    throw HyracksDataException.create(flush.getFailure());
+                }
                 isFoundNull = true;
                 isUpdated = false;
             } else {
@@ -125,8 +127,7 @@ public class LSMBTreeUpdateInPlaceTest extends AbstractOperationCallbackTest {
             }
 
             if (j == 1) {
-                lsmAccessor.scheduleFlush(ioOpCallback);
-                ioOpCallback.waitForIO();
+                lsmAccessor.scheduleFlush().sync();
             } else {
                 isFoundNull = false;
             }
@@ -153,7 +154,7 @@ public class LSMBTreeUpdateInPlaceTest extends AbstractOperationCallbackTest {
         test((IIndexAccessor a) -> a.upsert(tuple), (IIndexAccessor a) -> a.upsert(tuple));
     }
 
-    private class VerifyingUpdateModificationCallback implements IModificationOperationCallback {
+    private class VerifyingUpdateModificationCallback implements IExtendedModificationOperationCallback {
 
         private final ITupleReference tuple;
 
@@ -175,6 +176,11 @@ public class LSMBTreeUpdateInPlaceTest extends AbstractOperationCallbackTest {
                 Assert.assertEquals(isUpdated, ((IBTreeIndexTupleReference) before).isUpdated());
             }
             Assert.assertEquals(0, cmp.compare(this.tuple, after));
+        }
+
+        @Override
+        public void after(ITupleReference tuple) {
+            //Nothing to do there, not testing filters
         }
     }
 

@@ -18,6 +18,12 @@
  */
 package org.apache.hyracks.maven.license;
 
+import static org.apache.hyracks.maven.license.ProjectFlag.ALTERNATE_LICENSE_FILE;
+import static org.apache.hyracks.maven.license.ProjectFlag.ALTERNATE_NOTICE_FILE;
+import static org.apache.hyracks.maven.license.ProjectFlag.IGNORE_MISSING_EMBEDDED_LICENSE;
+import static org.apache.hyracks.maven.license.ProjectFlag.IGNORE_MISSING_EMBEDDED_NOTICE;
+import static org.apache.hyracks.maven.license.ProjectFlag.IGNORE_NOTICE_OVERRIDE;
+
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -113,9 +119,13 @@ public class GenerateFileMojo extends LicenseMojo {
             rebuildLicenseContentProjectMap();
             combineCommonGavs();
             SourcePointerResolver.execute(this);
-            persistLicenseMap();
             buildNoticeProjectMap();
+            persistLicenseMap();
             generateFiles();
+            if (seenWarning && failOnWarning) {
+                throw new MojoFailureException(
+                        "'failOnWarning' enabled and warning(s) (or error(s)) occurred during execution; see output");
+            }
         } catch (IOException | TemplateException | ProjectBuildingException e) {
             throw new MojoExecutionException("Unexpected exception: " + e, e);
         }
@@ -128,30 +138,35 @@ public class GenerateFileMojo extends LicenseMojo {
         }
         licenseSpecs.addAll(urlToLicenseMap.values());
         for (LicenseSpec license : licenseSpecs) {
-            resolveLicenseContent(license, true);
+            resolveArtifactContent(license, true);
         }
     }
 
-    private String resolveLicenseContent(LicenseSpec license, boolean bestEffort) throws IOException {
-        if (license.getContent() == null) {
-            getLog().debug("Resolving content for " + license.getUrl() + " (" + license.getContentFile() + ")");
-            File cFile = new File(license.getContentFile());
+    private String resolveArtifactContent(ArtifactSpec artifact, boolean bestEffort) throws IOException {
+        if (artifact.getContent() == null) {
+            getLog().debug("Resolving content for " + artifact.getUrl() + " (" + artifact.getContentFile() + ")");
+            File cFile = new File(artifact.getContentFile());
             if (!cFile.isAbsolute()) {
-                cFile = new File(licenseDirectory, license.getContentFile());
+                for (File directory : licenseDirectories) {
+                    cFile = new File(directory, artifact.getContentFile());
+                    if (cFile.exists()) {
+                        break;
+                    }
+                }
             }
             if (!cFile.exists()) {
                 if (!bestEffort) {
-                    getLog().warn("MISSING: license content file (" + cFile + ") for url: " + license.getUrl());
-                    license.setContent("MISSING: " + license.getContentFile() + " (" + license.getUrl() + ")");
+                    getLog().warn("MISSING: content file (" + cFile + ") for url: " + artifact.getUrl());
+                    artifact.setContent("MISSING: " + artifact.getContentFile() + " (" + artifact.getUrl() + ")");
                 }
             } else {
-                getLog().info("Reading license content from file: " + cFile);
+                getLog().info("Reading content from file: " + cFile);
                 StringWriter sw = new StringWriter();
                 LicenseUtil.readAndTrim(sw, cFile);
-                license.setContent(sw.toString());
+                artifact.setContent(sw.toString());
             }
         }
-        return license.getContent();
+        return artifact.getContent();
     }
 
     private void combineCommonGavs() {
@@ -182,8 +197,8 @@ public class GenerateFileMojo extends LicenseMojo {
                 throw new IOException("Could not load template " + generation.getTemplate());
             }
 
-            outputDir.mkdirs();
             final File file = new File(outputDir, generation.getOutputFile());
+            file.getParentFile().mkdirs();
             getLog().info("Writing " + file + "...");
             try (final FileOutputStream fos = new FileOutputStream(file);
                     final Writer writer = new OutputStreamWriter(fos, StandardCharsets.UTF_8)) {
@@ -248,8 +263,10 @@ public class GenerateFileMojo extends LicenseMojo {
             for (Project p : lps.getProjects()) {
                 String licenseText = p.getLicenseText();
                 if (licenseText == null) {
-                    getLog().warn("Using license other than from within artifact: " + p.gav());
-                    licenseText = resolveLicenseContent(lps.getLicense(), false);
+                    warnUnlessFlag(p.gav(), IGNORE_MISSING_EMBEDDED_LICENSE,
+                            "Using license other than from within artifact: " + p.gav() + " (" + lps.getLicense()
+                                    + ")");
+                    licenseText = resolveArtifactContent(lps.getLicense(), false);
                 }
                 LicenseSpec spec = lps.getLicense();
                 if (spec.getDisplayName() == null) {
@@ -281,11 +298,21 @@ public class GenerateFileMojo extends LicenseMojo {
         return projects;
     }
 
-    private void buildNoticeProjectMap() {
+    private void buildNoticeProjectMap() throws IOException {
         noticeMap = new TreeMap<>(WHITESPACE_NORMALIZED_COMPARATOR);
         for (Project p : getProjects()) {
+            String noticeText = p.getNoticeText();
+            if (noticeText == null && noticeOverrides.containsKey(p.gav())) {
+                String noticeUrl = noticeOverrides.get(p.gav());
+                warnUnlessFlag(p.gav(), IGNORE_NOTICE_OVERRIDE,
+                        "Using notice other than from within artifact: " + p.gav() + " (" + noticeUrl + ")");
+                p.setNoticeText(resolveArtifactContent(new NoticeSpec(noticeUrl), false));
+            } else if (noticeText == null && !noticeOverrides.containsKey(p.gav())
+                    && Boolean.TRUE.equals(getProjectFlag(p.gav(), IGNORE_NOTICE_OVERRIDE))) {
+                getLog().warn(p + " has IGNORE_NOTICE_OVERRIDE flag set, but no override defined...");
+            }
             prependSourcePointerToNotice(p);
-            final String noticeText = p.getNoticeText();
+            noticeText = p.getNoticeText();
             if (noticeText == null) {
                 continue;
             }
@@ -307,18 +334,22 @@ public class GenerateFileMojo extends LicenseMojo {
     }
 
     private void resolveNoticeFiles() throws MojoExecutionException, IOException {
-        resolveArtifactFiles("NOTICE", entry -> entry.getName().matches("(.*/|^)" + "NOTICE" + "(.txt)?"),
-                Project::setNoticeText,
+        // TODO(mblow): this will match *any* NOTICE[.txt] file located within the artifact- this seems way too liberal
+        resolveArtifactFiles("NOTICE", IGNORE_MISSING_EMBEDDED_NOTICE, ALTERNATE_NOTICE_FILE,
+                entry -> entry.getName().matches("(.*/|^)" + "NOTICE" + "(.txt)?"), Project::setNoticeText,
                 text -> stripFoundationAssertionFromNotices ? FOUNDATION_PATTERN.matcher(text).replaceAll("") : text);
     }
 
     private void resolveLicenseFiles() throws MojoExecutionException, IOException {
-        resolveArtifactFiles("LICENSE", entry -> entry.getName().matches("(.*/|^)" + "LICENSE" + "(.txt)?"),
-                Project::setLicenseText, UnaryOperator.identity());
+        // TODO(mblow): this will match *any* LICENSE[.txt] file located within the artifact- this seems way too liberal
+        resolveArtifactFiles("LICENSE", IGNORE_MISSING_EMBEDDED_LICENSE, ALTERNATE_LICENSE_FILE,
+                entry -> entry.getName().matches("(.*/|^)" + "LICENSE" + "(.txt)?"), Project::setLicenseText,
+                UnaryOperator.identity());
     }
 
-    private void resolveArtifactFiles(final String name, Predicate<JarEntry> filter,
-            BiConsumer<Project, String> consumer, UnaryOperator<String> contentTransformer)
+    private void resolveArtifactFiles(final String name, final ProjectFlag ignoreFlag,
+            final ProjectFlag alternateFilenameFlag, final Predicate<JarEntry> filter,
+            final BiConsumer<Project, String> consumer, final UnaryOperator<String> contentTransformer)
             throws MojoExecutionException, IOException {
         for (Project p : getProjects()) {
             File artifactFile = new File(p.getArtifactPath());
@@ -328,10 +359,13 @@ public class GenerateFileMojo extends LicenseMojo {
                 getLog().info("Skipping unknown artifact file type: " + artifactFile);
                 continue;
             }
+            String alternateFilename = (String) getProjectFlag(p.gav(), alternateFilenameFlag);
+            Predicate<JarEntry> finalFilter =
+                    alternateFilename != null ? entry -> entry.getName().equals(alternateFilename) : filter;
             try (JarFile jarFile = new JarFile(artifactFile)) {
-                SortedMap<String, JarEntry> matches = gatherMatchingEntries(jarFile, filter);
+                SortedMap<String, JarEntry> matches = gatherMatchingEntries(jarFile, finalFilter);
                 if (matches.isEmpty()) {
-                    getLog().warn("No " + name + " file found for " + p.gav());
+                    warnUnlessFlag(p, ignoreFlag, "No " + name + " file found for " + p.gav());
                 } else {
                     if (matches.size() > 1) {
                         getLog().warn("Multiple " + name + " files found for " + p.gav() + ": " + matches.keySet()

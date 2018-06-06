@@ -34,7 +34,6 @@ import org.apache.hyracks.storage.am.lsm.common.api.ILSMComponent;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMComponent.ComponentState;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMDiskComponent;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMIndex;
-import org.apache.hyracks.storage.am.lsm.common.api.ILSMIndexAccessor;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMMergePolicy;
 
 public class PrefixMergePolicy implements ILSMMergePolicy {
@@ -72,7 +71,7 @@ public class PrefixMergePolicy implements ILSMMergePolicy {
 
         if (fullMergeIsRequested) {
             ILSMIndexAccessor accessor = index.createAccessor(NoOpIndexAccessParameters.INSTANCE);
-            accessor.scheduleFullMerge(index.getIOOperationCallback());
+            accessor.scheduleFullMerge();
             long mergeSize = getMergeSize(immutableComponents);
             logDiskComponentsSnapshot(immutableComponents);
             logMergeInfo(mergeSize, true, immutableComponents.size(), immutableComponents.size(), immutableComponents);
@@ -262,7 +261,7 @@ public class PrefixMergePolicy implements ILSMMergePolicy {
         // Reverse the components order back to its original order
         Collections.reverse(mergableComponents);
         ILSMIndexAccessor accessor = index.createAccessor(NoOpIndexAccessParameters.INSTANCE);
-        accessor.scheduleMerge(index.getIOOperationCallback(), mergableComponents);
+        accessor.scheduleMerge(mergableComponents);
         long mergeSize = getMergeSize(mergableComponents);
         logDiskComponentsSnapshot(immutableComponents);
         logMergeInfo(mergeSize, false, mergableComponents.size(), immutableComponents.size(), immutableComponents);

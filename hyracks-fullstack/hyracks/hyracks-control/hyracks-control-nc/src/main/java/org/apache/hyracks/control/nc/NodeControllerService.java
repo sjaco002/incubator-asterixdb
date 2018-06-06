@@ -18,10 +18,10 @@
  */
 package org.apache.hyracks.control.nc;
 
-import static org.apache.hyracks.control.common.utils.MXHelper.gcMXBeans;
-import static org.apache.hyracks.control.common.utils.MXHelper.memoryMXBean;
-import static org.apache.hyracks.control.common.utils.MXHelper.osMXBean;
-import static org.apache.hyracks.control.common.utils.MXHelper.runtimeMXBean;
+import static org.apache.hyracks.util.MXHelper.gcMXBeans;
+import static org.apache.hyracks.util.MXHelper.memoryMXBean;
+import static org.apache.hyracks.util.MXHelper.osMXBean;
+import static org.apache.hyracks.util.MXHelper.runtimeMXBean;
 
 import java.io.File;
 import java.io.IOException;
@@ -37,7 +37,6 @@ import java.util.Timer;
 import java.util.TimerTask;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
@@ -94,8 +93,10 @@ import org.apache.hyracks.ipc.exceptions.IPCException;
 import org.apache.hyracks.ipc.impl.IPCSystem;
 import org.apache.hyracks.net.protocols.muxdemux.FullFrameChannelInterfaceFactory;
 import org.apache.hyracks.util.ExitUtil;
+import org.apache.hyracks.util.MaintainedThreadNameExecutorService;
 import org.apache.hyracks.util.PidHelper;
 import org.apache.hyracks.util.trace.ITracer;
+import org.apache.hyracks.util.trace.TraceUtils;
 import org.apache.hyracks.util.trace.Tracer;
 import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;
@@ -170,7 +171,7 @@ public class NodeControllerService implements IControllerService {
 
     private final Map<CcId, AtomicLong> maxJobIds = new ConcurrentHashMap<>();
 
-    private NodeStatus status = NodeStatus.BOOTING;
+    private volatile NodeStatus status = NodeStatus.ACTIVE;
 
     private NodeRegistration nodeRegistration;
 
@@ -352,18 +353,18 @@ public class NodeControllerService implements IControllerService {
                 @Override
                 public void ipcHandleRestored(IIPCHandle handle) throws IPCException {
                     // we need to re-register in case of NC -> CC connection reset
+                    final CcConnection ccConnection = getCcConnection(ccAddressMap.get(ccAddress));
                     try {
-                        registerNode(getCcConnection(ccAddressMap.get(ccAddress)), ccAddress);
-                    } catch (Exception e) {
-                        LOGGER.log(Level.WARN, "Failed Registering with cc", e);
+                        ccConnection.notifyConnectionRestored(NodeControllerService.this, ccAddress);
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
                         throw new IPCException(e);
                     }
                 }
             };
             ClusterControllerRemoteProxy ccProxy = new ClusterControllerRemoteProxy(
                     ipc.getHandle(ccAddress, ncConfig.getClusterConnectRetries(), 1, ipcEventListener));
-            CcConnection ccc = new CcConnection(ccProxy);
-            return registerNode(ccc, ccAddress);
+            return registerNode(new CcConnection(ccProxy), ccAddress);
         }
     }
 
@@ -412,9 +413,8 @@ public class NodeControllerService implements IControllerService {
         }
     }
 
-    private CcId registerNode(CcConnection ccc, InetSocketAddress ccAddress) throws Exception {
+    public CcId registerNode(CcConnection ccc, InetSocketAddress ccAddress) throws Exception {
         LOGGER.info("Registering with Cluster Controller {}", ccc);
-
         int registrationId = nextRegistrationId.incrementAndGet();
         pendingRegistrations.put(registrationId, ccc);
         CcId ccId = ccc.registerNode(nodeRegistration, registrationId);
@@ -424,10 +424,8 @@ public class NodeControllerService implements IControllerService {
         if (distributedState != null) {
             getDistributedState().put(ccId, distributedState);
         }
-        application.onRegisterNode(ccId);
         IClusterController ccs = ccc.getClusterControllerService();
         NodeParameters nodeParameters = ccc.getNodeParameters();
-
         // Start heartbeat generator.
         if (!heartbeatThreads.containsKey(ccId)) {
             Thread heartbeatThread = new Thread(
@@ -444,8 +442,8 @@ public class NodeControllerService implements IControllerService {
             ccTimer.schedule(new ProfileDumpTask(ccs, ccId), 0, nodeParameters.getProfileDumpPeriod());
             ccTimers.put(ccId, ccTimer);
         }
-
-        LOGGER.info("Registering with Cluster Controller {} complete", ccc);
+        ccc.notifyRegistrationCompleted();
+        LOGGER.info("Registering with Cluster Controller {} completed", ccc);
         return ccId;
     }
 
@@ -472,7 +470,6 @@ public class NodeControllerService implements IControllerService {
     }
 
     private ConcurrentHashMap<CcId, Serializable> getDistributedState() {
-        //noinspection unchecked
         return (ConcurrentHashMap<CcId, Serializable>) serviceCtx.getDistributedState();
     }
 
@@ -480,7 +477,7 @@ public class NodeControllerService implements IControllerService {
         serviceCtx = new NCServiceContext(this, serverCtx, ioManager, id, memoryManager, lccm,
                 ncConfig.getNodeScopedAppConfig());
         application.init(serviceCtx);
-        executor = Executors.newCachedThreadPool(serviceCtx.getThreadFactory());
+        executor = MaintainedThreadNameExecutorService.newCachedThreadPool(serviceCtx.getThreadFactory());
         application.start(ncConfig.getAppArgsArray());
     }
 
@@ -568,9 +565,6 @@ public class NodeControllerService implements IControllerService {
 
     public void storeActivityClusterGraph(DeployedJobSpecId deployedJobSpecId, ActivityClusterGraph acg)
             throws HyracksException {
-        if (deployedJobSpecActivityClusterGraphMap.get(deployedJobSpecId.getId()) != null) {
-            throw HyracksException.create(ErrorCode.DUPLICATE_DEPLOYED_JOB, deployedJobSpecId);
-        }
         deployedJobSpecActivityClusterGraphMap.put(deployedJobSpecId.getId(), acg);
     }
 
@@ -625,6 +619,11 @@ public class NodeControllerService implements IControllerService {
         return executor;
     }
 
+    @Override
+    public Timer getTimer() {
+        return timer;
+    }
+
     public NCConfig getConfiguration() {
         return ncConfig;
     }
@@ -633,11 +632,11 @@ public class NodeControllerService implements IControllerService {
         return workQueue;
     }
 
-    public synchronized NodeStatus getNodeStatus() {
+    public NodeStatus getNodeStatus() {
         return status;
     }
 
-    public synchronized void setNodeStatus(NodeStatus status) {
+    public void setNodeStatus(NodeStatus status) {
         this.status = status;
     }
 
@@ -659,6 +658,11 @@ public class NodeControllerService implements IControllerService {
 
     public MessagingNetworkManager getMessagingNetworkManager() {
         return messagingNetManager;
+    }
+
+    public void notifyTasksCompleted(CcId ccId) throws Exception {
+        partitionManager.jobsCompleted(ccId);
+        application.onRegisterNode(ccId);
     }
 
     private static INCApplication getApplication(NCConfig config)
@@ -702,13 +706,12 @@ public class NodeControllerService implements IControllerService {
     }
 
     private class TraceCurrentTimeTask extends TimerTask {
-
         private ITracer tracer;
         private long traceCategory;
 
         public TraceCurrentTimeTask(ITracer tracer) {
             this.tracer = tracer;
-            this.traceCategory = tracer.getRegistry().get("Timestamp");
+            this.traceCategory = tracer.getRegistry().get(TraceUtils.TIMESTAMP);
         }
 
         @Override
@@ -719,5 +722,9 @@ public class NodeControllerService implements IControllerService {
                 LOGGER.log(Level.WARN, "Exception tracing current time", e);
             }
         }
+    }
+
+    public INCApplication getApplication() {
+        return application;
     }
 }

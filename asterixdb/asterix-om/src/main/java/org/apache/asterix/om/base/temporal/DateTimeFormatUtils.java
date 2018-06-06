@@ -20,10 +20,14 @@ package org.apache.asterix.om.base.temporal;
 
 import java.io.IOException;
 import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.TimeZone;
 
+import org.apache.asterix.om.base.AMutableInt32;
+import org.apache.asterix.om.base.AMutableInt64;
+import org.apache.commons.lang3.mutable.Mutable;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
 
 /**
@@ -53,7 +57,7 @@ public class DateTimeFormatUtils {
 
     private static final GregorianCalendarSystem CAL = GregorianCalendarSystem.getInstance();
 
-    private static final Charset ENCODING = Charset.forName("UTF-8");
+    private static final Charset ENCODING = StandardCharsets.UTF_8;
 
     // For time
     private static final char HOUR_CHAR = 'h';
@@ -71,7 +75,6 @@ public class DateTimeFormatUtils {
     private static final int MAX_TIMEZONE_CHARS = 1;
 
     private enum DateTimeProcessState {
-        INIT,
         YEAR,
         MONTH,
         DAY,
@@ -124,12 +127,7 @@ public class DateTimeFormatUtils {
     private static final char SKIPPER_CHAR = 'O';
     private static final int MAX_SKIPPER_CHAR = 1;
 
-    private static final int MS_PER_MINUTE = 60 * 1000;
-    private static final int MS_PER_HOUR = 60 * MS_PER_MINUTE;
-
     private static final byte TO_LOWER_OFFSET = 'A' - 'a';
-
-    private static final String[] TZ_IDS = TimeZone.getAvailableIDs();
 
     private static Comparator<byte[]> byteArrayComparator = new Comparator<byte[]>() {
         @Override
@@ -149,33 +147,31 @@ public class DateTimeFormatUtils {
         }
     };
 
-    private static final byte[][] TIMEZONE_IDS = new byte[TZ_IDS.length][];
+    private static final byte[][] TIMEZONE_IDS;
+    private static final TimeZone[] TIMEZONE_VALUES;
+
     static {
-        for (int i = 0; i < TIMEZONE_IDS.length; i++) {
-            TIMEZONE_IDS[i] = TZ_IDS[i].getBytes(ENCODING);
+        String[] tzIds = TimeZone.getAvailableIDs();
+        int tzCount = tzIds.length;
+        TIMEZONE_IDS = new byte[tzCount][];
+        TIMEZONE_VALUES = new TimeZone[tzCount];
+
+        for (int i = 0; i < tzCount; i++) {
+            TIMEZONE_IDS[i] = tzIds[i].getBytes(ENCODING);
         }
         Arrays.sort(TIMEZONE_IDS, byteArrayComparator);
+        for (int i = 0; i < tzCount; i++) {
+            TIMEZONE_VALUES[i] = TimeZone.getTimeZone(new String(TIMEZONE_IDS[i], ENCODING));
+        }
     }
 
-    private static final int[] TIMEZONE_OFFSETS = new int[TIMEZONE_IDS.length];
-    static {
-        for (int i = 0; i < TIMEZONE_IDS.length; i++) {
-            TIMEZONE_OFFSETS[i] = TimeZone.getTimeZone(new String(TIMEZONE_IDS[i], ENCODING)).getRawOffset();
-        }
+    private static final DateTimeFormatUtils INSTANCE = new DateTimeFormatUtils();
+
+    public static DateTimeFormatUtils getInstance() {
+        return INSTANCE;
     }
 
     private DateTimeFormatUtils() {
-    }
-
-    private static class DateTimeFormatUtilsHolder {
-        private static final DateTimeFormatUtils INSTANCE = new DateTimeFormatUtils();
-
-        private DateTimeFormatUtilsHolder() {
-        }
-    }
-
-    public static DateTimeFormatUtils getInstance() {
-        return DateTimeFormatUtilsHolder.INSTANCE;
     }
 
     private int parseFormatField(byte[] format, int formatStart, int formatLength, int formatPointer, char formatChar,
@@ -245,9 +241,10 @@ public class DateTimeFormatUtils {
         return -1;
     }
 
-    private int binaryTimezoneIDSearch(byte[] barray, int start, int length) {
-        return Arrays.binarySearch(TIMEZONE_IDS, 0, TIMEZONE_IDS.length,
+    public static TimeZone findTimeZone(byte[] barray, int start, int length) {
+        int idx = Arrays.binarySearch(TIMEZONE_IDS, 0, TIMEZONE_IDS.length,
                 Arrays.copyOfRange(barray, start, start + length), byteArrayComparator);
+        return idx >= 0 ? TIMEZONE_VALUES[idx] : null;
     }
 
     private int indexOf(byte[] barray, int start, int length, char c) {
@@ -274,20 +271,30 @@ public class DateTimeFormatUtils {
         return b;
     }
 
-    public long parseDateTime(byte[] data, int dataStart, int dataLength, byte[] format, int formatStart,
-            int formatLength, DateTimeParseMode parseMode) throws AsterixTemporalTypeParseException {
+    public boolean parseDateTime(AMutableInt64 outChronon, byte[] data, int dataStart, int dataLength, byte[] format,
+            int formatStart, int formatLength, DateTimeParseMode parseMode, boolean raiseParseDataError)
+            throws AsterixTemporalTypeParseException {
+        return parseDateTime(outChronon, null, null, data, dataStart, dataLength, format, formatStart, formatLength,
+                parseMode, raiseParseDataError, (byte) '\0');
+    }
+
+    public boolean parseDateTime(AMutableInt64 outChronon, Mutable<Boolean> outTimeZoneExists,
+            AMutableInt32 outTimeZone, byte[] data, int dataStart, int dataLength, byte[] format, int formatStart,
+            int formatLength, DateTimeParseMode parseMode, boolean raiseParseDataError, byte altSeparatorChar)
+            throws AsterixTemporalTypeParseException {
         int year = 0, month = 0, day = 0, hour = 0, min = 0, sec = 0, ms = 0, timezone = 0;
+        boolean timezoneExists = false;
 
         boolean negativeYear = false;
-        int formatCharCopies = 0;
+        int formatCharCopies;
 
         int dataStringPointer = 0, formatPointer = 0;
 
         byte separatorChar = '\0';
 
-        DateTimeProcessState processState = DateTimeProcessState.INIT;
+        DateTimeProcessState processState;
 
-        int pointerMove = 0;
+        int pointerMove;
 
         while (dataStringPointer < dataLength && formatPointer < formatLength) {
             formatCharCopies = 0;
@@ -421,8 +428,6 @@ public class DateTimeFormatUtils {
             }
 
             switch (processState) {
-                case INIT:
-                    break;
                 case YEAR:
                     if (dataStringPointer < dataLength && data[dataStart + dataStringPointer] == HYPHEN_CHAR) {
                         negativeYear = true;
@@ -435,8 +440,12 @@ public class DateTimeFormatUtils {
                     int processedFieldsCount = 0;
                     for (int i = 0; i < formatCharCopies; i++) {
                         if (data[dataStart + dataStringPointer] < '0' || data[dataStart + dataStringPointer] > '9') {
-                            throw new AsterixTemporalTypeParseException("Unexpected char for year field at "
-                                    + (dataStart + dataStringPointer) + ": " + data[dataStart + dataStringPointer]);
+                            if (raiseParseDataError) {
+                                throw new AsterixTemporalTypeParseException("Unexpected char for year field at "
+                                        + (dataStart + dataStringPointer) + ": " + data[dataStart + dataStringPointer]);
+                            } else {
+                                return false;
+                            }
                         }
                         parsedValue = parsedValue * 10 + (data[dataStart + dataStringPointer] - '0');
                         dataStringPointer++;
@@ -467,24 +476,38 @@ public class DateTimeFormatUtils {
                             month = monthNameMatch + 1;
                             dataStringPointer += 3;
                         } else {
-                            throw new AsterixTemporalTypeParseException(
-                                    "Unrecognizable month string " + (char) data[dataStart + dataStringPointer] + " "
-                                            + (char) data[dataStart + dataStringPointer + 1] + " "
-                                            + (char) data[dataStart + dataStringPointer + 2]);
+                            if (raiseParseDataError) {
+                                throw new AsterixTemporalTypeParseException(
+                                        "Unrecognizable month string " + (char) data[dataStart + dataStringPointer]
+                                                + " " + (char) data[dataStart + dataStringPointer + 1] + " "
+                                                + (char) data[dataStart + dataStringPointer + 2]);
+                            } else {
+                                return false;
+                            }
                         }
                     } else {
                         int processedMonthFieldsCount = 0;
                         for (int i = 0; i < formatCharCopies; i++) {
                             if (data[dataStart + dataStringPointer] < '0'
                                     || data[dataStart + dataStringPointer] > '9') {
-                                throw new AsterixTemporalTypeParseException("Unexpected char for month field at "
-                                        + (dataStart + dataStringPointer) + ": " + data[dataStart + dataStringPointer]);
+                                if (raiseParseDataError) {
+                                    throw new AsterixTemporalTypeParseException(
+                                            "Unexpected char for month field at " + (dataStart + dataStringPointer)
+                                                    + ": " + data[dataStart + dataStringPointer]);
+                                } else {
+                                    return false;
+                                }
                             }
                             month = month * 10 + (data[dataStart + dataStringPointer] - '0');
                             dataStringPointer++;
                             if (processedMonthFieldsCount++ > 2) {
-                                throw new AsterixTemporalTypeParseException("Unexpected char for month field at "
-                                        + (dataStart + dataStringPointer) + ": " + data[dataStart + dataStringPointer]);
+                                if (raiseParseDataError) {
+                                    throw new AsterixTemporalTypeParseException(
+                                            "Unexpected char for month field at " + (dataStart + dataStringPointer)
+                                                    + ": " + data[dataStart + dataStringPointer]);
+                                } else {
+                                    return false;
+                                }
                             }
                         }
                         // if there are more than 2 digits for the day string
@@ -507,9 +530,13 @@ public class DateTimeFormatUtils {
                     }
                     // match the weekday name
                     if (weekdayIDSearch(data, dataStart + dataStringPointer, processedWeekdayFieldsCount) < 0) {
-                        throw new AsterixTemporalTypeParseException("Unexpected string for day-of-week: "
-                                + (new String(Arrays.copyOfRange(data, dataStart + dataStringPointer,
-                                        dataStart + dataStringPointer + processedWeekdayFieldsCount))));
+                        if (raiseParseDataError) {
+                            throw new AsterixTemporalTypeParseException("Unexpected string for day-of-week: "
+                                    + new String(data, dataStart + dataStringPointer,
+                                            dataStart + dataStringPointer + processedWeekdayFieldsCount, ENCODING));
+                        } else {
+                            return false;
+                        }
                     }
                     dataStringPointer += processedWeekdayFieldsCount;
                     break;
@@ -522,15 +549,25 @@ public class DateTimeFormatUtils {
                     parsedValue = 0;
                     for (int i = 0; i < formatCharCopies; i++) {
                         if (data[dataStart + dataStringPointer] < '0' || data[dataStart + dataStringPointer] > '9') {
-                            throw new AsterixTemporalTypeParseException("Unexpected char for " + processState.name()
-                                    + " field at " + (dataStart + dataStringPointer) + ": "
-                                    + data[dataStart + dataStringPointer]);
+                            if (raiseParseDataError) {
+                                throw new AsterixTemporalTypeParseException("Unexpected char for " + processState.name()
+                                        + " field at " + (dataStart + dataStringPointer) + ": "
+                                        + data[dataStart + dataStringPointer]);
+                            } else {
+                                return false;
+                            }
+
                         }
                         parsedValue = parsedValue * 10 + (data[dataStart + dataStringPointer] - '0');
                         dataStringPointer++;
                         if (processFieldsCount++ > expectedMaxCount) {
-                            throw new AsterixTemporalTypeParseException("Unexpected char for " + processState.name()
-                                    + " field at " + dataStringPointer + ": " + data[dataStart + dataStringPointer]);
+                            if (raiseParseDataError) {
+                                throw new AsterixTemporalTypeParseException(
+                                        "Unexpected char for " + processState.name() + " field at " + dataStringPointer
+                                                + ": " + data[dataStart + dataStringPointer]);
+                            } else {
+                                return false;
+                            }
                         }
                     }
                     // if there are more than formatCharCopies digits for the hour string
@@ -581,20 +618,29 @@ public class DateTimeFormatUtils {
                         } else if (data[dataStart + dataStringPointer] == '+') {
                             dataStringPointer++;
                         } else {
-                            throw new AsterixTemporalTypeParseException(
-                                    "Incorrect timezone hour field: expecting sign + or - but got: "
-                                            + data[dataStart + dataStringPointer]);
+                            if (raiseParseDataError) {
+                                throw new AsterixTemporalTypeParseException(
+                                        "Incorrect timezone hour field: expecting sign + or - but got: "
+                                                + data[dataStart + dataStringPointer]);
+                            } else {
+                                return false;
+                            }
                         }
+                        parsedValue = 0;
                         // timezone hours
                         for (int i = 0; i < 2; i++) {
                             if (data[dataStart + dataStringPointer + i] >= '0'
                                     && data[dataStart + dataStringPointer + i] <= '9') {
-                                timezone += (data[dataStart + dataStringPointer + i] - '0') * MS_PER_HOUR;
+                                parsedValue = parsedValue * 10 + (data[dataStart + dataStringPointer + i] - '0');
                             } else {
-                                throw new AsterixTemporalTypeParseException(
-                                        "Unexpected character for timezone hour field at "
-                                                + (dataStart + dataStringPointer) + ": "
-                                                + data[dataStart + dataStringPointer]);
+                                if (raiseParseDataError) {
+                                    throw new AsterixTemporalTypeParseException(
+                                            "Unexpected character for timezone hour field at "
+                                                    + (dataStart + dataStringPointer) + ": "
+                                                    + data[dataStart + dataStringPointer]);
+                                } else {
+                                    return false;
+                                }
                             }
                         }
                         dataStringPointer += 2;
@@ -602,18 +648,25 @@ public class DateTimeFormatUtils {
                         if (data[dataStart + dataStringPointer] == ':') {
                             dataStringPointer++;
                         }
+                        timezone = (int) (parsedValue * GregorianCalendarSystem.CHRONON_OF_HOUR);
+                        parsedValue = 0;
                         // timezone minutes
                         for (int i = 0; i < 2; i++) {
                             if (data[dataStart + dataStringPointer + i] >= '0'
                                     && data[dataStart + dataStringPointer + i] <= '9') {
-                                timezone += (data[dataStart + dataStringPointer + i] - '0') * MS_PER_MINUTE;
+                                parsedValue = parsedValue * 10 + (data[dataStart + dataStringPointer + i] - '0');
                             } else {
-                                throw new AsterixTemporalTypeParseException(
-                                        "Unexpected character for timezone minute field at "
-                                                + (dataStart + dataStringPointer) + ": "
-                                                + data[dataStart + dataStringPointer]);
+                                if (raiseParseDataError) {
+                                    throw new AsterixTemporalTypeParseException(
+                                            "Unexpected character for timezone minute field at "
+                                                    + (dataStart + dataStringPointer) + ": "
+                                                    + data[dataStart + dataStringPointer]);
+                                } else {
+                                    return false;
+                                }
                             }
                         }
+                        timezone += (int) (parsedValue * GregorianCalendarSystem.CHRONON_OF_MINUTE);
                         dataStringPointer += 2;
                         if (!negativeTimeZone) {
                             timezone *= -1;
@@ -631,22 +684,31 @@ public class DateTimeFormatUtils {
                                 || data[dataStart + timezoneEndField] == '_')) {
                             timezoneEndField++;
                         }
-                        int searchIdx = binaryTimezoneIDSearch(data, dataStart + dataStringPointer,
-                                timezoneEndField - dataStringPointer);
-                        if (searchIdx >= 0) {
-                            timezone = TIMEZONE_OFFSETS[searchIdx];
+                        TimeZone tz =
+                                findTimeZone(data, dataStart + dataStringPointer, timezoneEndField - dataStringPointer);
+                        if (tz != null) {
+                            timezone = tz.getRawOffset();
                         } else {
-                            throw new AsterixTemporalTypeParseException(
-                                    "Unexpected timezone string: " + new String(Arrays.copyOfRange(data,
-                                            dataStart + dataStringPointer, dataStart + timezoneEndField)));
+                            if (raiseParseDataError) {
+                                throw new AsterixTemporalTypeParseException("Unexpected timezone string: " + new String(
+                                        data, dataStart + dataStringPointer, dataStart + timezoneEndField, ENCODING));
+                            } else {
+                                return false;
+                            }
                         }
                         dataStringPointer = timezoneEndField;
                     }
+                    timezoneExists = true;
                     break;
                 case AMPM:
                     if (dataStringPointer + 1 < dataLength) {
                         if (hour > 12 || hour <= 0) {
-                            throw new IllegalStateException("Hour " + hour + " cannot be a time for AM.");
+                            if (raiseParseDataError) {
+                                throw new AsterixTemporalTypeParseException(
+                                        "Hour " + hour + " cannot be a time for AM/PM.");
+                            } else {
+                                return false;
+                            }
                         }
                         if (byteArrayEqualToString(data, dataStart + dataStringPointer, 2, AM_BYTEARRAY)) {
                             // do nothing
@@ -656,13 +718,21 @@ public class DateTimeFormatUtils {
                                 hour = 0;
                             }
                         } else {
-                            throw new AsterixTemporalTypeParseException(
-                                    "Unexpected string for AM/PM marker " + new String(Arrays.copyOfRange(data,
-                                            dataStart + dataStringPointer, dataStart + dataStringPointer + 2)));
+                            if (raiseParseDataError) {
+                                throw new AsterixTemporalTypeParseException("Unexpected string for AM/PM marker "
+                                        + new String(data, dataStart + dataStringPointer,
+                                                dataStart + dataStringPointer + 2, ENCODING));
+                            } else {
+                                return false;
+                            }
                         }
                         dataStringPointer += 2;
                     } else {
-                        throw new AsterixTemporalTypeParseException("Cannot find valid AM/PM marker.");
+                        if (raiseParseDataError) {
+                            throw new AsterixTemporalTypeParseException("Cannot find valid AM/PM marker.");
+                        } else {
+                            return false;
+                        }
                     }
                     break;
                 case SKIPPER:
@@ -676,14 +746,16 @@ public class DateTimeFormatUtils {
                     }
                     break;
                 case SEPARATOR:
-                    if (separatorChar == '\0') {
-                        throw new AsterixTemporalTypeParseException(
-                                "Incorrect separator char in date string as " + data[dataStart + dataStringPointer]);
-                    }
                     for (int i = 0; i < formatCharCopies; i++) {
-                        if (data[dataStart + dataStringPointer] != separatorChar) {
-                            throw new AsterixTemporalTypeParseException("Expecting separator " + separatorChar
-                                    + " but got " + data[dataStart + dataStringPointer]);
+                        byte b = data[dataStart + dataStringPointer];
+                        boolean match = b == separatorChar || (altSeparatorChar != '\0' && b == altSeparatorChar);
+                        if (!match) {
+                            if (raiseParseDataError) {
+                                throw new AsterixTemporalTypeParseException(
+                                        "Expecting separator " + separatorChar + " but got " + b);
+                            } else {
+                                return false;
+                            }
                         }
                         dataStringPointer++;
                     }
@@ -695,19 +767,33 @@ public class DateTimeFormatUtils {
         }
 
         if (dataStringPointer < dataLength) {
-            throw new AsterixTemporalTypeParseException(
-                    "The given data string is not fully parsed by the given format string");
+            if (raiseParseDataError) {
+                throw new AsterixTemporalTypeParseException(
+                        "The given data string is not fully parsed by the given format string");
+            } else {
+                return false;
+            }
         }
 
         if (formatPointer < formatLength) {
-            throw new AsterixTemporalTypeParseException(
-                    "The given format string is not fully used for the given format string");
+            if (raiseParseDataError) {
+                throw new AsterixTemporalTypeParseException(
+                        "The given format string is not fully used for the given data string");
+            } else {
+                return false;
+            }
         }
 
-        if (parseMode == DateTimeParseMode.TIME_ONLY) {
-            return CAL.getChronon(hour, min, sec, ms, timezone);
+        long chronon = parseMode == DateTimeParseMode.TIME_ONLY ? CAL.getChronon(hour, min, sec, ms, timezone)
+                : CAL.getChronon(year, month, day, hour, min, sec, ms, timezone);
+        outChronon.setValue(chronon);
+        if (outTimeZoneExists != null) {
+            outTimeZoneExists.setValue(timezoneExists);
         }
-        return CAL.getChronon(year, month, day, hour, min, sec, ms, timezone);
+        if (outTimeZone != null) {
+            outTimeZone.setValue(timezone);
+        }
+        return true;
     }
 
     public void printDateTime(long chronon, int timezone, byte[] format, int formatStart, int formatLength,
@@ -720,15 +806,15 @@ public class DateTimeFormatUtils {
         int sec = CAL.getSecOfMin(chronon);
         int ms = CAL.getMillisOfSec(chronon);
 
-        int formatCharCopies = 0;
+        int formatCharCopies;
 
         int formatPointer = 0;
 
         byte separatorChar = '\0';
 
-        DateTimeProcessState processState = DateTimeProcessState.INIT;
+        DateTimeProcessState processState;
 
-        int pointerMove = 0;
+        int pointerMove;
 
         boolean usePM = false;
         if (indexOf(format, formatStart, formatLength, 'a') >= 0) {
@@ -860,8 +946,6 @@ public class DateTimeFormatUtils {
 
             try {
                 switch (processState) {
-                    case INIT:
-                        break;
                     case YEAR:
                         if (year < 0) {
                             appender.append('-');
@@ -945,12 +1029,13 @@ public class DateTimeFormatUtils {
                             appender.append('-');
                             timezone *= -1;
                         }
-                        int timezoneField = timezone / MS_PER_HOUR;
+                        int timezoneField = (int) (timezone / GregorianCalendarSystem.CHRONON_OF_HOUR);
                         if (timezoneField < 10) {
                             appender.append('0');
                         }
                         appender.append(String.valueOf(timezoneField));
-                        timezoneField = timezone % MS_PER_HOUR / MS_PER_MINUTE;
+                        timezoneField = (int) (timezone % GregorianCalendarSystem.CHRONON_OF_HOUR
+                                / GregorianCalendarSystem.CHRONON_OF_MINUTE);
                         if (timezoneField < 10) {
                             appender.append('0');
                         }
@@ -976,7 +1061,7 @@ public class DateTimeFormatUtils {
                         throw new HyracksDataException("Unexpected time state when printing a date value");
                 }
             } catch (IOException ex) {
-                throw new HyracksDataException(ex);
+                throw HyracksDataException.create(ex);
             }
         }
     }

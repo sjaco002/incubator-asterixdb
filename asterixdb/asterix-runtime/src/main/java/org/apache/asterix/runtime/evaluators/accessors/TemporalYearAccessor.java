@@ -132,7 +132,7 @@ public class TemporalYearAccessor extends AbstractScalarFunctionDynamicDescripto
                                 result.set(resultStorage);
                                 return;
                             } else {
-                                throw new TypeMismatchException(getIdentifier(), 0, bytes[startOffset],
+                                throw new TypeMismatchException(sourceLoc, getIdentifier(), 0, bytes[startOffset],
                                         ATypeTag.SERIALIZED_DURATION_TYPE_TAG,
                                         ATypeTag.SERIALIZED_YEAR_MONTH_DURATION_TYPE_TAG,
                                         ATypeTag.SERIALIZED_DATE_TYPE_TAG, ATypeTag.SERIALIZED_DATETIME_TYPE_TAG,
@@ -144,7 +144,7 @@ public class TemporalYearAccessor extends AbstractScalarFunctionDynamicDescripto
                             intSerde.serialize(aMutableInt64, out);
                             result.set(resultStorage);
                         } catch (IOException e) {
-                            throw new HyracksDataException(e);
+                            throw HyracksDataException.create(e);
                         }
                     }
                 };

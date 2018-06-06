@@ -97,7 +97,6 @@ public abstract class MetadataManager implements IMetadataManager {
     private final MetadataCache cache = new MetadataCache();
     protected final Collection<IAsterixStateProxy> proxies;
     protected IMetadataNode metadataNode;
-    private final ReadWriteLock metadataLatch;
     protected boolean rebindMetadataNode = false;
 
     // TODO(mblow): replace references of this (non-constant) field with a method,
@@ -117,7 +116,6 @@ public abstract class MetadataManager implements IMetadataManager {
             throw new IllegalArgumentException("Null / empty list of proxies given to MetadataManager");
         }
         this.proxies = proxies;
-        this.metadataLatch = new ReentrantReadWriteLock(true);
     }
 
     protected abstract TxnId createTxnId();
@@ -143,16 +141,6 @@ public abstract class MetadataManager implements IMetadataManager {
     @Override
     public void abortTransaction(MetadataTransactionContext ctx) throws RemoteException, ACIDException {
         metadataNode.abortTransaction(ctx.getTxnId());
-    }
-
-    @Override
-    public void lock(MetadataTransactionContext ctx, byte lockMode) throws RemoteException, ACIDException {
-        metadataNode.lock(ctx.getTxnId(), lockMode);
-    }
-
-    @Override
-    public void unlock(MetadataTransactionContext ctx, byte lockMode) throws RemoteException, ACIDException {
-        metadataNode.unlock(ctx.getTxnId(), lockMode);
     }
 
     @Override
@@ -297,7 +285,7 @@ public abstract class MetadataManager implements IMetadataManager {
     public List<Index> getDatasetIndexes(MetadataTransactionContext ctx, String dataverseName, String datasetName)
             throws AlgebricksException {
         List<Index> datasetIndexes = new ArrayList<>();
-        Dataset dataset = findDataset(ctx, dataverseName, datasetName);
+        Dataset dataset = getDataset(ctx, dataverseName, datasetName);
         if (dataset == null) {
             return datasetIndexes;
         }
@@ -735,26 +723,6 @@ public abstract class MetadataManager implements IMetadataManager {
     }
 
     @Override
-    public void acquireWriteLatch() {
-        metadataLatch.writeLock().lock();
-    }
-
-    @Override
-    public void releaseWriteLatch() {
-        metadataLatch.writeLock().unlock();
-    }
-
-    @Override
-    public void acquireReadLatch() {
-        metadataLatch.readLock().lock();
-    }
-
-    @Override
-    public void releaseReadLatch() {
-        metadataLatch.readLock().unlock();
-    }
-
-    @Override
     public FeedPolicyEntity getFeedPolicy(MetadataTransactionContext ctx, String dataverse, String policyName)
             throws AlgebricksException {
 
@@ -959,14 +927,6 @@ public abstract class MetadataManager implements IMetadataManager {
         // reflect the dataset into the cache
         ctx.dropDataset(dataset.getDataverseName(), dataset.getDatasetName());
         ctx.addDataset(dataset);
-    }
-
-    public Dataset findDataset(MetadataTransactionContext ctx, String dataverseName, String datasetName) {
-        Dataset dataset = ctx.getDataset(dataverseName, datasetName);
-        if (dataset == null) {
-            dataset = cache.getDataset(dataverseName, datasetName);
-        }
-        return dataset;
     }
 
     @Override

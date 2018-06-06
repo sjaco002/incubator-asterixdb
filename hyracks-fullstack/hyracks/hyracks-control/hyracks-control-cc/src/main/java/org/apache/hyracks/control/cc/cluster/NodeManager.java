@@ -94,7 +94,7 @@ public class NodeManager implements INodeManager {
     }
 
     @Override
-    public void addNode(String nodeId, NodeControllerState ncState) throws HyracksException {
+    public synchronized void addNode(String nodeId, NodeControllerState ncState) throws HyracksException {
         LOGGER.warn("addNode(" + nodeId + ") called");
         if (nodeId == null || ncState == null) {
             throw HyracksException.create(ErrorCode.INVALID_INPUT_PARAMETER);
@@ -103,14 +103,11 @@ public class NodeManager implements INodeManager {
         if (nodeRegistry.containsKey(nodeId)) {
             LOGGER.warn("Node with name " + nodeId + " has already registered; failing the node then re-registering.");
             failNode(nodeId);
-        } else {
-            try {
-                // TODO(mblow): it seems we should close IPC handles when we're done with them (like here)
-                IIPCHandle ncIPCHandle = ccs.getClusterIPC().getHandle(ncState.getNodeController().getAddress());
-                ncIPCHandle.send(-1, new AbortCCJobsFunction(ccConfig.getCcId()), null);
-            } catch (IPCException e) {
-                throw HyracksDataException.create(e);
-            }
+        }
+        try {
+            ncState.getNodeController().abortJobs(ccs.getCcId());
+        } catch (IPCException e) {
+            throw HyracksDataException.create(e);
         }
         LOGGER.warn("adding node to registry");
         nodeRegistry.put(nodeId, ncState);
@@ -131,7 +128,7 @@ public class NodeManager implements INodeManager {
 
     @Override
     @Idempotent
-    public void removeNode(String nodeId) throws HyracksException {
+    public synchronized void removeNode(String nodeId) throws HyracksException {
         NodeControllerState ncState = nodeRegistry.remove(nodeId);
         if (ncState == null) {
             LOGGER.warn("request to remove unknown node {}; ignoring", nodeId);
@@ -152,7 +149,7 @@ public class NodeManager implements INodeManager {
     }
 
     @Override
-    public Pair<Collection<String>, Collection<JobId>> removeDeadNodes() throws HyracksException {
+    public synchronized Pair<Collection<String>, Collection<JobId>> removeDeadNodes() throws HyracksException {
         Set<String> deadNodes = new HashSet<>();
         Set<JobId> affectedJobIds = new HashSet<>();
         Iterator<Map.Entry<String, NodeControllerState>> nodeIterator = nodeRegistry.entrySet().iterator();
@@ -178,7 +175,7 @@ public class NodeManager implements INodeManager {
         return Pair.of(deadNodes, affectedJobIds);
     }
 
-    public void failNode(String nodeId) throws HyracksException {
+    public synchronized void failNode(String nodeId) throws HyracksException {
         NodeControllerState state = nodeRegistry.get(nodeId);
         Set<JobId> affectedJobIds = state.getActiveJobIds();
         // Removes the node from node map.
@@ -230,13 +227,15 @@ public class NodeManager implements INodeManager {
     }
 
     private void ensureNodeFailure(String nodeId, NodeControllerState state) {
-        try {
-            LOGGER.info("Requesting node {} to shutdown to ensure failure", nodeId);
-            state.getNodeController().shutdown(false);
-            LOGGER.info("Request to shutdown failed node {} succeeded. false positive heartbeat miss indication",
-                    nodeId);
-        } catch (Exception ignore) {
-            LOGGER.debug(() -> "Ignoring failure on ensuring node " + nodeId + " has failed", ignore);
-        }
+        ccs.getExecutor().submit(() -> {
+            try {
+                LOGGER.info("Requesting node {} to shutdown to ensure failure", nodeId);
+                state.getNodeController().shutdown(false);
+                LOGGER.warn("Request to shutdown failed node {} succeeded. false positive heartbeat miss indication",
+                        nodeId);
+            } catch (Exception ignore) {
+                LOGGER.debug(() -> "Ignoring failure on ensuring node " + nodeId + " has failed", ignore);
+            }
+        });
     }
 }

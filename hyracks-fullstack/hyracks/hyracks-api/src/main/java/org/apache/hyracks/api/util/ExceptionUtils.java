@@ -107,4 +107,27 @@ public class ExceptionUtils {
         }
         return first;
     }
+
+    /**
+     * Returns a throwable containing {@code thread} stacktrace
+     *
+     * @param thread
+     * @return The throwable with {@code thread} stacktrace
+     */
+    public static Throwable fromThreadStack(Thread thread) {
+        final Throwable stackThrowable = new Throwable(thread.getName() + " Stack trace");
+        stackThrowable.setStackTrace(thread.getStackTrace());
+        return stackThrowable;
+    }
+
+    public static Throwable getRootCause(Throwable e) {
+        Throwable current = e;
+        Throwable cause = e.getCause();
+        while (cause != null && cause != current) {
+            current = cause;
+            cause = current.getCause();
+        }
+        return current;
+    }
+
 }

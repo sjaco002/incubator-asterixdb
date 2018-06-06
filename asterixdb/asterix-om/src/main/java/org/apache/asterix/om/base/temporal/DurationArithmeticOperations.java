@@ -69,14 +69,14 @@ public class DurationArithmeticOperations {
         int ms = GREG_CAL.getMillisOfSec(pointChronon);
 
         // Apply the year-month duration
-        int carry = yearMonthDuration / 12;
-        month += (yearMonthDuration % 12);
+        int carry = yearMonthDuration / GregorianCalendarSystem.MONTHS_IN_A_YEAR;
+        month += (yearMonthDuration % GregorianCalendarSystem.MONTHS_IN_A_YEAR);
 
         if (month < 1) {
-            month += 12;
+            month += GregorianCalendarSystem.MONTHS_IN_A_YEAR;
             carry -= 1;
-        } else if (month > 12) {
-            month -= 12;
+        } else if (month > GregorianCalendarSystem.MONTHS_IN_A_YEAR) {
+            month -= GregorianCalendarSystem.MONTHS_IN_A_YEAR;
             carry += 1;
         }
 
@@ -85,12 +85,12 @@ public class DurationArithmeticOperations {
         boolean isLeapYear = GREG_CAL.isLeapYear(year);
 
         if (isLeapYear) {
-            if (day > GregorianCalendarSystem.DAYS_OF_MONTH_ORDI[month - 1]) {
-                day = GregorianCalendarSystem.DAYS_OF_MONTH_ORDI[month - 1];
-            }
-        } else {
             if (day > GregorianCalendarSystem.DAYS_OF_MONTH_LEAP[month - 1]) {
                 day = GregorianCalendarSystem.DAYS_OF_MONTH_LEAP[month - 1];
+            }
+        } else {
+            if (day > GregorianCalendarSystem.DAYS_OF_MONTH_ORDI[month - 1]) {
+                day = GregorianCalendarSystem.DAYS_OF_MONTH_ORDI[month - 1];
             }
         }
 

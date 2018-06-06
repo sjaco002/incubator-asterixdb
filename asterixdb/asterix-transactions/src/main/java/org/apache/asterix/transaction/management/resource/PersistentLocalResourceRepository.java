@@ -58,6 +58,7 @@ import org.apache.asterix.common.storage.DatasetResourceReference;
 import org.apache.asterix.common.storage.IIndexCheckpointManager;
 import org.apache.asterix.common.storage.IIndexCheckpointManagerProvider;
 import org.apache.asterix.common.storage.ResourceReference;
+import org.apache.asterix.common.storage.ResourceStorageStats;
 import org.apache.asterix.common.utils.StorageConstants;
 import org.apache.asterix.common.utils.StoragePathUtil;
 import org.apache.commons.io.FileUtils;
@@ -185,7 +186,7 @@ public class PersistentLocalResourceRepository implements ILocalResourceReposito
         }
 
         resourceCache.put(resource.getPath(), resource);
-        indexCheckpointManagerProvider.get(DatasetResourceReference.of(resource)).init(0);
+        indexCheckpointManagerProvider.get(DatasetResourceReference.of(resource)).init(null, 0);
         //if replication enabled, send resource metadata info to remote nodes
         if (isReplicationEnabled) {
             createReplicationJob(ReplicationOperation.REPLICATE, resourceFile);
@@ -395,6 +396,19 @@ public class PersistentLocalResourceRepository implements ILocalResourceReposito
         }
     }
 
+    public List<ResourceStorageStats> getStorageStats() throws HyracksDataException {
+        final List<DatasetResourceReference> allResources = loadAndGetAllResources().values().stream()
+                .map(DatasetResourceReference::of).collect(Collectors.toList());
+        final List<ResourceStorageStats> resourcesStats = new ArrayList<>();
+        for (DatasetResourceReference res : allResources) {
+            final ResourceStorageStats resourceStats = getResourceStats(res);
+            if (resourceStats != null) {
+                resourcesStats.add(resourceStats);
+            }
+        }
+        return resourcesStats;
+    }
+
     private void deleteIndexMaskedFiles(File index) throws IOException {
         File[] masks = index.listFiles(MASK_FILES_FILTER);
         if (masks != null) {
@@ -415,15 +429,20 @@ public class PersistentLocalResourceRepository implements ILocalResourceReposito
     }
 
     private void deleteIndexInvalidComponents(File index) throws IOException, ParseException {
+        final Format formatter = THREAD_LOCAL_FORMATTER.get();
+        final File[] indexComponentFiles = index.listFiles(COMPONENT_FILES_FILTER);
+        if (indexComponentFiles == null) {
+            throw new IOException(index + " doesn't exist or an IO error occurred");
+        }
         final Optional<String> validComponentTimestamp = getIndexCheckpointManager(index).getValidComponentTimestamp();
         if (!validComponentTimestamp.isPresent()) {
-            // index doesn't have any components
-            return;
-        }
-        final Format formatter = THREAD_LOCAL_FORMATTER.get();
-        final Date validTimestamp = (Date) formatter.parseObject(validComponentTimestamp.get());
-        final File[] indexComponentFiles = index.listFiles(COMPONENT_FILES_FILTER);
-        if (indexComponentFiles != null) {
+            // index doesn't have any valid component, delete all
+            for (File componentFile : indexComponentFiles) {
+                LOGGER.info(() -> "Deleting invalid component file: " + componentFile.getAbsolutePath());
+                Files.delete(componentFile.toPath());
+            }
+        } else {
+            final Date validTimestamp = (Date) formatter.parseObject(validComponentTimestamp.get());
             for (File componentFile : indexComponentFiles) {
                 // delete any file with startTime > validTimestamp
                 final String fileStartTimeStr =
@@ -463,12 +482,36 @@ public class PersistentLocalResourceRepository implements ILocalResourceReposito
         }
     }
 
+    private ResourceStorageStats getResourceStats(DatasetResourceReference resource) {
+        try {
+            final FileReference resolvedPath = ioManager.resolve(resource.getRelativePath().toString());
+            long totalSize = 0;
+            final File[] indexFiles = resolvedPath.getFile().listFiles();
+            final Map<String, Long> componentsStats = new HashMap<>();
+            if (indexFiles != null) {
+                for (File file : indexFiles) {
+                    long fileSize = file.length();
+                    totalSize += fileSize;
+                    if (isComponentFile(resolvedPath.getFile(), file.getName())) {
+                        String componentId = getComponentId(file.getAbsolutePath());
+                        componentsStats.put(componentId, componentsStats.getOrDefault(componentId, 0L) + fileSize);
+                    }
+                }
+            }
+            return new ResourceStorageStats(resource, componentsStats, totalSize);
+        } catch (Exception e) {
+            LOGGER.warn("Couldn't get stats for resource {}", resource.getRelativePath(), e);
+        }
+        return null;
+    }
+
     /**
      * Gets a component id based on its unique timestamp.
      * e.g. a component file 2018-01-08-01-08-50-439_2018-01-08-01-08-50-439_b
      * will return a component id 2018-01-08-01-08-50-439_2018-01-08-01-08-50-439
      *
-     * @param componentFile any component file
+     * @param componentFile
+     *            any component file
      * @return The component id
      */
     public static String getComponentId(String componentFile) {
@@ -478,5 +521,9 @@ public class PersistentLocalResourceRepository implements ILocalResourceReposito
 
     private static boolean isComponentMask(File mask) {
         return mask.getName().startsWith(StorageConstants.COMPONENT_MASK_FILE_PREFIX);
+    }
+
+    private static boolean isComponentFile(File indexDir, String fileName) {
+        return COMPONENT_FILES_FILTER.accept(indexDir, fileName);
     }
 }

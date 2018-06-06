@@ -20,6 +20,7 @@ package org.apache.asterix.api.common;
 
 import java.io.IOException;
 import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -67,6 +68,7 @@ import org.apache.asterix.optimizer.base.FuzzyUtils;
 import org.apache.asterix.optimizer.rules.am.AbstractIntroduceAccessMethodRule;
 import org.apache.asterix.runtime.job.listener.JobEventListenerFactory;
 import org.apache.asterix.translator.CompiledStatements.ICompiledDmlStatement;
+import org.apache.asterix.translator.ExecutionPlans;
 import org.apache.asterix.translator.IStatementExecutor.Stats;
 import org.apache.asterix.translator.SessionConfig;
 import org.apache.asterix.translator.SessionOutput;
@@ -100,6 +102,7 @@ import org.apache.hyracks.api.client.IHyracksClientConnection;
 import org.apache.hyracks.api.client.NodeControllerInfo;
 import org.apache.hyracks.api.config.IOptionType;
 import org.apache.hyracks.api.exceptions.HyracksException;
+import org.apache.hyracks.api.exceptions.SourceLocation;
 import org.apache.hyracks.api.job.JobId;
 import org.apache.hyracks.api.job.JobSpecification;
 import org.apache.hyracks.api.job.resource.IClusterCapacity;
@@ -120,8 +123,7 @@ public class APIFramework {
     private static final int MIN_FRAME_LIMIT_FOR_JOIN = 5;
     // one for query, two for intermediate results, one for final result, and one for reading an inverted list
     private static final int MIN_FRAME_LIMIT_FOR_TEXTSEARCH = 5;
-    private static final String LPLAN = "Logical plan";
-    private static final String OPLAN = "Optimized logical plan";
+    private static final ObjectWriter OBJECT_WRITER = new ObjectMapper().writerWithDefaultPrettyPrinter();
 
     // A white list of supported configurable parameters.
     private static final Set<String> CONFIGURABLE_PARAMETER_NAMES =
@@ -137,12 +139,14 @@ public class APIFramework {
     private final IAstPrintVisitorFactory astPrintVisitorFactory;
     private final ILangExpressionToPlanTranslatorFactory translatorFactory;
     private final IRuleSetFactory ruleSetFactory;
+    private final ExecutionPlans executionPlans;
 
     public APIFramework(ILangCompilationProvider compilationProvider) {
         this.rewriterFactory = compilationProvider.getRewriterFactory();
         this.astPrintVisitorFactory = compilationProvider.getAstPrintVisitorFactory();
         this.translatorFactory = compilationProvider.getExpressionToPlanTranslatorFactory();
         this.ruleSetFactory = compilationProvider.getRuleSetFactory();
+        executionPlans = new ExecutionPlans();
     }
 
     private static class OptimizationContextFactory implements IOptimizationContextFactory {
@@ -165,27 +169,6 @@ public class APIFramework {
         }
     }
 
-    private void printPlanPrefix(SessionOutput output, String planName) {
-        if (output.config().is(SessionConfig.FORMAT_HTML)) {
-            output.out().println("<h4>" + planName + ":</h4>");
-            if (LPLAN.equalsIgnoreCase(planName)) {
-                output.out().println("<pre class = query-plan>");
-            } else if (OPLAN.equalsIgnoreCase(planName)) {
-                output.out().println("<pre class = query-optimized-plan>");
-            } else {
-                output.out().println("<pre>");
-            }
-        } else {
-            output.out().println("----------" + planName + ":");
-        }
-    }
-
-    private void printPlanPostfix(SessionOutput output) {
-        if (output.config().is(SessionConfig.FORMAT_HTML)) {
-            output.out().println("</pre>");
-        }
-    }
-
     public Pair<IReturningStatement, Integer> reWriteQuery(List<FunctionDecl> declaredFunctions,
             MetadataProvider metadataProvider, IReturningStatement q, SessionOutput output, boolean inlineUdfs)
             throws CompilationException {
@@ -194,10 +177,7 @@ public class APIFramework {
         }
         SessionConfig conf = output.config();
         if (!conf.is(SessionConfig.FORMAT_ONLY_PHYSICAL_OPS) && conf.is(SessionConfig.OOB_EXPR_TREE)) {
-            output.out().println();
-            printPlanPrefix(output, "Expression tree");
-            q.accept(astPrintVisitorFactory.createLangVisitor(output.out()), 0);
-            printPlanPostfix(output);
+            generateExpressionTree(q);
         }
         IQueryRewriter rw = rewriterFactory.createQueryRewriter();
         rw.rewrite(declaredFunctions, q, metadataProvider, new LangRewritingContext(q.getVarCounter()), inlineUdfs);
@@ -211,16 +191,13 @@ public class APIFramework {
         // establish facts
         final boolean isQuery = query != null;
         final boolean isLoad = statement != null && statement.getKind() == Statement.Kind.LOAD;
+        final SourceLocation sourceLoc =
+                query != null ? query.getSourceLocation() : statement != null ? statement.getSourceLocation() : null;
 
         SessionConfig conf = output.config();
-        if (!conf.is(SessionConfig.FORMAT_ONLY_PHYSICAL_OPS) && conf.is(SessionConfig.OOB_REWRITTEN_EXPR_TREE)) {
-            output.out().println();
-
-            printPlanPrefix(output, "Rewritten expression tree");
-            if (isQuery) {
-                query.accept(astPrintVisitorFactory.createLangVisitor(output.out()), 0);
-            }
-            printPlanPostfix(output);
+        if (isQuery && !conf.is(SessionConfig.FORMAT_ONLY_PHYSICAL_OPS)
+                && conf.is(SessionConfig.OOB_REWRITTEN_EXPR_TREE)) {
+            generateRewrittenExpressionTree(query);
         }
 
         final TxnId txnId = metadataProvider.getTxnIdFactory().create();
@@ -230,19 +207,14 @@ public class APIFramework {
 
         ILogicalPlan plan = isLoad ? t.translateLoad(statement) : t.translate(query, outputDatasetName, statement);
 
-        if (!conf.is(SessionConfig.FORMAT_ONLY_PHYSICAL_OPS) && conf.is(SessionConfig.OOB_LOGICAL_PLAN)) {
-            output.out().println();
-
-            printPlanPrefix(output, "Logical plan");
-            if (isQuery || isLoad) {
-                PlanPrettyPrinter.printPlan(plan, getPrettyPrintVisitor(output.config().getLpfmt(), output.out()), 0);
-            }
-            printPlanPostfix(output);
+        if ((isQuery || isLoad) && !conf.is(SessionConfig.FORMAT_ONLY_PHYSICAL_OPS)
+                && conf.is(SessionConfig.OOB_LOGICAL_PLAN)) {
+            generateLogicalPlan(plan, output.config().getPlanFormat());
         }
         CompilerProperties compilerProperties = metadataProvider.getApplicationContext().getCompilerProperties();
-        Map<String, String> querySpecificConfig = validateConfig(metadataProvider.getConfig());
+        Map<String, String> querySpecificConfig = validateConfig(metadataProvider.getConfig(), sourceLoc);
         final PhysicalOptimizationConfig physOptConf =
-                getPhysicalOptimizationConfig(compilerProperties, querySpecificConfig);
+                getPhysicalOptimizationConfig(compilerProperties, querySpecificConfig, sourceLoc);
 
         HeuristicCompilerFactoryBuilder builder =
                 new HeuristicCompilerFactoryBuilder(OptimizationContextFactory.INSTANCE);
@@ -273,12 +245,9 @@ public class APIFramework {
                     AlgebricksAppendable buffer = new AlgebricksAppendable(output.out());
                     PlanPrettyPrinter.printPhysicalOps(plan, buffer, 0);
                 } else {
-                    printPlanPrefix(output, "Optimized logical plan");
                     if (isQuery || isLoad) {
-                        PlanPrettyPrinter.printPlan(plan,
-                                getPrettyPrintVisitor(output.config().getLpfmt(), output.out()), 0);
+                        generateOptimizedLogicalPlan(plan, output.config().getPlanFormat());
                     }
-                    printPlanPostfix(output);
                 }
             }
         }
@@ -327,26 +296,27 @@ public class APIFramework {
                     ResourceUtils.getRequiredCapacity(plan, jobLocations, physOptConf);
             spec.setRequiredClusterCapacity(jobRequiredCapacity);
         }
-
-        printJobSpec(query, spec, conf, output);
+        if (isQuery && conf.is(SessionConfig.OOB_HYRACKS_JOB)) {
+            generateJob(spec);
+        }
         return spec;
     }
 
     protected PhysicalOptimizationConfig getPhysicalOptimizationConfig(CompilerProperties compilerProperties,
-            Map<String, String> querySpecificConfig) throws AlgebricksException {
+            Map<String, String> querySpecificConfig, SourceLocation sourceLoc) throws AlgebricksException {
         int frameSize = compilerProperties.getFrameSize();
         int sortFrameLimit = getFrameLimit(CompilerProperties.COMPILER_SORTMEMORY_KEY,
                 querySpecificConfig.get(CompilerProperties.COMPILER_SORTMEMORY_KEY),
-                compilerProperties.getSortMemorySize(), frameSize, MIN_FRAME_LIMIT_FOR_SORT);
+                compilerProperties.getSortMemorySize(), frameSize, MIN_FRAME_LIMIT_FOR_SORT, sourceLoc);
         int groupFrameLimit = getFrameLimit(CompilerProperties.COMPILER_GROUPMEMORY_KEY,
                 querySpecificConfig.get(CompilerProperties.COMPILER_GROUPMEMORY_KEY),
-                compilerProperties.getGroupMemorySize(), frameSize, MIN_FRAME_LIMIT_FOR_GROUP_BY);
+                compilerProperties.getGroupMemorySize(), frameSize, MIN_FRAME_LIMIT_FOR_GROUP_BY, sourceLoc);
         int joinFrameLimit = getFrameLimit(CompilerProperties.COMPILER_JOINMEMORY_KEY,
                 querySpecificConfig.get(CompilerProperties.COMPILER_JOINMEMORY_KEY),
-                compilerProperties.getJoinMemorySize(), frameSize, MIN_FRAME_LIMIT_FOR_JOIN);
+                compilerProperties.getJoinMemorySize(), frameSize, MIN_FRAME_LIMIT_FOR_JOIN, sourceLoc);
         int textSearchFrameLimit = getFrameLimit(CompilerProperties.COMPILER_TEXTSEARCHMEMORY_KEY,
                 querySpecificConfig.get(CompilerProperties.COMPILER_TEXTSEARCHMEMORY_KEY),
-                compilerProperties.getTextSearchMemorySize(), frameSize, MIN_FRAME_LIMIT_FOR_TEXTSEARCH);
+                compilerProperties.getTextSearchMemorySize(), frameSize, MIN_FRAME_LIMIT_FOR_TEXTSEARCH, sourceLoc);
         final PhysicalOptimizationConfig physOptConf = OptimizationConfUtil.getPhysicalOptimizationConfig();
         physOptConf.setFrameSize(frameSize);
         physOptConf.setMaxFramesExternalSort(sortFrameLimit);
@@ -370,23 +340,6 @@ public class APIFramework {
                 return format.getCleanJSONPrinterFactoryProvider();
             default:
                 throw new AlgebricksException("Unexpected OutputFormat: " + outputFormat);
-        }
-    }
-
-    protected void printJobSpec(Query rwQ, JobSpecification spec, SessionConfig conf, SessionOutput output)
-            throws AlgebricksException {
-        if (conf.is(SessionConfig.OOB_HYRACKS_JOB)) {
-            printPlanPrefix(output, "Hyracks job");
-            if (rwQ != null) {
-                try {
-                    final ObjectWriter objectWriter = new ObjectMapper().writerWithDefaultPrettyPrinter();
-                    output.out().println(objectWriter.writeValueAsString(spec.toJSON()));
-                } catch (IOException e) {
-                    throw new AlgebricksException(e);
-                }
-                output.out().println(spec.getUserConstraints());
-            }
-            printPlanPostfix(output);
         }
     }
 
@@ -427,6 +380,10 @@ public class APIFramework {
             double duration = (endTime - startTime) / 1000.00;
             out.println("<pre>Duration: " + duration + " sec</pre>");
         }
+    }
+
+    public ExecutionPlans getExecutionPlans() {
+        return executionPlans;
     }
 
     // Chooses the location constraints, i.e., whether to use storage parallelism or use a user-sepcified number
@@ -496,12 +453,17 @@ public class APIFramework {
 
     // Gets the frame limit.
     private static int getFrameLimit(String parameterName, String parameter, long memBudgetInConfiguration,
-            int frameSize, int minFrameLimit) throws AlgebricksException {
+            int frameSize, int minFrameLimit, SourceLocation sourceLoc) throws AlgebricksException {
         IOptionType<Long> longBytePropertyInterpreter = OptionTypes.LONG_BYTE_UNIT;
-        long memBudget = parameter == null ? memBudgetInConfiguration : longBytePropertyInterpreter.parse(parameter);
+        long memBudget;
+        try {
+            memBudget = parameter == null ? memBudgetInConfiguration : longBytePropertyInterpreter.parse(parameter);
+        } catch (IllegalArgumentException e) {
+            throw AsterixException.create(ErrorCode.COMPILATION_ERROR, sourceLoc, e.getMessage());
+        }
         int frameLimit = (int) (memBudget / frameSize);
         if (frameLimit < minFrameLimit) {
-            throw AsterixException.create(ErrorCode.COMPILATION_BAD_QUERY_PARAMETER_VALUE, parameterName,
+            throw AsterixException.create(ErrorCode.COMPILATION_BAD_QUERY_PARAMETER_VALUE, sourceLoc, parameterName,
                     frameSize * minFrameLimit);
         }
         // Sets the frame limit to the minimum frame limit if the caculated frame limit is too small.
@@ -515,13 +477,58 @@ public class APIFramework {
     }
 
     // Validates if the query contains unsupported query parameters.
-    private static Map<String, String> validateConfig(Map<String, String> config) throws AlgebricksException {
+    private static Map<String, String> validateConfig(Map<String, String> config, SourceLocation sourceLoc)
+            throws AlgebricksException {
         for (String parameterName : config.keySet()) {
             if (!CONFIGURABLE_PARAMETER_NAMES.contains(parameterName)) {
-                throw AsterixException.create(ErrorCode.COMPILATION_UNSUPPORTED_QUERY_PARAMETER, parameterName);
+                throw AsterixException.create(ErrorCode.COMPILATION_UNSUPPORTED_QUERY_PARAMETER, sourceLoc,
+                        parameterName);
             }
         }
         return config;
+    }
+
+    private void generateExpressionTree(IReturningStatement statement) throws CompilationException {
+        final StringWriter stringWriter = new StringWriter();
+        try (PrintWriter writer = new PrintWriter(stringWriter)) {
+            statement.accept(astPrintVisitorFactory.createLangVisitor(writer), 0);
+            executionPlans.setExpressionTree(stringWriter.toString());
+        }
+    }
+
+    private void generateRewrittenExpressionTree(IReturningStatement statement) throws CompilationException {
+        final StringWriter stringWriter = new StringWriter();
+        try (PrintWriter writer = new PrintWriter(stringWriter)) {
+            statement.accept(astPrintVisitorFactory.createLangVisitor(writer), 0);
+            executionPlans.setRewrittenExpressionTree(stringWriter.toString());
+        }
+    }
+
+    private void generateLogicalPlan(ILogicalPlan plan, SessionConfig.PlanFormat format) throws AlgebricksException {
+        final StringWriter stringWriter = new StringWriter();
+        try (PrintWriter writer = new PrintWriter(stringWriter)) {
+            PlanPrettyPrinter.printPlan(plan, getPrettyPrintVisitor(format, writer), 0);
+            executionPlans.setLogicalPlan(stringWriter.toString());
+        }
+    }
+
+    private void generateOptimizedLogicalPlan(ILogicalPlan plan, SessionConfig.PlanFormat format)
+            throws AlgebricksException {
+        final StringWriter stringWriter = new StringWriter();
+        try (PrintWriter writer = new PrintWriter(stringWriter)) {
+            PlanPrettyPrinter.printPlan(plan, getPrettyPrintVisitor(format, writer), 0);
+            executionPlans.setOptimizedLogicalPlan(stringWriter.toString());
+        }
+    }
+
+    private void generateJob(JobSpecification spec) {
+        final StringWriter stringWriter = new StringWriter();
+        try (PrintWriter writer = new PrintWriter(stringWriter)) {
+            writer.println(OBJECT_WRITER.writeValueAsString(spec.toJSON()));
+            executionPlans.setJob(stringWriter.toString());
+        } catch (IOException e) {
+            throw new IllegalStateException(e);
+        }
     }
 
     public static AlgebricksAbsolutePartitionConstraint getJobLocations(JobSpecification spec,

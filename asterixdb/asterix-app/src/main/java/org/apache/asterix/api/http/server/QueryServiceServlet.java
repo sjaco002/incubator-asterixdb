@@ -18,6 +18,11 @@
  */
 package org.apache.asterix.api.http.server;
 
+import static org.apache.asterix.common.exceptions.ErrorCode.ASTERIX;
+import static org.apache.asterix.common.exceptions.ErrorCode.QUERY_TIMEOUT;
+import static org.apache.asterix.common.exceptions.ErrorCode.REJECT_BAD_CLUSTER_STATE;
+import static org.apache.asterix.common.exceptions.ErrorCode.REJECT_NODE_UNREGISTERED;
+
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.net.InetAddress;
@@ -35,12 +40,13 @@ import org.apache.asterix.common.config.GlobalConfig;
 import org.apache.asterix.common.context.IStorageComponentProvider;
 import org.apache.asterix.common.dataflow.ICcApplicationContext;
 import org.apache.asterix.common.exceptions.AsterixException;
-import org.apache.asterix.common.exceptions.ErrorCode;
 import org.apache.asterix.compiler.provider.ILangCompilationProvider;
 import org.apache.asterix.lang.aql.parser.TokenMgrError;
 import org.apache.asterix.lang.common.base.IParser;
 import org.apache.asterix.lang.common.base.Statement;
 import org.apache.asterix.metadata.MetadataManager;
+import org.apache.asterix.translator.ExecutionPlans;
+import org.apache.asterix.translator.ExecutionPlansJsonPrintUtil;
 import org.apache.asterix.translator.IRequestParameters;
 import org.apache.asterix.translator.IStatementExecutor;
 import org.apache.asterix.translator.IStatementExecutor.ResultDelivery;
@@ -138,7 +144,13 @@ public class QueryServiceServlet extends AbstractQueryApiServlet {
         MODE("mode"),
         TIMEOUT("timeout"),
         PLAN_FORMAT("plan-format"),
-        MAX_RESULT_READS("max-result-reads");
+        MAX_RESULT_READS("max-result-reads"),
+        EXPRESSION_TREE("expression-tree"),
+        REWRITTEN_EXPRESSION_TREE("rewritten-expression-tree"),
+        LOGICAL_PLAN("logical-plan"),
+        OPTIMIZED_LOGICAL_PLAN("optimized-logical-plan"),
+        JOB("job"),
+        SIGNATURE("signature");
 
         private final String str;
 
@@ -185,7 +197,7 @@ public class QueryServiceServlet extends AbstractQueryApiServlet {
         }
     }
 
-    static class RequestParameters {
+    protected static class RequestParameters {
         String host;
         String path;
         String statement;
@@ -195,6 +207,13 @@ public class QueryServiceServlet extends AbstractQueryApiServlet {
         String clientContextID;
         String mode;
         String maxResultReads;
+        String planFormat;
+        boolean expressionTree;
+        boolean rewrittenExpressionTree;
+        boolean logicalPlan;
+        boolean optimizedLogicalPlan;
+        boolean job;
+        boolean signature;
 
         @Override
         public String toString() {
@@ -210,14 +229,22 @@ public class QueryServiceServlet extends AbstractQueryApiServlet {
                 on.put("format", format);
                 on.put("timeout", timeout);
                 on.put("maxResultReads", maxResultReads);
+                on.put("planFormat", planFormat);
+                on.put("expressionTree", expressionTree);
+                on.put("rewrittenExpressionTree", rewrittenExpressionTree);
+                on.put("logicalPlan", logicalPlan);
+                on.put("optimizedLogicalPlan", optimizedLogicalPlan);
+                on.put("job", job);
+                on.put("signature", signature);
                 return om.writer(new MinimalPrettyPrinter()).writeValueAsString(on);
             } catch (JsonProcessingException e) { // NOSONAR
-                return e.getMessage();
+                LOGGER.debug("unexpected exception marshalling {} instance to json", getClass(), e);
+                return e.toString();
             }
         }
     }
 
-    static final class RequestExecutionState {
+    protected static final class RequestExecutionState {
         private long execStart = -1;
         private long execEnd = -1;
         private ResultStatus resultStatus = ResultStatus.SUCCESS;
@@ -287,7 +314,7 @@ public class QueryServiceServlet extends AbstractQueryApiServlet {
             if (format.equals(HttpUtil.ContentType.APPLICATION_ADM)) {
                 return SessionConfig.OutputFormat.ADM;
             }
-            if (format.startsWith(HttpUtil.ContentType.APPLICATION_JSON)) {
+            if (isJsonFormat(format)) {
                 return Boolean.parseBoolean(getParameterValue(format, Attribute.LOSSLESS.str()))
                         ? SessionConfig.OutputFormat.LOSSLESS_JSON : SessionConfig.OutputFormat.CLEAN_JSON;
             }
@@ -303,9 +330,15 @@ public class QueryServiceServlet extends AbstractQueryApiServlet {
         SessionOutput.ResultAppender appendStatus = ResultUtil.createResultStatusAppender();
 
         SessionConfig.OutputFormat format = getFormat(param.format);
-        //TODO:get the parameters from UI.Currently set to clean_json.
-        SessionConfig sessionConfig = new SessionConfig(format);
+        final SessionConfig.PlanFormat planFormat =
+                SessionConfig.PlanFormat.get(param.planFormat, param.planFormat, SessionConfig.PlanFormat.JSON, LOGGER);
+        SessionConfig sessionConfig = new SessionConfig(format, planFormat);
         sessionConfig.set(SessionConfig.FORMAT_WRAPPER_ARRAY, true);
+        sessionConfig.set(SessionConfig.OOB_EXPR_TREE, param.expressionTree);
+        sessionConfig.set(SessionConfig.OOB_REWRITTEN_EXPR_TREE, param.rewrittenExpressionTree);
+        sessionConfig.set(SessionConfig.OOB_LOGICAL_PLAN, param.logicalPlan);
+        sessionConfig.set(SessionConfig.OOB_OPTIMIZED_LOGICAL_PLAN, param.optimizedLogicalPlan);
+        sessionConfig.set(SessionConfig.OOB_HYRACKS_JOB, param.job);
         sessionConfig.set(SessionConfig.FORMAT_INDENT_JSON, param.pretty);
         sessionConfig.set(SessionConfig.FORMAT_QUOTE_RECORD,
                 format != SessionConfig.OutputFormat.CLEAN_JSON && format != SessionConfig.OutputFormat.LOSSLESS_JSON);
@@ -320,8 +353,15 @@ public class QueryServiceServlet extends AbstractQueryApiServlet {
         }
     }
 
-    private static void printSignature(PrintWriter pw) {
-        ResultUtil.printField(pw, ResultFields.SIGNATURE.str(), "*");
+    private static void printSignature(PrintWriter pw, RequestParameters param) {
+        if (param.signature) {
+            pw.print("\t\"");
+            pw.print(ResultFields.SIGNATURE.str());
+            pw.print("\": {\n");
+            pw.print("\t");
+            ResultUtil.printField(pw, "*", "*", false);
+            pw.print("\t},\n");
+        }
     }
 
     private static void printType(PrintWriter pw, SessionConfig sessionConfig) {
@@ -387,6 +427,14 @@ public class QueryServiceServlet extends AbstractQueryApiServlet {
                 param.clientContextID = getOptText(jsonRequest, Parameter.CLIENT_ID.str());
                 param.timeout = getOptText(jsonRequest, Parameter.TIMEOUT.str());
                 param.maxResultReads = getOptText(jsonRequest, Parameter.MAX_RESULT_READS.str());
+                param.planFormat = getOptText(jsonRequest, Parameter.PLAN_FORMAT.str());
+                param.expressionTree = getOptBoolean(jsonRequest, Parameter.EXPRESSION_TREE.str(), false);
+                param.rewrittenExpressionTree =
+                        getOptBoolean(jsonRequest, Parameter.REWRITTEN_EXPRESSION_TREE.str(), false);
+                param.logicalPlan = getOptBoolean(jsonRequest, Parameter.LOGICAL_PLAN.str(), false);
+                param.optimizedLogicalPlan = getOptBoolean(jsonRequest, Parameter.OPTIMIZED_LOGICAL_PLAN.str(), false);
+                param.job = getOptBoolean(jsonRequest, Parameter.JOB.str(), false);
+                param.signature = getOptBoolean(jsonRequest, Parameter.SIGNATURE.str(), true);
             } catch (JsonParseException | JsonMappingException e) {
                 // if the JSON parsing fails, the statement is empty and we get an empty statement error
                 GlobalConfig.ASTERIX_LOGGER.log(Level.ERROR, e.getMessage(), e);
@@ -402,6 +450,7 @@ public class QueryServiceServlet extends AbstractQueryApiServlet {
             param.clientContextID = request.getParameter(Parameter.CLIENT_ID.str());
             param.timeout = request.getParameter(Parameter.TIMEOUT.str());
             param.maxResultReads = request.getParameter(Parameter.MAX_RESULT_READS.str());
+            param.planFormat = request.getParameter(Parameter.PLAN_FORMAT.str());
         }
         return param;
     }
@@ -447,7 +496,7 @@ public class QueryServiceServlet extends AbstractQueryApiServlet {
 
     private void handleRequest(IServletRequest request, IServletResponse response) throws IOException {
         RequestParameters param = getRequestParameters(request);
-        LOGGER.info(param.toString());
+        LOGGER.info("handleRequest: {}", param);
         long elapsedStart = System.nanoTime();
         final PrintWriter httpWriter = response.writer();
 
@@ -469,7 +518,7 @@ public class QueryServiceServlet extends AbstractQueryApiServlet {
         sessionOutput.out().print("{\n");
         printRequestId(sessionOutput.out());
         printClientContextID(sessionOutput.out(), param);
-        printSignature(sessionOutput.out());
+        printSignature(sessionOutput.out(), param);
         printType(sessionOutput.out(), sessionConfig);
         long errorCount = 1; // so far we just return 1 error
         try {
@@ -492,9 +541,9 @@ public class QueryServiceServlet extends AbstractQueryApiServlet {
             }
             errorCount = 0;
         } catch (Exception | TokenMgrError | org.apache.asterix.aqlplus.parser.TokenMgrError e) {
-            handleExecuteStatementException(e, execution);
+            handleExecuteStatementException(e, execution, param);
             response.setStatus(execution.getHttpStatus());
-            ResultUtil.printError(sessionOutput.out(), e);
+            printError(sessionOutput.out(), e);
             ResultUtil.printStatus(sessionOutput, execution.getResultStatus());
         } finally {
             // make sure that we stop buffering and return the result to the http response
@@ -529,23 +578,64 @@ public class QueryServiceServlet extends AbstractQueryApiServlet {
                 getHyracksDataset(), resultProperties, stats, null, param.clientContextID, optionalParameters);
         translator.compileAndExecute(getHyracksClientConnection(), queryCtx, requestParameters);
         execution.end();
+        printExecutionPlans(sessionOutput, translator.getExecutionPlans());
     }
 
-    protected void handleExecuteStatementException(Throwable t, RequestExecutionState execution) {
+    protected void handleExecuteStatementException(Throwable t, RequestExecutionState state, RequestParameters param) {
         if (t instanceof org.apache.asterix.aqlplus.parser.TokenMgrError || t instanceof TokenMgrError
                 || t instanceof AlgebricksException) {
-            GlobalConfig.ASTERIX_LOGGER.log(Level.INFO, t.getMessage(), t);
-            execution.setStatus(ResultStatus.FATAL, HttpResponseStatus.BAD_REQUEST);
-        } else if (t instanceof HyracksException) {
-            GlobalConfig.ASTERIX_LOGGER.log(Level.WARN, t.getMessage(), t);
-            if (((HyracksException) t).getErrorCode() == ErrorCode.QUERY_TIMEOUT) {
-                execution.setStatus(ResultStatus.TIMEOUT, HttpResponseStatus.OK);
+            if (LOGGER.isDebugEnabled()) {
+                LOGGER.debug("handleException: {}: {}", t.getMessage(), param, t);
             } else {
-                execution.setStatus(ResultStatus.FATAL, HttpResponseStatus.INTERNAL_SERVER_ERROR);
+                LOGGER.info("handleException: {}: {}", t.getMessage(), param);
+            }
+            state.setStatus(ResultStatus.FATAL, HttpResponseStatus.BAD_REQUEST);
+        } else if (t instanceof HyracksException) {
+            HyracksException he = (HyracksException) t;
+            switch (he.getComponent() + he.getErrorCode()) {
+                case ASTERIX + QUERY_TIMEOUT:
+                    LOGGER.info("handleException: query execution timed out: {}", param);
+                    state.setStatus(ResultStatus.TIMEOUT, HttpResponseStatus.OK);
+                    break;
+                case ASTERIX + REJECT_BAD_CLUSTER_STATE:
+                case ASTERIX + REJECT_NODE_UNREGISTERED:
+                    LOGGER.warn("handleException: {}: {}", he.getMessage(), param);
+                    state.setStatus(ResultStatus.FATAL, HttpResponseStatus.SERVICE_UNAVAILABLE);
+                    break;
+                default:
+                    LOGGER.warn("handleException: unexpected exception {}: {}", he.getMessage(), param, he);
+                    state.setStatus(ResultStatus.FATAL, HttpResponseStatus.INTERNAL_SERVER_ERROR);
+                    break;
             }
         } else {
-            GlobalConfig.ASTERIX_LOGGER.log(Level.WARN, "Unexpected exception", t);
-            execution.setStatus(ResultStatus.FATAL, HttpResponseStatus.INTERNAL_SERVER_ERROR);
+            LOGGER.warn("handleException: unexpected exception: {}", param, t);
+            state.setStatus(ResultStatus.FATAL, HttpResponseStatus.INTERNAL_SERVER_ERROR);
         }
+    }
+
+    protected void printError(PrintWriter sessionOut, Throwable throwable) {
+        ResultUtil.printError(sessionOut, throwable);
+    }
+
+    protected void printExecutionPlans(SessionOutput output, ExecutionPlans executionPlans) {
+        final PrintWriter pw = output.out();
+        pw.print("\t\"");
+        pw.print(ResultFields.PLANS.str());
+        pw.print("\":");
+        final SessionConfig.PlanFormat planFormat = output.config().getPlanFormat();
+        switch (planFormat) {
+            case JSON:
+            case STRING:
+                pw.print(ExecutionPlansJsonPrintUtil.asJson(executionPlans, planFormat));
+                break;
+            default:
+                throw new IllegalStateException("Unrecognized plan format: " + planFormat);
+        }
+        pw.print(",\n");
+    }
+
+    private static boolean isJsonFormat(String format) {
+        return format.startsWith(HttpUtil.ContentType.APPLICATION_JSON)
+                || format.equalsIgnoreCase(HttpUtil.ContentType.JSON);
     }
 }

@@ -27,8 +27,6 @@ import java.util.Iterator;
 import java.util.List;
 
 import org.apache.asterix.builders.RecordBuilder;
-import org.apache.asterix.common.exceptions.AsterixException;
-import org.apache.asterix.runtime.exceptions.TypeMismatchException;
 import org.apache.asterix.om.functions.BuiltinFunctions;
 import org.apache.asterix.om.pointables.AListVisitablePointable;
 import org.apache.asterix.om.pointables.ARecordVisitablePointable;
@@ -40,10 +38,13 @@ import org.apache.asterix.om.types.ARecordType;
 import org.apache.asterix.om.types.ATypeTag;
 import org.apache.asterix.om.types.runtime.RuntimeRecordTypeInfo;
 import org.apache.asterix.runtime.evaluators.functions.PointableHelper;
+import org.apache.asterix.runtime.exceptions.TypeMismatchException;
 import org.apache.hyracks.algebricks.runtime.base.IScalarEvaluator;
 import org.apache.hyracks.algebricks.runtime.base.IScalarEvaluatorFactory;
 import org.apache.hyracks.api.context.IHyracksTaskContext;
+import org.apache.hyracks.api.dataflow.value.IBinaryComparator;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
+import org.apache.hyracks.api.exceptions.SourceLocation;
 import org.apache.hyracks.data.std.api.IPointable;
 import org.apache.hyracks.data.std.primitive.VoidPointable;
 import org.apache.hyracks.data.std.util.ArrayBackedValueStorage;
@@ -56,16 +57,17 @@ class RecordRemoveFieldsEvalFactory implements IScalarEvaluatorFactory {
     private ARecordType requiredRecType;
     private ARecordType inputRecType;
     private AOrderedListType inputListType;
+    private final SourceLocation sourceLoc;
 
     public RecordRemoveFieldsEvalFactory(IScalarEvaluatorFactory inputRecordEvalFactory,
             IScalarEvaluatorFactory removeFieldPathsFactory, ARecordType requiredRecType, ARecordType inputRecType,
-            AOrderedListType inputListType) {
+            AOrderedListType inputListType, SourceLocation sourceLoc) {
         this.inputRecordEvalFactory = inputRecordEvalFactory;
         this.removeFieldPathsFactory = removeFieldPathsFactory;
         this.requiredRecType = requiredRecType;
         this.inputRecType = inputRecType;
         this.inputListType = inputListType;
-
+        this.sourceLoc = sourceLoc;
     }
 
     @Override
@@ -78,6 +80,7 @@ class RecordRemoveFieldsEvalFactory implements IScalarEvaluatorFactory {
         final IPointable inputArg1 = new VoidPointable();
         final IScalarEvaluator eval0 = inputRecordEvalFactory.createScalarEvaluator(ctx);
         final IScalarEvaluator eval1 = removeFieldPathsFactory.createScalarEvaluator(ctx);
+        final IBinaryComparator stringBinaryComparator = PointableHelper.createStringBinaryComparator();
 
         return new IScalarEvaluator() {
             private final RuntimeRecordTypeInfo runtimeRecordTypeInfo = new RuntimeRecordTypeInfo();
@@ -97,13 +100,13 @@ class RecordRemoveFieldsEvalFactory implements IScalarEvaluatorFactory {
 
                 byte inputTypeTag0 = inputArg0.getByteArray()[inputArg0.getStartOffset()];
                 if (inputTypeTag0 != ATypeTag.SERIALIZED_RECORD_TYPE_TAG) {
-                    throw new TypeMismatchException(BuiltinFunctions.REMOVE_FIELDS, 0, inputTypeTag0,
+                    throw new TypeMismatchException(sourceLoc, BuiltinFunctions.REMOVE_FIELDS, 0, inputTypeTag0,
                             ATypeTag.SERIALIZED_INT32_TYPE_TAG);
                 }
 
                 byte inputTypeTag1 = inputArg1.getByteArray()[inputArg1.getStartOffset()];
                 if (inputTypeTag1 != ATypeTag.SERIALIZED_ORDEREDLIST_TYPE_TAG) {
-                    throw new TypeMismatchException(BuiltinFunctions.REMOVE_FIELDS, 1, inputTypeTag1,
+                    throw new TypeMismatchException(sourceLoc, BuiltinFunctions.REMOVE_FIELDS, 1, inputTypeTag1,
                             ATypeTag.SERIALIZED_ORDEREDLIST_TYPE_TAG);
                 }
 
@@ -119,7 +122,7 @@ class RecordRemoveFieldsEvalFactory implements IScalarEvaluatorFactory {
                     processRecord(requiredRecType, recordPointable, listPointable, 0);
                     rbStack.get(0).write(out, true);
                 } catch (IOException e) {
-                    throw new HyracksDataException(e);
+                    throw HyracksDataException.create(e);
                 }
                 result.set(resultStorage);
             }
@@ -197,7 +200,8 @@ class RecordRemoveFieldsEvalFactory implements IScalarEvaluatorFactory {
                             boolean match = true;
                             Iterator<IVisitablePointable> fpi = recordPath.iterator();
                             for (int j = inputPathItems.size() - 1; j >= 0; j--) {
-                                match &= PointableHelper.isEqual(inputPathItems.get(j), fpi.next());
+                                match &= PointableHelper.isEqual(inputPathItems.get(j), fpi.next(),
+                                        stringBinaryComparator);
                                 if (!match) {
                                     break;
                                 }
@@ -207,7 +211,7 @@ class RecordRemoveFieldsEvalFactory implements IScalarEvaluatorFactory {
                             }
                         }
                     } else {
-                        if (PointableHelper.isEqual(recordPath.getFirst(), item)) {
+                        if (PointableHelper.isEqual(recordPath.getFirst(), item, stringBinaryComparator)) {
                             return false;
                         }
                     }

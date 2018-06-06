@@ -119,6 +119,18 @@ public class JSONDataParser extends AbstractNestedDataParser<ADMToken>
         }
     }
 
+    public boolean parseAnyValue(DataOutput out) throws HyracksDataException {
+        try {
+            if (nextToken() == ADMToken.EOF) {
+                return false;
+            }
+            parseValue(BuiltinType.ANY, out);
+            return true;
+        } catch (IOException e) {
+            throw new RuntimeDataException(ErrorCode.RECORD_READER_MALFORMED_INPUT_STREAM, e);
+        }
+    }
+
     @Override
     public boolean reset(InputStream in) throws IOException {
         setInputStream(in);
@@ -414,22 +426,23 @@ public class JSONDataParser extends AbstractNestedDataParser<ADMToken>
      * @throws IOException
      */
     private void serializeString(ATypeTag stringVariantType, DataOutput out) throws IOException {
-        final String stringValue = jsonParser.getText();
+        char[] buffer = jsonParser.getTextCharacters();
+        int begin = jsonParser.getTextOffset();
+        int len = jsonParser.getTextLength();
         final ATypeTag typeToUse = stringVariantType == ATypeTag.ANY ? currentToken().getTypeTag() : stringVariantType;
 
         switch (typeToUse) {
             case STRING:
-                aString.setValue(stringValue);
-                stringSerde.serialize(aString, out);
+                parseString(buffer, begin, len, out);
                 break;
             case DATE:
-                parseDate(stringValue, out);
+                parseDate(buffer, begin, len, out);
                 break;
             case DATETIME:
-                parseDateTime(stringValue, out);
+                parseDateTime(buffer, begin, len, out);
                 break;
             case TIME:
-                parseTime(stringValue, out);
+                parseTime(buffer, begin, len, out);
                 break;
             default:
                 throw new RuntimeDataException(ErrorCode.TYPE_UNSUPPORTED, jsonParser.currentToken().toString());

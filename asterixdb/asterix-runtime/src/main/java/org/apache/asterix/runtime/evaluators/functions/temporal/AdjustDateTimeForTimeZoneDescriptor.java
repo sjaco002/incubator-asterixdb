@@ -95,12 +95,12 @@ public class AdjustDateTimeForTimeZoneDescriptor extends AbstractScalarFunctionD
 
                         try {
                             if (bytes0[offset0] != ATypeTag.SERIALIZED_DATETIME_TYPE_TAG) {
-                                throw new TypeMismatchException(getIdentifier(), 0, bytes0[offset0],
+                                throw new TypeMismatchException(sourceLoc, getIdentifier(), 0, bytes0[offset0],
                                         ATypeTag.SERIALIZED_DATETIME_TYPE_TAG);
                             }
 
                             if (bytes1[offset1] != ATypeTag.SERIALIZED_STRING_TYPE_TAG) {
-                                throw new TypeMismatchException(getIdentifier(), 1, bytes1[offset1],
+                                throw new TypeMismatchException(sourceLoc, getIdentifier(), 1, bytes1[offset1],
                                         ATypeTag.SERIALIZED_STRING_TYPE_TAG);
                             }
 
@@ -109,7 +109,7 @@ public class AdjustDateTimeForTimeZoneDescriptor extends AbstractScalarFunctionD
                                     utf8Ptr.getCharStartOffset());
 
                             if (!calInstance.validateTimeZone(timezone)) {
-                                throw new InvalidDataFormatException(getIdentifier(), "timezone");
+                                throw new InvalidDataFormatException(sourceLoc, getIdentifier(), "timezone");
                             }
 
                             long chronon = ADateTimeSerializerDeserializer.getChronon(bytes0, offset0 + 1);
@@ -121,9 +121,9 @@ public class AdjustDateTimeForTimeZoneDescriptor extends AbstractScalarFunctionD
                                     Fields.MILLISECOND, true);
 
                             out.writeByte(ATypeTag.SERIALIZED_STRING_TYPE_TAG);
-                            utf8Writer.writeUTF8(sbder.toString(), out);
+                            utf8Writer.writeUTF8(sbder, out);
                         } catch (IOException e1) {
-                            throw new HyracksDataException(e1);
+                            throw HyracksDataException.create(e1);
                         }
                         result.set(resultStorage);
                     }

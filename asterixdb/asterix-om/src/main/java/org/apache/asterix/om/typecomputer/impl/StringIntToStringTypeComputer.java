@@ -25,17 +25,28 @@ import org.apache.asterix.om.types.BuiltinType;
 import org.apache.asterix.om.types.IAType;
 import org.apache.hyracks.algebricks.common.exceptions.AlgebricksException;
 import org.apache.hyracks.algebricks.core.algebra.base.ILogicalExpression;
+import org.apache.hyracks.api.exceptions.SourceLocation;
 
 public class StringIntToStringTypeComputer extends AbstractResultTypeComputer {
-    public static final StringIntToStringTypeComputer INSTANCE = new StringIntToStringTypeComputer();
+    public static final StringIntToStringTypeComputer INSTANCE = new StringIntToStringTypeComputer(1);
+
+    public static final StringIntToStringTypeComputer INSTANCE_TRIPLE_STRING = new StringIntToStringTypeComputer(3);
+
+    private final int stringArgCount;
+
+    public StringIntToStringTypeComputer(int stringArgCount) {
+        this.stringArgCount = stringArgCount;
+    }
 
     @Override
-    public void checkArgType(String funcName, int argIndex, IAType type) throws AlgebricksException {
+    public void checkArgType(String funcName, int argIndex, IAType type, SourceLocation sourceLoc)
+            throws AlgebricksException {
         ATypeTag tag = type.getTypeTag();
-        if (argIndex == 0 && tag != ATypeTag.STRING) {
-            throw new TypeMismatchException(funcName, argIndex, tag, ATypeTag.STRING);
-        }
-        if (argIndex == 1) {
+        if (argIndex < stringArgCount) {
+            if (tag != ATypeTag.STRING) {
+                throw new TypeMismatchException(sourceLoc, funcName, argIndex, tag, ATypeTag.STRING);
+            }
+        } else {
             switch (tag) {
                 case TINYINT:
                 case SMALLINT:
@@ -43,8 +54,8 @@ public class StringIntToStringTypeComputer extends AbstractResultTypeComputer {
                 case BIGINT:
                     break;
                 default:
-                    throw new TypeMismatchException(funcName, argIndex, tag, ATypeTag.TINYINT, ATypeTag.SMALLINT,
-                            ATypeTag.INTEGER, ATypeTag.BIGINT);
+                    throw new TypeMismatchException(sourceLoc, funcName, argIndex, tag, ATypeTag.TINYINT,
+                            ATypeTag.SMALLINT, ATypeTag.INTEGER, ATypeTag.BIGINT);
             }
         }
     }

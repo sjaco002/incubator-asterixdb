@@ -50,7 +50,7 @@ public class StringRegExpReplaceWithFlagsDescriptor extends AbstractScalarFuncti
             @Override
             public IScalarEvaluator createScalarEvaluator(IHyracksTaskContext ctx) throws HyracksDataException {
                 return new AbstractQuadStringStringEval(ctx, args[0], args[1], args[2], args[3],
-                        StringRegExpReplaceWithFlagsDescriptor.this.getIdentifier()) {
+                        StringRegExpReplaceWithFlagsDescriptor.this.getIdentifier(), sourceLoc) {
                     private final RegExpMatcher matcher = new RegExpMatcher();
 
                     @Override
@@ -66,6 +66,6 @@ public class StringRegExpReplaceWithFlagsDescriptor extends AbstractScalarFuncti
 
     @Override
     public FunctionIdentifier getIdentifier() {
-        return BuiltinFunctions.STRING_REPLACE_WITH_FLAG;
+        return BuiltinFunctions.STRING_REGEXP_REPLACE_WITH_FLAG;
     }
 }

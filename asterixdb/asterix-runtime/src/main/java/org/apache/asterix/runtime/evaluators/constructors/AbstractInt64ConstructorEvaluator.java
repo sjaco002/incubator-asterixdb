@@ -27,12 +27,14 @@ import org.apache.asterix.om.base.AInt64;
 import org.apache.asterix.om.base.AMutableInt64;
 import org.apache.asterix.om.types.ATypeTag;
 import org.apache.asterix.om.types.BuiltinType;
+import org.apache.asterix.runtime.evaluators.common.NumberUtils;
 import org.apache.asterix.runtime.exceptions.InvalidDataFormatException;
 import org.apache.asterix.runtime.exceptions.TypeMismatchException;
 import org.apache.hyracks.algebricks.core.algebra.functions.FunctionIdentifier;
 import org.apache.hyracks.algebricks.runtime.base.IScalarEvaluator;
 import org.apache.hyracks.api.dataflow.value.ISerializerDeserializer;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
+import org.apache.hyracks.api.exceptions.SourceLocation;
 import org.apache.hyracks.data.std.api.IPointable;
 import org.apache.hyracks.data.std.primitive.UTF8StringPointable;
 import org.apache.hyracks.data.std.primitive.VoidPointable;
@@ -45,14 +47,16 @@ public abstract class AbstractInt64ConstructorEvaluator implements IScalarEvalua
             SerializerDeserializerProvider.INSTANCE.getSerializerDeserializer(BuiltinType.AINT64);
 
     protected final IScalarEvaluator inputEval;
+    protected final SourceLocation sourceLoc;
     protected final IPointable inputArg;
     protected final ArrayBackedValueStorage resultStorage;
     protected final DataOutput out;
     protected final AMutableInt64 aInt64;
     protected final UTF8StringPointable utf8Ptr;
 
-    protected AbstractInt64ConstructorEvaluator(IScalarEvaluator inputEval) {
+    protected AbstractInt64ConstructorEvaluator(IScalarEvaluator inputEval, SourceLocation sourceLoc) {
         this.inputEval = inputEval;
+        this.sourceLoc = sourceLoc;
         inputArg = new VoidPointable();
         resultStorage = new ArrayBackedValueStorage();
         out = resultStorage.getDataOutput();
@@ -67,7 +71,7 @@ public abstract class AbstractInt64ConstructorEvaluator implements IScalarEvalua
             resultStorage.reset();
             evaluateImpl(result);
         } catch (IOException e) {
-            throw new InvalidDataFormatException(getIdentifier(), e, ATypeTag.SERIALIZED_INT64_TYPE_TAG);
+            throw new InvalidDataFormatException(sourceLoc, getIdentifier(), e, ATypeTag.SERIALIZED_INT64_TYPE_TAG);
         }
     }
 
@@ -79,56 +83,20 @@ public abstract class AbstractInt64ConstructorEvaluator implements IScalarEvalua
         if (tt == ATypeTag.SERIALIZED_INT64_TYPE_TAG) {
             result.set(inputArg);
         } else if (tt == ATypeTag.SERIALIZED_STRING_TYPE_TAG) {
-            int len = inputArg.getLength();
-            utf8Ptr.set(bytes, startOffset + 1, len - 1);
-            int offset = utf8Ptr.getCharStartOffset();
-            //accumulating value in negative domain
-            //otherwise Long.MIN_VALUE = -(Long.MAX_VALUE + 1) would have caused overflow
-            long value = 0;
-            boolean positive = true;
-            long limit = -Long.MAX_VALUE;
-            if (bytes[offset] == '+') {
-                offset++;
-            } else if (bytes[offset] == '-') {
-                offset++;
-                positive = false;
-                limit = Long.MIN_VALUE;
-            }
-            int end = startOffset + len;
-            for (; offset < end; offset++) {
-                int digit;
-                if (bytes[offset] >= '0' && bytes[offset] <= '9') {
-                    value *= 10;
-                    digit = bytes[offset] - '0';
-                } else if (bytes[offset] == 'i' && bytes[offset + 1] == '6' && bytes[offset + 2] == '4'
-                        && offset + 3 == end) {
-                    break;
-                } else {
-                    handleUnparseableString(result);
-                    return;
-                }
-                if (value < limit + digit) {
-                    handleUnparseableString(result);
-                }
-                value -= digit;
-            }
-            if (value > 0) {
+            utf8Ptr.set(bytes, startOffset + 1, inputArg.getLength() - 1);
+            if (NumberUtils.parseInt64(utf8Ptr, aInt64)) {
+                INT64_SERDE.serialize(aInt64, out);
+                result.set(resultStorage);
+            } else {
                 handleUnparseableString(result);
             }
-            if (value < 0 && positive) {
-                value *= -1;
-            }
-
-            aInt64.setValue(value);
-            INT64_SERDE.serialize(aInt64, out);
-            result.set(resultStorage);
         } else {
-            throw new TypeMismatchException(getIdentifier(), 0, tt, ATypeTag.SERIALIZED_STRING_TYPE_TAG);
+            throw new TypeMismatchException(sourceLoc, getIdentifier(), 0, tt, ATypeTag.SERIALIZED_STRING_TYPE_TAG);
         }
     }
 
     protected void handleUnparseableString(IPointable result) throws HyracksDataException {
-        throw new InvalidDataFormatException(getIdentifier(), ATypeTag.SERIALIZED_INT64_TYPE_TAG);
+        throw new InvalidDataFormatException(sourceLoc, getIdentifier(), ATypeTag.SERIALIZED_INT64_TYPE_TAG);
     }
 
     protected abstract FunctionIdentifier getIdentifier();

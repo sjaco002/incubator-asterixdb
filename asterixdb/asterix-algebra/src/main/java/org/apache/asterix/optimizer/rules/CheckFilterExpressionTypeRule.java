@@ -19,6 +19,8 @@
 
 package org.apache.asterix.optimizer.rules;
 
+import org.apache.asterix.common.exceptions.CompilationException;
+import org.apache.asterix.common.exceptions.ErrorCode;
 import org.apache.asterix.om.types.ATypeTag;
 import org.apache.asterix.om.types.AUnionType;
 import org.apache.asterix.om.types.IAType;
@@ -62,7 +64,7 @@ public class CheckFilterExpressionTypeRule implements IAlgebraicRewriteRule {
         IAType condType = (IAType) env.getType(condition);
         if (condType.getTypeTag() != ATypeTag.BOOLEAN && condType.getTypeTag() != ATypeTag.ANY
                 && !isPossibleBoolean(condType)) {
-            throw new AlgebricksException(
+            throw new CompilationException(ErrorCode.COMPILATION_ERROR, condition.getSourceLocation(),
                     "The select condition " + condition.toString() + " should be of the boolean type.");
         }
         return false;
@@ -75,11 +77,13 @@ public class CheckFilterExpressionTypeRule implements IAlgebraicRewriteRule {
      * @return true if it is; false otherwise.
      */
     private boolean isPossibleBoolean(IAType type) {
-        while (NonTaggedFormatUtil.isOptional(type)) {
-            IAType actualType = ((AUnionType) type).getActualType();
+        IAType checkingType = type;
+        while (NonTaggedFormatUtil.isOptional(checkingType)) {
+            IAType actualType = ((AUnionType) checkingType).getActualType();
             if (actualType.getTypeTag() == ATypeTag.BOOLEAN || actualType.getTypeTag() == ATypeTag.ANY) {
                 return true;
             }
+            checkingType = actualType;
         }
         return false;
     }

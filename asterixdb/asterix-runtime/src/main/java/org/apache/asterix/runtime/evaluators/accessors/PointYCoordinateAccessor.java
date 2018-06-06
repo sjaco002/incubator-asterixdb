@@ -92,11 +92,11 @@ public class PointYCoordinateAccessor extends AbstractScalarFunctionDynamicDescr
                                 aDouble.setValue(y);
                                 doubleSerde.serialize(aDouble, out);
                             } else {
-                                throw new TypeMismatchException(getIdentifier(), 0, bytes[startOffset],
+                                throw new TypeMismatchException(sourceLoc, getIdentifier(), 0, bytes[startOffset],
                                         ATypeTag.SERIALIZED_POINT_TYPE_TAG);
                             }
                         } catch (IOException e) {
-                            throw new HyracksDataException(e);
+                            throw HyracksDataException.create(e);
                         }
                         result.set(resultStorage);
                     }

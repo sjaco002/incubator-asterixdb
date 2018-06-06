@@ -28,8 +28,8 @@ import org.apache.hyracks.algebricks.core.algebra.functions.FunctionIdentifier;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
 
 public class NumericDivideDescriptor extends AbstractNumericArithmeticEval {
-
     private static final long serialVersionUID = 1L;
+
     public static final IFunctionDescriptorFactory FACTORY = new IFunctionDescriptorFactory() {
         public IFunctionDescriptor createFunctionDescriptor() {
             return new NumericDivideDescriptor();
@@ -42,14 +42,8 @@ public class NumericDivideDescriptor extends AbstractNumericArithmeticEval {
     }
 
     @Override
-    protected long evaluateInteger(long lhs, long rhs) throws HyracksDataException {
-        if (rhs == 0) {
-            throw new ArithmeticException("Division by Zero.");
-        }
-        if ((lhs == Long.MIN_VALUE) && (rhs == -1L)) {
-            throw new ArithmeticException(("Overflow in integer division"));
-        }
-        return lhs / rhs;
+    protected ATypeTag getNumericResultType(ATypeTag argTypeMax) {
+        return argTypeMax.ordinal() < ATypeTag.FLOAT.ordinal() ? ATypeTag.DOUBLE : argTypeMax;
     }
 
     @Override
@@ -58,13 +52,17 @@ public class NumericDivideDescriptor extends AbstractNumericArithmeticEval {
     }
 
     @Override
-    protected long evaluateTimeDurationArithmetic(long chronon, int yearMonth, long dayTime, boolean isTimeOnly)
-            throws HyracksDataException {
+    protected long evaluateInteger(long lhs, long rhs) {
+        throw new IllegalStateException();
+    }
+
+    @Override
+    protected long evaluateTimeDurationArithmetic(long chronon, int yearMonth, long dayTime, boolean isTimeOnly) {
         throw new NotImplementedException("Divide operation is not defined for temporal types");
     }
 
     @Override
     protected long evaluateTimeInstanceArithmetic(long chronon0, long chronon1) throws HyracksDataException {
-        throw new UnsupportedTypeException(getIdentifier(), ATypeTag.SERIALIZED_TIME_TYPE_TAG);
+        throw new UnsupportedTypeException(sourceLoc, getIdentifier(), ATypeTag.SERIALIZED_TIME_TYPE_TAG);
     }
 }

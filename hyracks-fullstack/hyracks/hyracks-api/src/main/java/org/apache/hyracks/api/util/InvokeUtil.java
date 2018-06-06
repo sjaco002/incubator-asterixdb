@@ -22,8 +22,13 @@ import java.io.IOException;
 import java.nio.channels.ClosedByInterruptException;
 import java.util.concurrent.Callable;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.function.BooleanSupplier;
 
 import org.apache.hyracks.api.exceptions.HyracksDataException;
+import org.apache.hyracks.util.IOInterruptibleAction;
+import org.apache.hyracks.util.InterruptibleAction;
+import org.apache.hyracks.util.ThrowingAction;
 import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -232,18 +237,18 @@ public class InvokeUtil {
         }
     }
 
-    @FunctionalInterface
-    public interface InterruptibleAction {
-        void run() throws InterruptedException;
-    }
-
-    @FunctionalInterface
-    public interface ThrowingAction {
-        void run() throws Exception; // NOSONAR
-    }
-
-    @FunctionalInterface
-    public interface IOInterruptibleAction {
-        void run() throws IOException, InterruptedException;
+    /**
+     * Runs the supplied {@code action} until {@code stopCondition} is met or timeout.
+     */
+    public static void runWithTimeout(ThrowingAction action, BooleanSupplier stopCondition, long timeout, TimeUnit unit)
+            throws Exception {
+        final long waitTime = unit.toNanos(timeout);
+        final long startTime = System.nanoTime();
+        while (!stopCondition.getAsBoolean()) {
+            action.run();
+            if (System.nanoTime() - startTime >= waitTime) {
+                throw new TimeoutException("Stop condition was not met after " + unit.toSeconds(timeout) + " seconds.");
+            }
+        }
     }
 }

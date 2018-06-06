@@ -47,6 +47,7 @@ import org.apache.hyracks.algebricks.core.algebra.functions.FunctionIdentifier;
 import org.apache.hyracks.algebricks.runtime.base.IScalarEvaluator;
 import org.apache.hyracks.algebricks.runtime.base.IScalarEvaluatorFactory;
 import org.apache.hyracks.api.context.IHyracksTaskContext;
+import org.apache.hyracks.api.dataflow.value.IBinaryComparator;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.apache.hyracks.data.std.api.IPointable;
 import org.apache.hyracks.data.std.primitive.VoidPointable;
@@ -108,6 +109,7 @@ public class RecordMergeDescriptor extends AbstractScalarFunctionDynamicDescript
                 final List<RecordBuilder> rbStack = new ArrayList<>();
 
                 final ArrayBackedValueStorage tabvs = new ArrayBackedValueStorage();
+                final IBinaryComparator stringBinaryComparator = PointableHelper.createStringBinaryComparator();
 
                 return new IScalarEvaluator() {
 
@@ -132,7 +134,7 @@ public class RecordMergeDescriptor extends AbstractScalarFunctionDynamicDescript
                             mergeFields(outRecType, rp0, rp1, true, 0);
                             rbStack.get(0).write(out, true);
                         } catch (IOException e) {
-                            throw new HyracksDataException(e);
+                            throw HyracksDataException.create(e);
                         }
                         result.set(resultStorage);
                     }
@@ -158,7 +160,7 @@ public class RecordMergeDescriptor extends AbstractScalarFunctionDynamicDescript
                                 IVisitablePointable rightValue = rightRecord.getFieldValues().get(j);
                                 IVisitablePointable rightType = rightRecord.getFieldTypeTags().get(j);
                                 // Check if same fieldname
-                                if (PointableHelper.isEqual(leftName, rightName)
+                                if (PointableHelper.isEqual(leftName, rightName, stringBinaryComparator)
                                         && !deepEqualAssesor.isEqual(leftValue, rightValue)) {
                                     //Field was found on the right and are subrecords, merge them
                                     if (PointableHelper.sameType(ATypeTag.OBJECT, rightType)

@@ -302,7 +302,7 @@ public class BTree extends AbstractTreeIndex {
             }
             // fall-through
             case SUFFICIENT_CONTIGUOUS_SPACE: {
-                foundModCallback(ctx, null, tuple);
+                ctx.getModificationCallback().found(null, tuple);
                 ctx.getLeafFrame().insert(tuple, targetTupleIndex);
                 ctx.getSplitKey().reset();
                 break;
@@ -310,7 +310,7 @@ public class BTree extends AbstractTreeIndex {
             case SUFFICIENT_SPACE: {
                 int finalIndex = ctx.getLeafFrame().compact() ? ctx.getLeafFrame().findInsertTupleIndex(tuple)
                         : targetTupleIndex;
-                foundModCallback(ctx, null, tuple);
+                ctx.getModificationCallback().found(null, tuple);
                 ctx.getLeafFrame().insert(tuple, finalIndex);
                 ctx.getSplitKey().reset();
                 break;
@@ -319,7 +319,7 @@ public class BTree extends AbstractTreeIndex {
                 // Try compressing the page first and see if there is space available.
                 if (ctx.getLeafFrame().compress()
                         && ctx.getLeafFrame().hasSpaceInsert(tuple) == FrameOpSpaceStatus.SUFFICIENT_CONTIGUOUS_SPACE) {
-                    foundModCallback(ctx, null, tuple);
+                    ctx.getModificationCallback().found(null, tuple);
                     ctx.getLeafFrame().insert(tuple, ctx.getLeafFrame().findInsertTupleIndex(tuple));
                     ctx.getSplitKey().reset();
                 } else {
@@ -362,10 +362,10 @@ public class BTree extends AbstractTreeIndex {
             // Perform an update (delete + insert) if the updateTupleIndex != -1
             if (updateTupleIndex != -1) {
                 ITupleReference beforeTuple = ctx.getLeafFrame().getMatchingKeyTuple(tuple, updateTupleIndex);
-                foundModCallback(ctx, beforeTuple, tuple);
+                ctx.getModificationCallback().found(beforeTuple, tuple);
                 ctx.getLeafFrame().delete(tuple, updateTupleIndex);
             } else {
-                foundModCallback(ctx, null, tuple);
+                ctx.getModificationCallback().found(null, tuple);
             }
             ctx.getLeafFrame().split(rightFrame, tuple, ctx.getSplitKey(), ctx, bufferCache);
 
@@ -400,7 +400,7 @@ public class BTree extends AbstractTreeIndex {
         boolean restartOp = false;
         switch (spaceStatus) {
             case SUFFICIENT_INPLACE_SPACE: {
-                foundModCallback(ctx, beforeTuple, tuple);
+                ctx.getModificationCallback().found(beforeTuple, tuple);
                 ctx.getLeafFrame().update(tuple, oldTupleIndex, true);
                 ctx.getSplitKey().reset();
                 break;
@@ -409,7 +409,7 @@ public class BTree extends AbstractTreeIndex {
                 // TODO: avoid repeated calculation of tuple size
                 // TODO: in-place update on expand
                 // Delete the old tuple, compact the frame, and insert the new tuple.
-                foundModCallback(ctx, beforeTuple, tuple);
+                ctx.getModificationCallback().found(beforeTuple, tuple);
                 ctx.getLeafFrame().delete(tuple, oldTupleIndex);
                 ctx.getLeafFrame().compact();
                 ctx.getLeafFrame().ensureCapacity(bufferCache, tuple, ctx);
@@ -419,14 +419,14 @@ public class BTree extends AbstractTreeIndex {
                 break;
             }
             case SUFFICIENT_CONTIGUOUS_SPACE: {
-                foundModCallback(ctx, beforeTuple, tuple);
+                ctx.getModificationCallback().found(beforeTuple, tuple);
                 ctx.getLeafFrame().update(tuple, oldTupleIndex, false);
                 ctx.getSplitKey().reset();
                 break;
             }
             case SUFFICIENT_SPACE: {
                 // Delete the old tuple, compact the frame, and insert the new tuple.
-                foundModCallback(ctx, beforeTuple, tuple);
+                ctx.getModificationCallback().found(beforeTuple, tuple);
                 ctx.getLeafFrame().delete(tuple, oldTupleIndex);
                 ctx.getLeafFrame().compact();
                 int targetTupleIndex = ctx.getLeafFrame().findInsertTupleIndex(tuple);
@@ -769,6 +769,7 @@ public class BTree extends AbstractTreeIndex {
                 modificationCallback, searchCallback, logTupleFields);
     }
 
+    @SuppressWarnings("rawtypes")
     public String printTree(IBTreeLeafFrame leafFrame, IBTreeInteriorFrame interiorFrame,
             ISerializerDeserializer[] keySerdes) throws Exception {
         MultiComparator cmp = MultiComparator.create(cmpFactories);
@@ -826,11 +827,6 @@ public class BTree extends AbstractTreeIndex {
         return new BTreeAccessor(this, iap.getModificationCallback(), iap.getSearchOperationCallback());
     }
 
-    public BTreeAccessor createAccessor(IModificationOperationCallback modificationCallback,
-            ISearchOperationCallback searchCallback, int[] logTupleFields) {
-        return new BTreeAccessor(this, modificationCallback, searchCallback, logTupleFields);
-    }
-
     // TODO: Class should be private. But currently we need to expose the
     // setOpContext() API to the LSM Tree for it to work correctly.
 
@@ -854,12 +850,6 @@ public class BTree extends AbstractTreeIndex {
                 ISearchOperationCallback searchCallback) {
             this.btree = btree;
             this.ctx = btree.createOpContext(this, modificationCalback, searchCallback);
-        }
-
-        public BTreeAccessor(BTree btree, IModificationOperationCallback modificationCalback,
-                ISearchOperationCallback searchCallback, int[] logTupleFields) {
-            this.btree = btree;
-            this.ctx = btree.createOpContext(this, modificationCalback, searchCallback, logTupleFields);
         }
 
         public void reset(BTree btree, IModificationOperationCallback modificationCallback,
@@ -1259,14 +1249,4 @@ public class BTree extends AbstractTreeIndex {
     public int getNumOfFilterFields() {
         return 0;
     }
-
-    private void foundModCallback(BTreeOpContext ctx, ITupleReference before, ITupleReference after)
-            throws HyracksDataException {
-        if (ctx.getTupleWithNonIndexFields() == null) {
-            ctx.getModificationCallback().found(before, after);
-        } else {
-            ctx.getModificationCallback().found(before, ctx.getTupleWithNonIndexFields());
-        }
-    }
-
 }

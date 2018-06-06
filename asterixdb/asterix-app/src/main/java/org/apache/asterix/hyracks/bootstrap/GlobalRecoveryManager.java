@@ -46,7 +46,6 @@ import org.apache.hyracks.api.client.IHyracksClientConnection;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.apache.hyracks.api.job.JobId;
 import org.apache.hyracks.api.job.JobSpecification;
-import org.apache.hyracks.control.nc.NCShutdownHook;
 import org.apache.hyracks.util.ExitUtil;
 import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;
@@ -57,7 +56,7 @@ public class GlobalRecoveryManager implements IGlobalRecoveryManager {
     private static final Logger LOGGER = LogManager.getLogger();
     protected final IStorageComponentProvider componentProvider;
     protected final ICCServiceContext serviceCtx;
-    protected IHyracksClientConnection hcc;
+    protected final IHyracksClientConnection hcc;
     protected volatile boolean recoveryCompleted;
     protected volatile boolean recovering;
 
@@ -99,7 +98,7 @@ public class GlobalRecoveryManager implements IGlobalRecoveryManager {
                             recover(appCtx);
                         } catch (HyracksDataException e) {
                             LOGGER.log(Level.ERROR, "Global recovery failed. Shutting down...", e);
-                            ExitUtil.exit(NCShutdownHook.FAILED_TO_RECOVER_EXIT_CODE);
+                            ExitUtil.exit(ExitUtil.EC_FAILED_TO_RECOVER);
                         }
                     });
                 }
@@ -127,7 +126,9 @@ public class GlobalRecoveryManager implements IGlobalRecoveryManager {
             throws Exception {
         // Loop over datasets
         for (Dataverse dataverse : MetadataManager.INSTANCE.getDataverses(mdTxnCtx)) {
-            mdTxnCtx = recoverDataset(appCtx, mdTxnCtx, dataverse);
+            mdTxnCtx = recoverDatasets(appCtx, mdTxnCtx, dataverse);
+            // Fixes ASTERIXDB-2386 by caching the dataverse during recovery
+            MetadataManager.INSTANCE.getDataverse(mdTxnCtx, dataverse.getDataverseName());
         }
         return mdTxnCtx;
     }
@@ -139,8 +140,8 @@ public class GlobalRecoveryManager implements IGlobalRecoveryManager {
         }
     }
 
-    private MetadataTransactionContext recoverDataset(ICcApplicationContext appCtx, MetadataTransactionContext mdTxnCtx,
-            Dataverse dataverse) throws Exception {
+    private MetadataTransactionContext recoverDatasets(ICcApplicationContext appCtx,
+            MetadataTransactionContext mdTxnCtx, Dataverse dataverse) throws Exception {
         if (!dataverse.getDataverseName().equals(MetadataConstants.METADATA_DATAVERSE_NAME)) {
             MetadataProvider metadataProvider = new MetadataProvider(appCtx, dataverse);
             try {

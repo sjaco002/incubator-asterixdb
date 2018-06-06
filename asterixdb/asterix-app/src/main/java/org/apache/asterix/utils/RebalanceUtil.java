@@ -124,6 +124,9 @@ public class RebalanceUtil {
                 // The target dataset for rebalance.
                 targetDataset = sourceDataset.getTargetDatasetForRebalance(nodeGroupName);
 
+                LOGGER.info("Rebalancing dataset {} from node group {} with nodes {} to node group {} with nodes {}",
+                        sourceDataset.getDatasetName(), sourceDataset.getNodeGroupName(), sourceNodes,
+                        targetDataset.getNodeGroupName(), targetNcNames);
                 // Rebalances the source dataset into the target dataset.
                 rebalance(sourceDataset, targetDataset, metadataProvider, hcc, datasetRebalanceCallback);
             } else {
@@ -158,6 +161,7 @@ public class RebalanceUtil {
             // the source dataset.
             runMetadataTransaction(metadataProvider, () -> dropSourceDataset(sourceDataset, metadataProvider, hcc));
         });
+        LOGGER.info("Dataset {} rebalance completed successfully", datasetName);
     }
 
     @FunctionalInterface
@@ -238,6 +242,8 @@ public class RebalanceUtil {
                 (ActiveNotificationHandler) appCtx.getActiveNotificationHandler();
         IMetadataLockManager lockManager = appCtx.getMetadataLockManager();
         lockManager.upgradeDatasetLockToWrite(metadataProvider.getLocks(), DatasetUtil.getFullyQualifiedName(source));
+        LOGGER.info("Updating dataset {} node group from {} to {}", source.getDatasetName(), source.getNodeGroupName(),
+                target.getNodeGroupName());
         try {
             // Updates the dataset entry in the metadata storage
             MetadataManager.INSTANCE.updateDataset(mdTxnCtx, target);
@@ -248,6 +254,7 @@ public class RebalanceUtil {
                 }
             }
             MetadataManager.INSTANCE.commitTransaction(mdTxnCtx);
+            LOGGER.info("dataset {} node group updated to {}", target.getDatasetName(), target.getNodeGroupName());
         } finally {
             lockManager.downgradeDatasetLockToExclusiveModify(metadataProvider.getLocks(),
                     DatasetUtil.getFullyQualifiedName(target));
@@ -348,7 +355,7 @@ public class RebalanceUtil {
         List<Index> indexes = metadataProvider.getDatasetIndexes(dataset.getDataverseName(), dataset.getDatasetName());
         for (Index index : indexes) {
             jobs.add(IndexUtil.buildDropIndexJobSpec(index, metadataProvider, dataset,
-                    EnumSet.of(DropOption.IF_EXISTS, DropOption.WAIT_ON_IN_USE)));
+                    EnumSet.of(DropOption.IF_EXISTS, DropOption.WAIT_ON_IN_USE), null));
         }
         for (JobSpecification jobSpec : jobs) {
             JobUtils.runJob(hcc, jobSpec, true);
@@ -364,12 +371,12 @@ public class RebalanceUtil {
             }
             // Creates the secondary index.
             JobSpecification indexCreationJobSpec =
-                    IndexUtil.buildSecondaryIndexCreationJobSpec(target, index, metadataProvider);
+                    IndexUtil.buildSecondaryIndexCreationJobSpec(target, index, metadataProvider, null);
             JobUtils.runJob(hcc, indexCreationJobSpec, true);
 
             // Loads the secondary index.
             JobSpecification indexLoadingJobSpec =
-                    IndexUtil.buildSecondaryIndexLoadingJobSpec(target, index, metadataProvider);
+                    IndexUtil.buildSecondaryIndexLoadingJobSpec(target, index, metadataProvider, null);
             JobUtils.runJob(hcc, indexLoadingJobSpec, true);
         }
     }

@@ -18,6 +18,8 @@
  */
 package org.apache.hyracks.net.protocols.tcp;
 
+import static org.apache.hyracks.net.protocols.tcp.TCPConnection.ConnectionType;
+
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
@@ -63,18 +65,17 @@ public class TCPEndpoint {
             serverSocket.bind(localAddress);
             this.localAddress = (InetSocketAddress) serverSocket.getLocalSocketAddress();
         }
-
         ioThreads = new IOThread[nThreads];
         for (int i = 0; i < ioThreads.length; ++i) {
             ioThreads[i] = new IOThread();
         }
-
         if (localAddress != null) {
-            ioThreads[0].registerServerSocket(serverSocketChannel);
+            for (IOThread ioThread : ioThreads) {
+                ioThread.registerServerSocket(serverSocketChannel);
+            }
         }
-
-        for (int i = 0; i < ioThreads.length; ++i) {
-            ioThreads[i].start();
+        for (IOThread ioThread : ioThreads) {
+            ioThread.start();
         }
     }
 
@@ -98,6 +99,11 @@ public class TCPEndpoint {
         return localAddress;
     }
 
+    @Override
+    public String toString() {
+        return "TCPEndpoint [Local Address: " + localAddress + "]";
+    }
+
     private class IOThread extends Thread {
         private final List<InetSocketAddress> pendingConnections;
 
@@ -110,7 +116,7 @@ public class TCPEndpoint {
         private final Selector selector;
 
         public IOThread() throws IOException {
-            super("TCPEndpoint IO Thread");
+            super("TCPEndpoint IO Thread [" + localAddress + "]");
             setDaemon(true);
             setPriority(Thread.NORM_PRIORITY);
             this.pendingConnections = new ArrayList<>();
@@ -156,7 +162,8 @@ public class TCPEndpoint {
                         for (SocketChannel channel : workingIncomingConnections) {
                             register(channel);
                             SelectionKey sKey = channel.register(selector, 0);
-                            TCPConnection connection = new TCPConnection(TCPEndpoint.this, channel, sKey, selector);
+                            TCPConnection connection = new TCPConnection(TCPEndpoint.this, channel, sKey, selector,
+                                    ConnectionType.INCOMING);
                             sKey.attach(connection);
                             synchronized (connectionListener) {
                                 connectionListener.acceptedConnection(connection);
@@ -178,10 +185,12 @@ public class TCPEndpoint {
                                 try {
                                     connection.getEventListener().notifyIOReady(connection, readable, writable);
                                 } catch (Exception e) {
-                                    LOGGER.error("Unexpected tcp io error", e);
+                                    LOGGER.error("Unexpected tcp io error in connection {}", connection, e);
                                     connection.getEventListener().notifyIOError(e);
                                     connection.close();
-                                    connectionListener.connectionClosed(connection);
+                                    synchronized (connectionListener) {
+                                        connectionListener.connectionClosed(connection);
+                                    }
                                     continue;
                                 }
                             }
@@ -195,6 +204,7 @@ public class TCPEndpoint {
                                 try {
                                     finishConnect = channel.finishConnect();
                                 } catch (IOException e) {
+                                    LOGGER.error("Failed to finish connect to channel {}", key.attachment(), e);
                                     key.cancel();
                                     synchronized (connectionListener) {
                                         connectionListener.connectionFailure((InetSocketAddress) key.attachment(), e);
@@ -207,13 +217,14 @@ public class TCPEndpoint {
                         }
                     }
                 } catch (Exception e) {
-                    LOGGER.error("Error in TCPEndpoint {}", localAddress, e);
+                    LOGGER.error("Error in TCPEndpoint {}", TCPEndpoint.this, e);
                 }
             }
         }
 
         private void createConnection(SelectionKey key, SocketChannel channel) {
-            TCPConnection connection = new TCPConnection(TCPEndpoint.this, channel, key, selector);
+            TCPConnection connection =
+                    new TCPConnection(TCPEndpoint.this, channel, key, selector, ConnectionType.OUTGOING);
             key.attach(connection);
             key.interestOps(0);
             synchronized (connectionListener) {

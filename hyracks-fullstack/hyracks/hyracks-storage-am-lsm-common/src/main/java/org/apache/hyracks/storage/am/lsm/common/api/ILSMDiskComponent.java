@@ -50,6 +50,7 @@ public interface ILSMDiskComponent extends ILSMComponent {
     /**
      * @return LsmIndex of the component
      */
+    @Override
     AbstractLSMIndex getLsmIndex();
 
     /**
@@ -142,6 +143,7 @@ public interface ILSMDiskComponent extends ILSMComponent {
      * Creates a bulkloader pipeline which includes all chained operations, bulkloading individual elements of the
      * component: indexes, LSM filters, Bloom filters, buddy indexes, etc.
      *
+     * @param operation
      * @param fillFactor
      * @param verifyInput
      * @param numElementsHint
@@ -151,6 +153,7 @@ public interface ILSMDiskComponent extends ILSMComponent {
      * @return
      * @throws HyracksDataException
      */
-    ChainedLSMDiskComponentBulkLoader createBulkLoader(float fillFactor, boolean verifyInput, long numElementsHint,
-            boolean checkIfEmptyIndex, boolean withFilter, boolean cleanupEmptyComponent) throws HyracksDataException;
+    ChainedLSMDiskComponentBulkLoader createBulkLoader(ILSMIOOperation operation, float fillFactor, boolean verifyInput,
+            long numElementsHint, boolean checkIfEmptyIndex, boolean withFilter, boolean cleanupEmptyComponent)
+            throws HyracksDataException;
 }

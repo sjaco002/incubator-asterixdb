@@ -21,13 +21,15 @@ package org.apache.hyracks.storage.am.lsm.common.api;
 import org.apache.hyracks.api.dataflow.value.IBinaryComparatorFactory;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.apache.hyracks.dataflow.common.data.accessors.ITupleReference;
+import org.apache.hyracks.storage.am.common.api.IExtendedModificationOperationCallback;
 import org.apache.hyracks.storage.common.MultiComparator;
 
 public interface ILSMComponentFilter {
 
-    void update(ITupleReference tuple, MultiComparator cmp) throws HyracksDataException;
-
     boolean satisfy(ITupleReference min, ITupleReference max, MultiComparator cmp) throws HyracksDataException;
+
+    void update(ITupleReference tuple, MultiComparator cmp, IExtendedModificationOperationCallback opCallback)
+            throws HyracksDataException;
 
     ITupleReference getMinTuple();
 

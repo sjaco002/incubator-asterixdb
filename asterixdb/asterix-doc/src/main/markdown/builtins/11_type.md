@@ -19,7 +19,7 @@
 
 ## <a id="TypeFunctions">Type Functions</a> ##
 
-### is_array (isarray) ###
+### is_array ###
  * Syntax:
 
         is_array(expr)
@@ -53,7 +53,7 @@
 
  The function has an alias `isarray`.
 
-### is_atomic (isatomic, isatom) ###
+### is_atomic (is_atom) ###
  * Syntax:
 
         is_atomic(expr)
@@ -84,9 +84,9 @@
 
         { "a": true, "b": true, "c": null, "e": true, "f": true, "g": true, "h": false, "i": false }
 
- The function has two aliases, `isatomic` or `isatom`.
+ The function has three aliases: `isatomic`, `is_atom`, and `isatom`.
 
-### is_boolean (isboolean, isbool) ###
+### is_boolean (is_bool) ###
  * Syntax:
 
         is_boolean(expr)
@@ -118,10 +118,10 @@
 
         { "a": true, "b": true, "c": null, "e": false, "f": false, "g": false, "h": false, "i": false }
 
- The function has two aliases, `isboolean` or `isbool`.
+ The function has three aliases: `isboolean`, `is_bool`, and `isbool`.
 
 
-### is_number (isnumber, isnum) ###
+### is_number (is_num) ###
  * Syntax:
 
         is_number(expr)
@@ -154,9 +154,9 @@
 
         { "a": false, "b": false, "c": null, "e": false, "f": true, "g": true, "h": false, "i": false }
 
- The function has two aliases, `isnumber` or `isnum`.
+ The function has three aliases: `isnumber`, `is_num`, and `isnum`.
 
-### is_object (isobject, isobj) ###
+### is_object (is_obj) ###
  * Syntax:
 
         is_object(expr)
@@ -188,10 +188,10 @@
 
        { "a": false, "b": false, "c": null, "e": false, "f": false, "g": false, "h": false, "i": true }
 
- The function has two aliases, `isobject` or `isobj`.
+ The function has three aliases: `isobject`, `is_obj`, and `isobj`.
 
 
-### is_string (isstring, isstr) ###
+### is_string (is_str) ###
  * Syntax:
 
         is_string(expr)
@@ -223,7 +223,7 @@
 
         { "a": false, "b": false, "c": null, "e": true, "f": false, "g": false, "h": false, "i": false }
 
- The function has two aliases, `isstring` or `isstr`.
+ The function has three aliases: `isstring`, `is_str`, and `isstr`.
 
 
 ### is_null ###
@@ -293,8 +293,69 @@
 
  The function has an alias `isunknown`.
 
+### to_array ###
+  * Syntax:
 
-### to_boolean ###
+        to_array(expr)
+
+  * Converts input value to an `array` value
+  * Arguments:
+     * `expr` : an expression
+  * Return Value:
+     * if the argument is `missing` then `missing` is returned
+     * if the argument is `null` then `null` is returned
+     * if the argument is of `array` type then it is returned as is
+     * if the argument is of `multiset` type then it is returned as an `array` with elements in an undefined order
+     * otherwise an `array` containing the input expression as its single item is returned
+
+ * Example:
+
+        {
+          "v1": to_array("asterix"),
+          "v2": to_array(["asterix"]),
+        };
+
+ * The expected result is:
+
+        { "v1": ["asterix"], "v2": ["asterix"] }
+
+ The function has an alias `toarray`.
+
+### to_atomic (to_atom) ###
+  * Syntax:
+
+        to_atomic(expr)
+
+  * Converts input value to a [primitive](../datamodel.html#PrimitiveTypes) value
+  * Arguments:
+     * `expr` : an expression
+  * Return Value:
+     * if the argument is `missing` then `missing` is returned
+     * if the argument is `null` then `null` is returned
+     * if the argument is of primitive type then it is returned as is
+     * if the argument is of `array` or `multiset` type and has only one element then the result of invoking
+       to_atomic() on that element is returned
+     * if the argument is of `object` type and has only one field then the result of invoking to_atomic() on the
+       value of that field is returned
+     * otherwise `null` is returned
+
+ * Example:
+
+        {
+          "v1": to_atomic("asterix"),
+          "v2": to_atomic(["asterix"]),
+          "v3": to_atomic([0, 1]),
+          "v4": to_atomic({"value": "asterix"}),
+          "v5": to_number({"x": 1, "y": 2})
+        };
+
+ * The expected result is:
+
+        { "v1": "asterix", "v2": "asterix", "v3": null, "v4": "asterix", "v5": null }
+
+ The function has three aliases: `toatomic`, `to_atom`, and `toatom`.
+
+### to_boolean (to_bool) ###
   * Syntax:
 
         to_boolean(expr)
@@ -325,8 +386,7 @@
 
         { "v1": false, "v2": true, "v3": false, "v4": true }
 
- The function has an alias `toboolean`.
-
+ The function has three aliases: `toboolean`, `to_bool`, and `tobool`.
 
 ### to_bigint ###
   * Syntax:
@@ -364,7 +424,6 @@
 
  The function has an alias `tobigint`.
 
-
 ### to_double ###
   * Syntax:
 
@@ -399,8 +458,69 @@
 
  The function has an alias `todouble`.
 
+### to_number (to_num) ###
+  * Syntax:
 
-### to_string ###
+        to_number(expr)
+
+  * Converts input value to a numeric value
+  * Arguments:
+     * `expr` : an expression
+  * Return Value:
+     * if the argument is `missing` then `missing` is returned
+     * if the argument is `null` then `null` is returned
+     * if the argument is of numeric type then it is returned as is
+     * if the argument is of `boolean` type then `1` is returned if it is `true`, `0` if it is `false`
+     * if the argument is of `string` type and can be parsed as `bigint` then that `bigint` value is returned,
+       otherwise if it can be parsed as `double` then that `double` value is returned,
+       otherwise `null` is returned
+     * if the argument is of `array`/`multiset`/`object` type then `null` is returned
+     * type error is raised for all other input types
+
+ * Example:
+
+        {
+          "v1": to_number(false),
+          "v2": to_number(true),
+          "v3": to_number(10),
+          "v4": to_number(11.5),
+          "v5": to_number("12.5")
+        };
+
+ * The expected result is:
+
+        { "v1": 0, "v2": 1, "v3": 10, "v4": 11.5, "v5": 12.5 }
+
+ The function has three aliases: `tonumber`, `to_num`, and `tonum`.
+
+### to_object (to_obj) ###
+  * Syntax:
+
+        to_object(expr)
+
+  * Converts input value to an `object` value
+  * Arguments:
+     * `expr` : an expression
+  * Return Value:
+     * if the argument is `missing` then `missing` is returned
+     * if the argument is `null` then `null` is returned
+     * if the argument is of `object` type then it is returned as is
+     * otherwise an empty `object` is returned
+
+ * Example:
+
+        {
+          "v1": to_object({"value": "asterix"}),
+          "v2": to_object("asterix")
+        };
+
+ * The expected result is:
+
+        { "v1": {"value": "asterix"}, "v2": {} }
+
+ The function has three aliases: `toobject`, `to_obj`, and `toobj`.
+
+### to_string (to_str) ###
   * Syntax:
 
         to_string(expr)
@@ -431,4 +551,4 @@
 
         { "v1": "false", "v2": "true", "v3": "10", "v4": "11.5", "v5": "asterix" }
 
- The function has an alias `tostring`.
+ The function has three aliases: `tostring`, `to_str`, and `tostr`.

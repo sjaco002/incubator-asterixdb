@@ -33,9 +33,12 @@ public class IOCounterFactory {
      */
     public IIOCounter getIOCounter() {
         String osName = System.getProperty("os.name").toLowerCase();
-        if (osName.indexOf("nix") >= 0 || osName.indexOf("nux") >= 0 || osName.indexOf("aix") >= 0) {
-            return new IOCounterLinux();
-        } else if (osName.indexOf("mac") >= 0) {
+        if (osName.contains("nix") || osName.contains("nux") || osName.contains("aix")) {
+            if (IOCounterProc.STATFILE.exists()) {
+                return new IOCounterProc();
+            }
+            return new IOCounterIoStat();
+        } else if (osName.contains("mac")) {
             return new IOCounterOSX();
         } else {
             return new IOCounterDefault();

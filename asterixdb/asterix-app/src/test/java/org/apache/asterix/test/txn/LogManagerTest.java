@@ -19,6 +19,7 @@
 package org.apache.asterix.test.txn;
 
 import java.lang.reflect.Method;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -27,6 +28,7 @@ import org.apache.asterix.common.TestDataUtil;
 import org.apache.asterix.common.api.IDatasetLifecycleManager;
 import org.apache.asterix.common.api.INcApplicationContext;
 import org.apache.asterix.common.config.GlobalConfig;
+import org.apache.asterix.common.config.TransactionProperties;
 import org.apache.asterix.common.dataflow.DatasetLocalResource;
 import org.apache.asterix.common.exceptions.ACIDException;
 import org.apache.asterix.common.exceptions.ExceptionUtils;
@@ -36,6 +38,7 @@ import org.apache.asterix.common.transactions.ILogManager;
 import org.apache.asterix.common.transactions.ITransactionContext;
 import org.apache.asterix.common.transactions.ITransactionManager;
 import org.apache.asterix.common.transactions.LogRecord;
+import org.apache.asterix.common.transactions.LogSource;
 import org.apache.asterix.common.transactions.LogType;
 import org.apache.asterix.common.transactions.TransactionOptions;
 import org.apache.asterix.common.transactions.TxnId;
@@ -43,6 +46,7 @@ import org.apache.asterix.common.utils.TransactionUtil;
 import org.apache.asterix.metadata.entities.Dataset;
 import org.apache.asterix.test.common.TestTupleReference;
 import org.apache.asterix.transaction.management.service.logging.LogManager;
+import org.apache.asterix.transaction.management.service.transaction.TransactionContextFactory;
 import org.apache.asterix.transaction.management.service.transaction.TransactionManagementConstants.LockManagerConstants;
 import org.apache.hyracks.storage.am.common.impls.NoOpOperationCallback;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMIndex;
@@ -61,6 +65,8 @@ public class LogManagerTest {
     @Before
     public void setUp() throws Exception {
         System.setProperty(GlobalConfig.CONFIG_FILE_PROPERTY, TEST_CONFIG_FILE_NAME);
+        // use a small page size for test purpose
+        integrationUtil.addOption(TransactionProperties.Option.TXN_LOG_BUFFER_PAGESIZE, 128 * 1024);
         integrationUtil.init(true, TEST_CONFIG_FILE_NAME);
     }
 
@@ -162,6 +168,27 @@ public class LogManagerTest {
 
         // make sure we can still log to the new file
         interruptedLogPageSwitch();
+    }
+
+    @Test
+    public void waitLogTest() throws Exception {
+        final INcApplicationContext ncAppCtx = (INcApplicationContext) integrationUtil.ncs[0].getApplicationContext();
+        LogRecord logRecord = new LogRecord();
+        final long txnId = 1;
+        logRecord.setTxnCtx(TransactionContextFactory.create(new TxnId(txnId),
+                new TransactionOptions(ITransactionManager.AtomicityLevel.ENTITY_LEVEL)));
+        logRecord.setLogSource(LogSource.LOCAL);
+        logRecord.setLogType(LogType.WAIT);
+        logRecord.setTxnId(txnId);
+        logRecord.isFlushed(false);
+        logRecord.computeAndSetLogSize();
+        Thread transactor = new Thread(() -> {
+            final LogManager logManager = (LogManager) ncAppCtx.getTransactionSubsystem().getLogManager();
+            logManager.log(logRecord);
+        });
+        transactor.start();
+        transactor.join(TimeUnit.SECONDS.toMillis(30));
+        Assert.assertTrue(logRecord.isFlushed());
     }
 
     private static ITransactionContext beingTransaction(INcApplicationContext ncAppCtx, ILSMIndex index,

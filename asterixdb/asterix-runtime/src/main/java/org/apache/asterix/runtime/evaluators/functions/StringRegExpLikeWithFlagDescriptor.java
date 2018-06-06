@@ -19,8 +19,6 @@
 
 package org.apache.asterix.runtime.evaluators.functions;
 
-import java.io.IOException;
-
 import org.apache.asterix.om.functions.BuiltinFunctions;
 import org.apache.asterix.om.functions.IFunctionDescriptor;
 import org.apache.asterix.om.functions.IFunctionDescriptorFactory;
@@ -51,12 +49,12 @@ public class StringRegExpLikeWithFlagDescriptor extends AbstractScalarFunctionDy
             @Override
             public IScalarEvaluator createScalarEvaluator(IHyracksTaskContext ctx) throws HyracksDataException {
                 return new AbstractTripleStringBoolEval(ctx, args[0], args[1], args[2],
-                        StringRegExpLikeWithFlagDescriptor.this.getIdentifier()) {
+                        StringRegExpLikeWithFlagDescriptor.this.getIdentifier(), sourceLoc) {
                     private final RegExpMatcher matcher = new RegExpMatcher();
 
                     @Override
                     protected boolean compute(UTF8StringPointable srcPtr, UTF8StringPointable patternPtr,
-                            UTF8StringPointable flagPtr) throws IOException {
+                            UTF8StringPointable flagPtr) {
                         matcher.build(srcPtr, patternPtr, flagPtr);
                         return matcher.matches();
                     }

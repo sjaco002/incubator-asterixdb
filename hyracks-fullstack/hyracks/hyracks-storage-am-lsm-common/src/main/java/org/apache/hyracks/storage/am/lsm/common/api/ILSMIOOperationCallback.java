@@ -18,58 +18,66 @@
  */
 package org.apache.hyracks.storage.am.lsm.common.api;
 
-import java.util.List;
-
 import org.apache.hyracks.api.exceptions.HyracksDataException;
-import org.apache.hyracks.storage.am.lsm.common.api.ILSMIOOperation.LSMIOOperationType;
 
 public interface ILSMIOOperationCallback {
 
     /**
-     * This method is called on an IO operation before the operation starts.
-     * (i.e. IO operations could be flush or merge operations.)
-     * For flush, this is called immediately before switching the current memory component pointer
+     * This method is called on an IO operation before the operation is scheduled
+     * For operations that are not scheduled(i,e. Bulk load), this call is skipped.
+     *
+     * @param operation
+     * @throws HyracksDataException
      */
-    void beforeOperation(LSMIOOperationType opType) throws HyracksDataException;
+    void scheduled(ILSMIOOperation operation) throws HyracksDataException;
 
     /**
-     * This method is called on an IO operation sometime after the operation was completed.
+     * This method is called on an IO operation before the operation starts.
+     * (i.e. IO operations could be flush, or merge operations.)
+     */
+    void beforeOperation(ILSMIOOperation operation) throws HyracksDataException;
+
+    /**
+     * This method is called on an IO operation sometime after the operation is completed but before the new component
+     * is marked as valid.
      * (i.e. IO operations could be flush or merge operations.)
      *
      * Copying content of metadata page from memory component to disk component should be done in this call
      * Merging content of metadata pages from disk components to new disk component should be done in this call
      *
-     * @param oldComponents
-     * @param newComponent
      * @throws HyracksDataException
      */
-    void afterOperation(LSMIOOperationType opType, List<ILSMComponent> oldComponents, ILSMDiskComponent newComponent)
-            throws HyracksDataException;
+    void afterOperation(ILSMIOOperation operation) throws HyracksDataException;
 
     /**
      * This method is called on an IO operation when the operation needs any cleanup works
      * regardless that the IO operation was executed or not. Once the IO operation is executed,
      * this method should be called after ILSMIOOperationCallback.afterOperation() was called.
      *
-     * @param newComponent
+     */
+    void afterFinalize(ILSMIOOperation operation) throws HyracksDataException;
+
+    /**
+     * This method is called after the schduler is done with the IO operation
+     * For operation that are not scheduled, this call is skipped
+     *
+     * @param operation
      * @throws HyracksDataException
      */
-    void afterFinalize(LSMIOOperationType opType, ILSMDiskComponent newComponent) throws HyracksDataException;
+    void completed(ILSMIOOperation operation);
 
     /**
      * This method is called when a memory component is recycled
      *
      * @param component
-     * @param componentSwitched
-     *            true if the component index was advanced for this recycle, false otherwise
      */
-    void recycled(ILSMMemoryComponent component, boolean componentSwitched) throws HyracksDataException;
+    void recycled(ILSMMemoryComponent component) throws HyracksDataException;
 
     /**
      * This method is called when a memory component is allocated
      *
      * @param component
+     *            the allocated component
      */
     void allocated(ILSMMemoryComponent component) throws HyracksDataException;
-
 }

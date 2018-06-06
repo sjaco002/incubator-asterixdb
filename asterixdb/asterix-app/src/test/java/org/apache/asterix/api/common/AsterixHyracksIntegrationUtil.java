@@ -30,6 +30,7 @@ import java.nio.file.Paths;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 import java.util.function.BiPredicate;
 import java.util.stream.Stream;
 
@@ -70,6 +71,7 @@ public class AsterixHyracksIntegrationUtil {
             joinPath(getProjectPath().toString(), "src", "test", "resources", "cc.conf");
     private static final String DEFAULT_STORAGE_PATH = joinPath("target", "io", "dir");
     private static String storagePath = DEFAULT_STORAGE_PATH;
+    private static final long RESULT_TTL = TimeUnit.MINUTES.toMillis(5);
 
     static {
         System.setProperty("java.util.logging.manager", org.apache.logging.log4j.jul.LogManager.class.getName());
@@ -95,7 +97,8 @@ public class AsterixHyracksIntegrationUtil {
      * main method to run a simple 2 node cluster in-process
      * suggested VM arguments: <code>-enableassertions -Xmx2048m -Dfile.encoding=UTF-8</code>
      *
-     * @param args unused
+     * @param args
+     *            unused
      */
     public static void main(String[] args) throws Exception {
         TestUtils.redirectLoggingToConsole();
@@ -137,11 +140,12 @@ public class AsterixHyracksIntegrationUtil {
                 ncConfigManager = new ConfigManager(new String[] { "-config-file", confFile });
             }
             ncApplication.registerConfig(ncConfigManager);
+            opts.forEach(opt -> ncConfigManager.set(nodeId, opt.getLeft(), opt.getRight()));
             nodeControllers.add(
                     new NodeControllerService(fixupIODevices(createNCConfig(nodeId, ncConfigManager)), ncApplication));
         }
 
-        opts.stream().forEach(opt -> configManager.set(opt.getLeft(), opt.getRight()));
+        opts.forEach(opt -> configManager.set(opt.getLeft(), opt.getRight()));
         cc.start();
 
         // Starts ncs.
@@ -197,7 +201,7 @@ public class AsterixHyracksIntegrationUtil {
         ccConfig.setClientListenAddress(Inet4Address.getLoopbackAddress().getHostAddress());
         ccConfig.setClientListenPort(DEFAULT_HYRACKS_CC_CLIENT_PORT);
         ccConfig.setClusterListenPort(DEFAULT_HYRACKS_CC_CLUSTER_PORT);
-        ccConfig.setResultTTL(120000L);
+        ccConfig.setResultTTL(RESULT_TTL);
         ccConfig.setResultSweepThreshold(1000L);
         ccConfig.setEnforceFrameWriterProtocol(true);
         configManager.set(ControllerConfig.Option.DEFAULT_DIR, joinPath(getDefaultStoragePath(), "asterixdb"));
@@ -216,18 +220,21 @@ public class AsterixHyracksIntegrationUtil {
         ncConfig.setDataListenAddress(Inet4Address.getLoopbackAddress().getHostAddress());
         ncConfig.setResultListenAddress(Inet4Address.getLoopbackAddress().getHostAddress());
         ncConfig.setMessagingListenAddress(Inet4Address.getLoopbackAddress().getHostAddress());
-        ncConfig.setResultTTL(120000L);
+        ncConfig.setResultTTL(RESULT_TTL);
         ncConfig.setResultSweepThreshold(1000L);
         ncConfig.setVirtualNC();
         configManager.set(ControllerConfig.Option.DEFAULT_DIR, joinPath(getDefaultStoragePath(), "asterixdb", ncName));
         return ncConfig;
     }
 
-    protected INCApplication createNCApplication() {
+    protected INCApplication createNCApplication()
+            throws InstantiationException, IllegalAccessException, ClassNotFoundException {
+        // Instead of using this flag, RecoveryManagerTest should set the desired class in its config file
         if (!gracefulShutdown) {
             return new UngracefulShutdownNCApplication();
         }
-        return new NCApplication();
+        String ncAppClass = (String) configManager.get(NCConfig.Option.APP_CLASS);
+        return (INCApplication) Class.forName(ncAppClass).newInstance();
     }
 
     private NCConfig fixupIODevices(NCConfig ncConfig) throws IOException, AsterixException, CmdLineException {
@@ -357,6 +364,10 @@ public class AsterixHyracksIntegrationUtil {
 
     public void addOption(IOption name, Object value) {
         opts.add(Pair.of(name, value));
+    }
+
+    public void clearOptions() {
+        opts.clear();
     }
 
     /**
