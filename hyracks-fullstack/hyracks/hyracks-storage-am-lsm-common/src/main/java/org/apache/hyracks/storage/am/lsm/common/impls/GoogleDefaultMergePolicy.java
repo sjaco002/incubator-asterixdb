@@ -56,7 +56,7 @@ public class GoogleDefaultMergePolicy implements ILSMMergePolicy {
             ILSMIndexAccessor accessor = (ILSMIndexAccessor) index.createAccessor(NoOpIndexAccessParameters.INSTANCE);
             long mergeSize = getMergeSize(immutableComponents);
             logMergeInfo(mergeSize, true, immutableComponents.size(), immutableComponents.size(), immutableComponents);
-            accessor.scheduleFullMerge(index.getIOOperationCallback());
+            accessor.scheduleFullMerge();
             numMerges++;
             mergeCost = mergeCost + ((double) mergeSize) / (1024 * 1024 * 1024);
             return;
@@ -91,7 +91,7 @@ public class GoogleDefaultMergePolicy implements ILSMMergePolicy {
         Collections.reverse(mergableComponents);
         ILSMIndexAccessor accessor = (ILSMIndexAccessor) index.createAccessor(NoOpIndexAccessParameters.INSTANCE);
         logMergeInfo(mergeSize, false, mergableComponents.size(), immutableComponents.size(), immutableComponents);
-        accessor.scheduleMerge(index.getIOOperationCallback(), mergableComponents);
+        accessor.scheduleMerge(mergableComponents);
         numMerges++;
         mergeCost = mergeCost + ((double) mergeSize) / (1024 * 1024 * 1024);
         return true;

@@ -61,7 +61,7 @@ public class KSlotMergePolicy implements ILSMMergePolicy {
         if (fullMergeIsRequested) {
             updateMergeCosts(0, 0);
             ILSMIndexAccessor accessor = (ILSMIndexAccessor) index.createAccessor(NoOpIndexAccessParameters.INSTANCE);
-            accessor.scheduleFullMerge(index.getIOOperationCallback());
+            accessor.scheduleFullMerge();
             long mergeSize = getMergeSize(immutableComponents);
             logDiskComponentsSnapshot(immutableComponents);
             logMergeInfo(mergeSize, true, immutableComponents.size(), immutableComponents.size());
@@ -110,7 +110,7 @@ public class KSlotMergePolicy implements ILSMMergePolicy {
             }
             Collections.reverse(mergableComponents);
             ILSMIndexAccessor accessor = (ILSMIndexAccessor) index.createAccessor(NoOpIndexAccessParameters.INSTANCE);
-            accessor.scheduleMerge(index.getIOOperationCallback(), mergableComponents);
+            accessor.scheduleMerge(mergableComponents);
             logDiskComponentsSnapshot(immutableComponents);
             logMergeInfo(mergeSize, false, mergableComponents.size(), immutableComponents.size());
             numMerges++;
@@ -161,7 +161,7 @@ public class KSlotMergePolicy implements ILSMMergePolicy {
         }
         Collections.reverse(mergableComponents);
         ILSMIndexAccessor accessor = (ILSMIndexAccessor) index.createAccessor(NoOpIndexAccessParameters.INSTANCE);
-        accessor.scheduleMerge(index.getIOOperationCallback(), mergableComponents);
+        accessor.scheduleMerge(mergableComponents);
         logDiskComponentsSnapshot(immutableComponents);
         logMergeInfo(mergeSize, false, mergableComponents.size(), immutableComponents.size());
         numMerges++;

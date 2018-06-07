@@ -60,7 +60,7 @@ public class PrefixConstantMergePolicy implements ILSMMergePolicy {
 
         if (fullMergeIsRequested) {
             ILSMIndexAccessor accessor = index.createAccessor(NoOpIndexAccessParameters.INSTANCE);
-            accessor.scheduleFullMerge(index.getIOOperationCallback());
+            accessor.scheduleFullMerge();
             long mergeSize = getMergeSize(immutableComponents);
             logDiskComponentsSnapshot(immutableComponents);
             logMergeInfo(mergeSize, true, immutableComponents.size(), immutableComponents.size());
@@ -201,7 +201,7 @@ public class PrefixConstantMergePolicy implements ILSMMergePolicy {
                 // Reverse the components order back to its original order
                 Collections.reverse(mergableComponents);
                 ILSMIndexAccessor accessor = index.createAccessor(NoOpIndexAccessParameters.INSTANCE);
-                accessor.scheduleMerge(index.getIOOperationCallback(), mergableComponents);
+                accessor.scheduleMerge(mergableComponents);
                 long mergeSize = getMergeSize(mergableComponents);
                 logDiskComponentsSnapshot(immutableComponents);
                 logMergeInfo(mergeSize, false, mergableComponents.size(), immutableComponents.size());
@@ -218,7 +218,7 @@ public class PrefixConstantMergePolicy implements ILSMMergePolicy {
                 Collections.reverse(immutableComponents);
                 ILSMIndexAccessor accessor =
                         (ILSMIndexAccessor) index.createAccessor(NoOpIndexAccessParameters.INSTANCE);
-                accessor.scheduleMerge(index.getIOOperationCallback(), immutableComponents);
+                accessor.scheduleMerge(immutableComponents);
                 long mergeSize = getMergeSize(immutableComponents);
                 logMergeInfo(mergeSize, false, immutableComponents.size(), immutableComponents.size());
                 numMerges++;

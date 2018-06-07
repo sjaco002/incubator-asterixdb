@@ -87,7 +87,6 @@ public class LSMBTree extends AbstractLSMIndex implements ITreeIndex {
     private long totalDiskComponents = 0;
     private long readCount = 0;
 
-
     // Common for in-memory and on-disk components.
     protected final ITreeIndexFrameFactory insertLeafFrameFactory;
     protected final ITreeIndexFrameFactory deleteLeafFrameFactory;

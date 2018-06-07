@@ -57,7 +57,7 @@ public class RatioBasedMergePolicy implements ILSMMergePolicy {
         }
         if (fullMergeIsRequested) {
             ILSMIndexAccessor accessor = (ILSMIndexAccessor) index.createAccessor(NoOpIndexAccessParameters.INSTANCE);
-            accessor.scheduleFullMerge(index.getIOOperationCallback());
+            accessor.scheduleFullMerge();
             long mergeSize = getMergeSize(immutableComponents);
             logDiskComponentsSnapshot(immutableComponents, false);
             logMergeInfo(mergeSize, true, immutableComponents.size(), immutableComponents.size());
@@ -104,7 +104,7 @@ public class RatioBasedMergePolicy implements ILSMMergePolicy {
             }
             Collections.reverse(mergableComponents);
             ILSMIndexAccessor accessor = (ILSMIndexAccessor) index.createAccessor(NoOpIndexAccessParameters.INSTANCE);
-            accessor.scheduleMerge(index.getIOOperationCallback(), mergableComponents);
+            accessor.scheduleMerge(mergableComponents);
             logDiskComponentsSnapshot(immutableComponents, special);
             logMergeInfo(mergeSize, false, mergableComponents.size(), immutableComponents.size());
             numMerges++;

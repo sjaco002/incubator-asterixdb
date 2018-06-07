@@ -42,6 +42,11 @@ public class TestLSMIndexAccessor implements ILSMIndexAccessor {
     }
 
     @Override
+    public int getComponentCount() {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
     public void insert(ITupleReference tuple) throws HyracksDataException {
         throw new UnsupportedOperationException();
     }
@@ -67,7 +72,7 @@ public class TestLSMIndexAccessor implements ILSMIndexAccessor {
     }
 
     @Override
-    public void search(IIndexCursor cursor, ISearchPredicate searchPred) throws HyracksDataException {
+    public List<Integer> search(IIndexCursor cursor, ISearchPredicate searchPred) throws HyracksDataException {
         throw new UnsupportedOperationException();
     }
 

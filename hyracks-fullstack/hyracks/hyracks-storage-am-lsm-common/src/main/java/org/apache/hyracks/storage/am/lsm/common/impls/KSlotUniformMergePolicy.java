@@ -61,7 +61,7 @@ public class KSlotUniformMergePolicy implements ILSMMergePolicy {
         if (fullMergeIsRequested) {
             updateMergeCosts(0, 0);
             ILSMIndexAccessor accessor = (ILSMIndexAccessor) index.createAccessor(NoOpIndexAccessParameters.INSTANCE);
-            accessor.scheduleFullMerge(index.getIOOperationCallback());
+            accessor.scheduleFullMerge();
             updateDiskComponentSizes(0);
             logDiskComponentSizes();
             long mergeSize = getMergeSize(immutableComponents);
@@ -115,7 +115,7 @@ public class KSlotUniformMergePolicy implements ILSMMergePolicy {
             }
             Collections.reverse(mergableComponents);
             ILSMIndexAccessor accessor = (ILSMIndexAccessor) index.createAccessor(NoOpIndexAccessParameters.INSTANCE);
-            accessor.scheduleMerge(index.getIOOperationCallback(), mergableComponents);
+            accessor.scheduleMerge(mergableComponents);
             updateDiskComponentSizes(mergedIndex);
             logDiskComponentSizes();
             logDiskComponentsSnapshot(immutableComponents);
@@ -233,7 +233,7 @@ public class KSlotUniformMergePolicy implements ILSMMergePolicy {
             LOGGER.severe("KSlot Uniform Server Crash Merge Triggered! ");
             updateMergeCosts(0, 0);
             ILSMIndexAccessor accessor = (ILSMIndexAccessor) index.createAccessor(NoOpIndexAccessParameters.INSTANCE);
-            accessor.scheduleFullMerge(index.getIOOperationCallback());
+            accessor.scheduleFullMerge();
             updateDiskComponentSizes(0);
             logDiskComponentSizes();
             long mergeSize = getMergeSize(immutableComponents);

@@ -763,13 +763,6 @@ public class BTree extends AbstractTreeIndex {
                 modificationCallback, searchCallback);
     }
 
-    private BTreeOpContext createOpContext(IIndexAccessor accessor, IModificationOperationCallback modificationCallback,
-            ISearchOperationCallback searchCallback, int[] logTupleFields) {
-        return new BTreeOpContext(accessor, leafFrameFactory, interiorFrameFactory, freePageManager, cmpFactories,
-                modificationCallback, searchCallback, logTupleFields);
-    }
-
-    @SuppressWarnings("rawtypes")
     public String printTree(IBTreeLeafFrame leafFrame, IBTreeInteriorFrame interiorFrame,
             ISerializerDeserializer[] keySerdes) throws Exception {
         MultiComparator cmp = MultiComparator.create(cmpFactories);

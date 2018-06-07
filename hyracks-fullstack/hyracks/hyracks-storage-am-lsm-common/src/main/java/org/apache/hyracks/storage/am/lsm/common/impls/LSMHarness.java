@@ -547,9 +547,8 @@ public class LSMHarness implements ILSMHarness {
     public void doIo(ILSMIOOperation operation) {
         try {
             operation.getCallback().beforeOperation(operation);
-            ILSMDiskComponent newComponent =
-                    operation.getIOOpertionType() == LSMIOOperationType.FLUSH ? lsmIndex.flush(operation)
-                            : lsmIndex.merge(operation);
+            ILSMDiskComponent newComponent = operation.getIOOpertionType() == LSMIOOperationType.FLUSH
+                    ? lsmIndex.flush(operation) : lsmIndex.merge(operation);
             operation.setNewComponent(newComponent);
             operation.getCallback().afterOperation(operation);
             if (newComponent != null) {
