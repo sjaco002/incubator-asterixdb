@@ -51,6 +51,7 @@ public class DelegateOperator extends AbstractLogicalOperator {
     public void recomputeSchema() throws AlgebricksException {
         schema = new ArrayList<LogicalVariable>(inputs.get(0).getValue().getSchema());
         delegate.setSchema(schema);
+        this.setSchema(schema);
     }
 
     @Override

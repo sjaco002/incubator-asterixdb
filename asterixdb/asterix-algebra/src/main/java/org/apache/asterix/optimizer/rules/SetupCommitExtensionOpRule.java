@@ -101,11 +101,13 @@ public class SetupCommitExtensionOpRule implements IAlgebraicRewriteRule {
         CommitOperator commitOperator = new CommitOperator(primaryKeyLogicalVars, isSink);
         CommitPOperator commitPOperator = new CommitPOperator(dataset, primaryKeyLogicalVars, isSink);
         commitOperator.setPhysicalOperator(commitPOperator);
+        commitOperator.setSchema(op.getSchema());
 
         //create ExtensionOperator and put the commitOperator in it.
         DelegateOperator extensionOperator = new DelegateOperator(commitOperator);
         extensionOperator.setSourceLocation(eOp.getSourceLocation());
         extensionOperator.setPhysicalOperator(commitPOperator);
+        extensionOperator.setSchema(op.getSchema());
 
         //update plan link
         extensionOperator.getInputs().add(eOp.getInputs().get(0));
