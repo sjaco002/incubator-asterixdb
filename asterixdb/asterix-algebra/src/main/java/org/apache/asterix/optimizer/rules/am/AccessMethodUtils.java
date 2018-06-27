@@ -1483,6 +1483,23 @@ public class AccessMethodUtils {
         return createRectangleExpr;
     }
 
+    private static ScalarFunctionCallExpression getNestedIsMissingCall(AbstractFunctionCallExpression call) {
+        ScalarFunctionCallExpression isMissingFuncExpr = null;
+        if (call.getFunctionIdentifier().equals(AlgebricksBuiltinFunctions.NOT)) {
+            if (call.getArguments().get(0).getValue().getExpressionTag() == LogicalExpressionTag.FUNCTION_CALL) {
+                if (((AbstractFunctionCallExpression) call.getArguments().get(0).getValue()).getFunctionIdentifier()
+                        .equals(AlgebricksBuiltinFunctions.IS_MISSING)) {
+                    isMissingFuncExpr = (ScalarFunctionCallExpression) call.getArguments().get(0).getValue();
+                    if (isMissingFuncExpr.getArguments().get(0).getValue()
+                            .getExpressionTag() == LogicalExpressionTag.VARIABLE) {
+                        return isMissingFuncExpr;
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
     public static ScalarFunctionCallExpression findLOJIsMissingFuncInGroupBy(GroupByOperator lojGroupbyOp)
             throws AlgebricksException {
         //find IS_MISSING function of which argument has the nullPlaceholder variable in the nested plan of groupby.
@@ -1496,23 +1513,27 @@ public class AccessMethodUtils {
             if (inputOp.getOperatorTag() == LogicalOperatorTag.SELECT) {
                 SelectOperator selectOp = (SelectOperator) inputOp;
                 if (selectOp.getCondition().getValue().getExpressionTag() == LogicalExpressionTag.FUNCTION_CALL) {
-                    if (((AbstractFunctionCallExpression) selectOp.getCondition().getValue()).getFunctionIdentifier()
-                            .equals(AlgebricksBuiltinFunctions.NOT)) {
-                        ScalarFunctionCallExpression notFuncExpr =
-                                (ScalarFunctionCallExpression) selectOp.getCondition().getValue();
-                        if (notFuncExpr.getArguments().get(0).getValue()
-                                .getExpressionTag() == LogicalExpressionTag.FUNCTION_CALL) {
-                            if (((AbstractFunctionCallExpression) notFuncExpr.getArguments().get(0).getValue())
-                                    .getFunctionIdentifier().equals(AlgebricksBuiltinFunctions.IS_MISSING)) {
+                    AbstractFunctionCallExpression call =
+                            (AbstractFunctionCallExpression) (selectOp).getCondition().getValue();
+                    if (call.getFunctionIdentifier().equals(AlgebricksBuiltinFunctions.AND)) {
+                        for (Mutable<ILogicalExpression> mexpr : call.getArguments()) {
+                            if (mexpr.getValue().getExpressionTag() == LogicalExpressionTag.FUNCTION_CALL) {
                                 isMissingFuncExpr =
-                                        (ScalarFunctionCallExpression) notFuncExpr.getArguments().get(0).getValue();
-                                if (isMissingFuncExpr.getArguments().get(0).getValue()
-                                        .getExpressionTag() == LogicalExpressionTag.VARIABLE) {
+                                        getNestedIsMissingCall((AbstractFunctionCallExpression) mexpr.getValue());
+                                if (isMissingFuncExpr != null) {
                                     foundSelectNonMissing = true;
                                     break;
                                 }
                             }
                         }
+                    }
+                    if (foundSelectNonMissing) {
+                        break;
+                    }
+                    isMissingFuncExpr = getNestedIsMissingCall(call);
+                    if (isMissingFuncExpr != null) {
+                        foundSelectNonMissing = true;
+                        break;
                     }
                 }
             }
