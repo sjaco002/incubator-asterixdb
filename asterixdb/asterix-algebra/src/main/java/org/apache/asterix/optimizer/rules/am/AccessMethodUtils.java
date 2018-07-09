@@ -1483,7 +1483,31 @@ public class AccessMethodUtils {
         return createRectangleExpr;
     }
 
-    private static ScalarFunctionCallExpression getNestedIsMissingCall(AbstractFunctionCallExpression call) {
+    private static boolean confirmAssignOperatorForIsMissingVar(LogicalVariable variableReference,
+            ILogicalOperator operator) {
+        if (operator.getOperatorTag() != LogicalOperatorTag.ASSIGN) {
+            for (int i = 0; i < operator.getInputs().size(); i++) {
+                if (confirmAssignOperatorForIsMissingVar(variableReference, operator.getInputs().get(i).getValue())) {
+                    return true;
+                }
+            }
+        } else {
+            AssignOperator assign = (AssignOperator) operator;
+            int i = 0;
+            for (LogicalVariable var : assign.getVariables()) {
+                if (var.equals(variableReference)
+                        && assign.getExpressions().get(i).getValue().equals(ConstantExpression.TRUE)) {
+                    return true;
+                }
+                i++;
+            }
+        }
+
+        return false;
+    }
+
+    private static ScalarFunctionCallExpression getNestedIsMissingCall(AbstractFunctionCallExpression call,
+            OptimizableOperatorSubTree subTree) {
         ScalarFunctionCallExpression isMissingFuncExpr = null;
         if (call.getFunctionIdentifier().equals(AlgebricksBuiltinFunctions.NOT)) {
             if (call.getArguments().get(0).getValue().getExpressionTag() == LogicalExpressionTag.FUNCTION_CALL) {
@@ -1492,7 +1516,13 @@ public class AccessMethodUtils {
                     isMissingFuncExpr = (ScalarFunctionCallExpression) call.getArguments().get(0).getValue();
                     if (isMissingFuncExpr.getArguments().get(0).getValue()
                             .getExpressionTag() == LogicalExpressionTag.VARIABLE) {
-                        return isMissingFuncExpr;
+
+                        if (confirmAssignOperatorForIsMissingVar(
+                                ((VariableReferenceExpression) isMissingFuncExpr.getArguments().get(0).getValue())
+                                        .getVariableReference(),
+                                subTree.getRoot())) {
+                            return isMissingFuncExpr;
+                        }
                     }
                 }
             }
@@ -1500,7 +1530,8 @@ public class AccessMethodUtils {
         return null;
     }
 
-    public static ScalarFunctionCallExpression findLOJIsMissingFuncInGroupBy(GroupByOperator lojGroupbyOp)
+    public static ScalarFunctionCallExpression findLOJIsMissingFuncInGroupBy(GroupByOperator lojGroupbyOp,
+            OptimizableOperatorSubTree subTree)
             throws AlgebricksException {
         //find IS_MISSING function of which argument has the nullPlaceholder variable in the nested plan of groupby.
         ALogicalPlanImpl subPlan = (ALogicalPlanImpl) lojGroupbyOp.getNestedPlans().get(0);
@@ -1519,7 +1550,8 @@ public class AccessMethodUtils {
                         for (Mutable<ILogicalExpression> mexpr : call.getArguments()) {
                             if (mexpr.getValue().getExpressionTag() == LogicalExpressionTag.FUNCTION_CALL) {
                                 isMissingFuncExpr =
-                                        getNestedIsMissingCall((AbstractFunctionCallExpression) mexpr.getValue());
+                                        getNestedIsMissingCall((AbstractFunctionCallExpression) mexpr.getValue(),
+                                                subTree);
                                 if (isMissingFuncExpr != null) {
                                     foundSelectNonMissing = true;
                                     break;
@@ -1530,7 +1562,7 @@ public class AccessMethodUtils {
                     if (foundSelectNonMissing) {
                         break;
                     }
-                    isMissingFuncExpr = getNestedIsMissingCall(call);
+                    isMissingFuncExpr = getNestedIsMissingCall(call, subTree);
                     if (isMissingFuncExpr != null) {
                         foundSelectNonMissing = true;
                         break;
@@ -1540,6 +1572,7 @@ public class AccessMethodUtils {
             inputOp = inputOp.getInputs().size() > 0 ? (AbstractLogicalOperator) inputOp.getInputs().get(0).getValue()
                     : null;
         }
+
 
         if (!foundSelectNonMissing) {
             throw CompilationException.create(ErrorCode.CANNOT_FIND_NON_MISSING_SELECT_OPERATOR,
