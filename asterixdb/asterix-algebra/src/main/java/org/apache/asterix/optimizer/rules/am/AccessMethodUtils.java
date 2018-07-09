@@ -1531,8 +1531,7 @@ public class AccessMethodUtils {
     }
 
     public static ScalarFunctionCallExpression findLOJIsMissingFuncInGroupBy(GroupByOperator lojGroupbyOp,
-            OptimizableOperatorSubTree subTree)
-            throws AlgebricksException {
+            OptimizableOperatorSubTree subTree) throws AlgebricksException {
         //find IS_MISSING function of which argument has the nullPlaceholder variable in the nested plan of groupby.
         ALogicalPlanImpl subPlan = (ALogicalPlanImpl) lojGroupbyOp.getNestedPlans().get(0);
         Mutable<ILogicalOperator> subPlanRootOpRef = subPlan.getRoots().get(0);
@@ -1549,9 +1548,8 @@ public class AccessMethodUtils {
                     if (call.getFunctionIdentifier().equals(AlgebricksBuiltinFunctions.AND)) {
                         for (Mutable<ILogicalExpression> mexpr : call.getArguments()) {
                             if (mexpr.getValue().getExpressionTag() == LogicalExpressionTag.FUNCTION_CALL) {
-                                isMissingFuncExpr =
-                                        getNestedIsMissingCall((AbstractFunctionCallExpression) mexpr.getValue(),
-                                                subTree);
+                                isMissingFuncExpr = getNestedIsMissingCall(
+                                        (AbstractFunctionCallExpression) mexpr.getValue(), subTree);
                                 if (isMissingFuncExpr != null) {
                                     foundSelectNonMissing = true;
                                     break;
@@ -1572,7 +1570,6 @@ public class AccessMethodUtils {
             inputOp = inputOp.getInputs().size() > 0 ? (AbstractLogicalOperator) inputOp.getInputs().get(0).getValue()
                     : null;
         }
-
 
         if (!foundSelectNonMissing) {
             throw CompilationException.create(ErrorCode.CANNOT_FIND_NON_MISSING_SELECT_OPERATOR,
