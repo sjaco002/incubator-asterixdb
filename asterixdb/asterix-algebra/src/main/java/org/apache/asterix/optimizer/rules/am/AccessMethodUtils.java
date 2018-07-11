@@ -64,6 +64,7 @@ import org.apache.hyracks.algebricks.common.utils.Quadruple;
 import org.apache.hyracks.algebricks.common.utils.Triple;
 import org.apache.hyracks.algebricks.core.algebra.base.ILogicalExpression;
 import org.apache.hyracks.algebricks.core.algebra.base.ILogicalOperator;
+import org.apache.hyracks.algebricks.core.algebra.base.ILogicalPlan;
 import org.apache.hyracks.algebricks.core.algebra.base.IOptimizationContext;
 import org.apache.hyracks.algebricks.core.algebra.base.LogicalExpressionTag;
 import org.apache.hyracks.algebricks.core.algebra.base.LogicalOperatorTag;
@@ -81,6 +82,7 @@ import org.apache.hyracks.algebricks.core.algebra.functions.IFunctionInfo;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.AbstractDataSourceOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.AbstractLogicalOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.AbstractLogicalOperator.ExecutionMode;
+import org.apache.hyracks.algebricks.core.algebra.operators.logical.AbstractOperatorWithNestedPlans;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.AbstractUnnestMapOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.AggregateOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.AssignOperator;
@@ -1483,32 +1485,9 @@ public class AccessMethodUtils {
         return createRectangleExpr;
     }
 
-    private static boolean confirmAssignOperatorForIsMissingVar(LogicalVariable variableReference,
-            ILogicalOperator operator) {
-        if (operator.getOperatorTag() != LogicalOperatorTag.ASSIGN) {
-            for (int i = 0; i < operator.getInputs().size(); i++) {
-                if (confirmAssignOperatorForIsMissingVar(variableReference, operator.getInputs().get(i).getValue())) {
-                    return true;
-                }
-            }
-        } else {
-            AssignOperator assign = (AssignOperator) operator;
-            int i = 0;
-            for (LogicalVariable var : assign.getVariables()) {
-                if (var.equals(variableReference)
-                        && assign.getExpressions().get(i).getValue().equals(ConstantExpression.TRUE)) {
-                    return true;
-                }
-                i++;
-            }
-        }
-
-        return false;
-    }
-
     private static ScalarFunctionCallExpression getNestedIsMissingCall(AbstractFunctionCallExpression call,
-            OptimizableOperatorSubTree leftSubTree, OptimizableOperatorSubTree rightSubTree) {
-        ScalarFunctionCallExpression isMissingFuncExpr = null;
+            OptimizableOperatorSubTree rightSubTree) throws AlgebricksException {
+        ScalarFunctionCallExpression isMissingFuncExpr;
         if (call.getFunctionIdentifier().equals(AlgebricksBuiltinFunctions.NOT)) {
             if (call.getArguments().get(0).getValue().getExpressionTag() == LogicalExpressionTag.FUNCTION_CALL) {
                 if (((AbstractFunctionCallExpression) call.getArguments().get(0).getValue()).getFunctionIdentifier()
@@ -1519,8 +1498,9 @@ public class AccessMethodUtils {
                         LogicalVariable var =
                                 ((VariableReferenceExpression) isMissingFuncExpr.getArguments().get(0).getValue())
                                         .getVariableReference();
-                        if (confirmAssignOperatorForIsMissingVar(var, leftSubTree.getRoot())
-                                || confirmAssignOperatorForIsMissingVar(var, rightSubTree.getRoot())) {
+                        List<LogicalVariable> liveSubplanVars = new ArrayList<>();
+                        VariableUtilities.getSubplanLocalLiveVariables(rightSubTree.getRoot(), liveSubplanVars);
+                        if (liveSubplanVars.contains(var)) {
                             return isMissingFuncExpr;
                         }
                     }
@@ -1530,16 +1510,10 @@ public class AccessMethodUtils {
         return null;
     }
 
-    public static ScalarFunctionCallExpression findLOJIsMissingFuncInGroupBy(GroupByOperator lojGroupbyOp,
-            OptimizableOperatorSubTree leftSubTree, OptimizableOperatorSubTree rightSubTree)
+    public static ScalarFunctionCallExpression findIsMissingInSubplan(AbstractLogicalOperator inputOp,
+            OptimizableOperatorSubTree rightSubTree)
             throws AlgebricksException {
-        //find IS_MISSING function of which argument has the nullPlaceholder variable in the nested plan of groupby.
-        ALogicalPlanImpl subPlan = (ALogicalPlanImpl) lojGroupbyOp.getNestedPlans().get(0);
-        Mutable<ILogicalOperator> subPlanRootOpRef = subPlan.getRoots().get(0);
-        AbstractLogicalOperator subPlanRootOp = (AbstractLogicalOperator) subPlanRootOpRef.getValue();
-        boolean foundSelectNonMissing = false;
         ScalarFunctionCallExpression isMissingFuncExpr = null;
-        AbstractLogicalOperator inputOp = subPlanRootOp;
         while (inputOp != null) {
             if (inputOp.getOperatorTag() == LogicalOperatorTag.SELECT) {
                 SelectOperator selectOp = (SelectOperator) inputOp;
@@ -1550,29 +1524,45 @@ public class AccessMethodUtils {
                         for (Mutable<ILogicalExpression> mexpr : call.getArguments()) {
                             if (mexpr.getValue().getExpressionTag() == LogicalExpressionTag.FUNCTION_CALL) {
                                 isMissingFuncExpr = getNestedIsMissingCall(
-                                        (AbstractFunctionCallExpression) mexpr.getValue(), leftSubTree, rightSubTree);
+                                        (AbstractFunctionCallExpression) mexpr.getValue(), rightSubTree);
                                 if (isMissingFuncExpr != null) {
-                                    foundSelectNonMissing = true;
-                                    break;
+                                    return isMissingFuncExpr;
                                 }
                             }
                         }
                     }
-                    if (foundSelectNonMissing) {
-                        break;
-                    }
-                    isMissingFuncExpr = getNestedIsMissingCall(call, leftSubTree, rightSubTree);
+                    isMissingFuncExpr = getNestedIsMissingCall(call, rightSubTree);
                     if (isMissingFuncExpr != null) {
-                        foundSelectNonMissing = true;
-                        break;
+                        return isMissingFuncExpr;
+                    }
+                }
+            } else if (inputOp.hasNestedPlans()) {
+                AbstractOperatorWithNestedPlans nestedPlanOp = (AbstractOperatorWithNestedPlans) inputOp;
+                for (ILogicalPlan nestedPlan : nestedPlanOp.getNestedPlans()) {
+                    for (Mutable<ILogicalOperator> root : nestedPlan.getRoots()) {
+                        isMissingFuncExpr =
+                                findIsMissingInSubplan((AbstractLogicalOperator) root.getValue(), rightSubTree);
+                        if (isMissingFuncExpr != null) {
+                            return isMissingFuncExpr;
+                        }
                     }
                 }
             }
             inputOp = inputOp.getInputs().size() > 0 ? (AbstractLogicalOperator) inputOp.getInputs().get(0).getValue()
                     : null;
         }
+        return isMissingFuncExpr;
+    }
 
-        if (!foundSelectNonMissing) {
+    public static ScalarFunctionCallExpression findLOJIsMissingFuncInGroupBy(GroupByOperator lojGroupbyOp,
+            OptimizableOperatorSubTree rightSubTree) throws AlgebricksException {
+        //find IS_MISSING function of which argument has the nullPlaceholder variable in the nested plan of groupby.
+        ALogicalPlanImpl subPlan = (ALogicalPlanImpl) lojGroupbyOp.getNestedPlans().get(0);
+        Mutable<ILogicalOperator> subPlanRootOpRef = subPlan.getRoots().get(0);
+        AbstractLogicalOperator subPlanRootOp = (AbstractLogicalOperator) subPlanRootOpRef.getValue();
+        ScalarFunctionCallExpression isMissingFuncExpr = findIsMissingInSubplan(subPlanRootOp, rightSubTree);
+
+        if (isMissingFuncExpr == null) {
             throw CompilationException.create(ErrorCode.CANNOT_FIND_NON_MISSING_SELECT_OPERATOR,
                     lojGroupbyOp.getSourceLocation());
         }
