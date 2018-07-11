@@ -1549,9 +1549,8 @@ public class AccessMethodUtils {
                     }
                 }
             }
-            currentOp =
-                    currentOp.getInputs().size() > 0 ? (AbstractLogicalOperator) currentOp.getInputs().get(0).getValue()
-                    : null;
+            currentOp = currentOp.getInputs().isEmpty() ? null
+                    : (AbstractLogicalOperator) currentOp.getInputs().get(0).getValue();
         }
         return isMissingFuncExpr;
     }
