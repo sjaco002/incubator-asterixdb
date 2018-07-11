@@ -1514,9 +1514,10 @@ public class AccessMethodUtils {
             OptimizableOperatorSubTree rightSubTree)
             throws AlgebricksException {
         ScalarFunctionCallExpression isMissingFuncExpr = null;
-        while (inputOp != null) {
-            if (inputOp.getOperatorTag() == LogicalOperatorTag.SELECT) {
-                SelectOperator selectOp = (SelectOperator) inputOp;
+        AbstractLogicalOperator currentOp = inputOp;
+        while (currentOp != null) {
+            if (currentOp.getOperatorTag() == LogicalOperatorTag.SELECT) {
+                SelectOperator selectOp = (SelectOperator) currentOp;
                 if (selectOp.getCondition().getValue().getExpressionTag() == LogicalExpressionTag.FUNCTION_CALL) {
                     AbstractFunctionCallExpression call =
                             (AbstractFunctionCallExpression) (selectOp).getCondition().getValue();
@@ -1536,8 +1537,8 @@ public class AccessMethodUtils {
                         return isMissingFuncExpr;
                     }
                 }
-            } else if (inputOp.hasNestedPlans()) {
-                AbstractOperatorWithNestedPlans nestedPlanOp = (AbstractOperatorWithNestedPlans) inputOp;
+            } else if (currentOp.hasNestedPlans()) {
+                AbstractOperatorWithNestedPlans nestedPlanOp = (AbstractOperatorWithNestedPlans) currentOp;
                 for (ILogicalPlan nestedPlan : nestedPlanOp.getNestedPlans()) {
                     for (Mutable<ILogicalOperator> root : nestedPlan.getRoots()) {
                         isMissingFuncExpr =
@@ -1548,7 +1549,8 @@ public class AccessMethodUtils {
                     }
                 }
             }
-            inputOp = inputOp.getInputs().size() > 0 ? (AbstractLogicalOperator) inputOp.getInputs().get(0).getValue()
+            currentOp =
+                    currentOp.getInputs().size() > 0 ? (AbstractLogicalOperator) currentOp.getInputs().get(0).getValue()
                     : null;
         }
         return isMissingFuncExpr;
