@@ -1511,8 +1511,7 @@ public class AccessMethodUtils {
     }
 
     public static ScalarFunctionCallExpression findIsMissingInSubplan(AbstractLogicalOperator inputOp,
-            OptimizableOperatorSubTree rightSubTree)
-            throws AlgebricksException {
+            OptimizableOperatorSubTree rightSubTree) throws AlgebricksException {
         ScalarFunctionCallExpression isMissingFuncExpr = null;
         AbstractLogicalOperator currentOp = inputOp;
         while (currentOp != null) {
