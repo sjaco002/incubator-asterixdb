@@ -479,6 +479,7 @@ public class SubstituteVariableVisitor
     @Override
     public Void visitDelegateOperator(DelegateOperator op, Pair<LogicalVariable, LogicalVariable> arg)
             throws AlgebricksException {
+        op.getDelegate().replaceVariables(arg);
         return null;
     }
 

@@ -82,7 +82,7 @@ public abstract class AbstractGroupingProperty {
         for (LogicalVariable v : columnSet) {
             boolean isImpliedByAnFD = false;
             for (FunctionalDependency fdep : fds) {
-                if (columnSet.containsAll(fdep.getHead()) && fdep.getTail().contains(v)) {
+                if (!fdep.getHead().isEmpty() && columnSet.containsAll(fdep.getHead()) && fdep.getTail().contains(v)) {
                     isImpliedByAnFD = true;
                     norm.addAll(fdep.getHead());
                     break;

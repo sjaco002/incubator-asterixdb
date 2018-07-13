@@ -24,6 +24,7 @@ import java.util.Collection;
 import java.util.List;
 
 import org.apache.hyracks.algebricks.common.exceptions.AlgebricksException;
+import org.apache.hyracks.algebricks.common.utils.Pair;
 import org.apache.hyracks.algebricks.core.algebra.base.LogicalVariable;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.AbstractDelegatedLogicalOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.IOperatorDelegate;
@@ -81,6 +82,12 @@ public class CommitOperator extends AbstractDelegatedLogicalOperator {
     @Override
     public void getUsedVariables(Collection<LogicalVariable> usedVars) {
         usedVars.addAll(primaryKeyLogicalVars);
+    }
+
+    @Override
+    public void replaceVariables(Pair<LogicalVariable, LogicalVariable> arg) {
+        //not used by commit but provided for extensions
+        return;
     }
 
     @Override

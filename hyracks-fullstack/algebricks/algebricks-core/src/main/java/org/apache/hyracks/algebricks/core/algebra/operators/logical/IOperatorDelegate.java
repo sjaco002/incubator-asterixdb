@@ -22,6 +22,7 @@ import java.util.Collection;
 import java.util.List;
 
 import org.apache.hyracks.algebricks.common.exceptions.AlgebricksException;
+import org.apache.hyracks.algebricks.common.utils.Pair;
 import org.apache.hyracks.algebricks.core.algebra.base.IPhysicalOperator;
 import org.apache.hyracks.algebricks.core.algebra.base.LogicalVariable;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.AbstractLogicalOperator.ExecutionMode;
@@ -49,6 +50,8 @@ public interface IOperatorDelegate {
     ExecutionMode getExecutionMode();
 
     public void getUsedVariables(Collection<LogicalVariable> usedVars);
+
+    void replaceVariables(Pair<LogicalVariable, LogicalVariable> arg);
 
     public void getProducedVariables(Collection<LogicalVariable> producedVars);
 }
