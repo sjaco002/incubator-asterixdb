@@ -142,7 +142,7 @@ public class LSMBTreePointSearchCursor extends EnforcedIndexCursor implements IL
                         foundIn = i;
                         long end = System.nanoTime();
                         searchTimeString = searchTimeString + ":" + (end - start);
-                        if (lsmHarness.getLsmIndex().toString().contains("Tweets1")) {
+                        if (lsmHarness.getLsmIndex().toString().contains("usertable")) {
                             LOGGER.severe("ReadTrace: " + bloomFilterString + " " + (i - 1) + " " + true + " "
                                     + new Date() + " Merg" + " " + searchTimeString + " " + componentSizeString + " "
                                     + depthString + " " + nodeTimes);
@@ -202,7 +202,7 @@ public class LSMBTreePointSearchCursor extends EnforcedIndexCursor implements IL
             long end = System.nanoTime();
             searchTimeString = searchTimeString + ":" + (end - start);
         }
-        if (lsmHarness.getLsmIndex().toString().contains("Tweets1")) {
+        if (lsmHarness.getLsmIndex().toString().contains("usertable")) {
             LOGGER.severe("ReadTrace: " + bloomFilterString + " " + (i - 1) + " " + false + " " + new Date() + " Merg"
                     + " " + searchTimeString + " " + componentSizeString + " " + depthString + " " + nodeTimes);
         }
