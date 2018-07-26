@@ -85,7 +85,7 @@ public class CommitOperator extends AbstractDelegatedLogicalOperator {
     }
 
     @Override
-    public void replaceVariables(Pair<LogicalVariable, LogicalVariable> arg) {
+    public void replaceVariable(Pair<LogicalVariable, LogicalVariable> arg) {
         //not used by commit but provided for extensions
         return;
     }

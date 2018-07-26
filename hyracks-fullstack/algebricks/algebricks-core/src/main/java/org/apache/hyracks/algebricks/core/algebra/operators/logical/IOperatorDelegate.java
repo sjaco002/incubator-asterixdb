@@ -51,7 +51,7 @@ public interface IOperatorDelegate {
 
     public void getUsedVariables(Collection<LogicalVariable> usedVars);
 
-    void replaceVariables(Pair<LogicalVariable, LogicalVariable> arg);
+    void replaceVariable(Pair<LogicalVariable, LogicalVariable> arg);
 
     public void getProducedVariables(Collection<LogicalVariable> producedVars);
 }
