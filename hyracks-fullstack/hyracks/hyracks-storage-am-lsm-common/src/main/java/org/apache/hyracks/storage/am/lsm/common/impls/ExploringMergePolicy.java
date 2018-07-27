@@ -77,16 +77,19 @@ public class ExploringMergePolicy implements ILSMMergePolicy {
             return false;
         }
         boolean mightBeStuck = (length > max) ? true : false;
-        List<ILSMDiskComponent> bestSelection = new ArrayList<>();
+        List<ILSMDiskComponent> bestSelection = new ArrayList<>(0);
         List<ILSMDiskComponent> smallest = new ArrayList<>(0);
         List<ILSMDiskComponent> mergableComponents = new ArrayList<>();
-        long smallestSize = Long.MAX_VALUE;
         long bestSize = 0;
+        long smallestSize = Long.MAX_VALUE;
         int bestStart = -1;
         int bestEnd = -1;
         int smallestStart = -1;
         int smallestEnd = -1;
         boolean merging = false;
+        int mergeStart = -1;
+        int mergeEnd = -1;
+        boolean special = false;
 
         for (int start = 0; start < length; start++) {
             for (int currentEnd = start + min - 1; currentEnd < length; currentEnd++) {
@@ -95,7 +98,7 @@ public class ExploringMergePolicy implements ILSMMergePolicy {
                     continue;
                 }
                 long size = getTotalSize(potentialMatchFiles);
-                if (mightBeStuck && size < smallestSize && potentialMatchFiles.size() == min) {
+                if (mightBeStuck && size < smallestSize) {
                     smallest = potentialMatchFiles;
                     smallestSize = size;
                     smallestStart = start;
@@ -104,19 +107,24 @@ public class ExploringMergePolicy implements ILSMMergePolicy {
                 if (!fileInRatio(potentialMatchFiles)) {
                     continue;
                 }
-                if (isBetterSelection(bestSelection, bestSize, potentialMatchFiles, size)) {
+                if (isBetterSelection(bestSelection, bestSize, potentialMatchFiles, size, mightBeStuck)) {
                     bestSelection = potentialMatchFiles;
-                    bestStart = start;
                     bestSize = size;
+                    bestStart = start;
                     bestEnd = currentEnd;
                 }
             }
         }
         if (bestSelection.size() == 0 && mightBeStuck && smallestStart != -1 && smallestEnd != -1) {
             merging = true;
+            special = true;
+            mergeStart = smallestStart;
+            mergeEnd = smallestEnd;
             mergableComponents = new ArrayList<>(smallest);
         } else if (bestStart != -1 && bestEnd != -1) {
             merging = true;
+            mergeStart = bestStart;
+            mergeEnd = bestEnd;
             mergableComponents = new ArrayList<>(bestSelection);
 
         }
@@ -136,12 +144,12 @@ public class ExploringMergePolicy implements ILSMMergePolicy {
     }
 
     public boolean isBetterSelection(List<ILSMDiskComponent> bestSelection, long bestSize,
-            List<ILSMDiskComponent> selection, long size) {
-        if (!(bestSelection.isEmpty())) {
-            double thresholdQuantity = ((double) bestSize / (double) bestSelection.size());
-            return thresholdQuantity > ((double) size / (double) selection.size());
+            List<ILSMDiskComponent> selection, long size, boolean mightBeStuck) {
+        if (mightBeStuck && bestSize > 0 && size > 0) {
+            double thresholdQuantity = ((double) bestSelection.size() / bestSize);
+            return thresholdQuantity < ((double) selection.size() / size);
         }
-        return true;
+        return selection.size() > bestSelection.size() || (selection.size() == bestSelection.size() && size < bestSize);
     }
 
     public boolean fileInRatio(final List<ILSMDiskComponent> files) {
